@@ -6,7 +6,7 @@ export type TMDBMovie = {
   title: string,
   release_date?: string,
   poster_path?: string,
-  background_path?: string,
+  backdrop_path?: string,
   popularity?: number
 }
 
