@@ -282,3 +282,4 @@ $RECYCLE.BIN/
 
 # Prisma
 /app/generated/prisma
+/prisma/migrations

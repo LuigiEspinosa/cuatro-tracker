@@ -1,10 +1,11 @@
 import MovieCard from "@/components/MovieCard";
 import { searchMovies } from "@/lib/tmdb";
 
-export default async function Search({ searchParams }: { searchParams?: { q?: string } }) {
-	const q = searchParams?.q || "";
-	const data = q ? await searchMovies(q) : { results: [] };
-	const movies = data.results as any[];
+export default async function Search({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+	const sp = await searchParams;
+	const q = sp?.q ?? "";
+	const data = q ? await searchMovies(q) : { results: [] as any[] };
+	const movies = (data.results ?? []) as any[];
 
 	return (
 		<div>

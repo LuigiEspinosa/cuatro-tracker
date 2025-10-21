@@ -30,6 +30,7 @@ export default function MovieCard({ movie }: { movie: any }) {
 					className="rounded"
 					width={245}
 					height={365}
+					priority
 				/>
 			)}
 

@@ -1,7 +1,10 @@
-import { auth } from '@/lib/auth'
+import { authConfig } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { ensureMovieCached } from '@/lib/movies'
+import { getServerSession } from 'next-auth'
+
+export const runtime = 'nodejs'
 
 const Body = z.object({
   movie: z.object({
@@ -18,8 +21,10 @@ const Body = z.object({
 })
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await getServerSession(authConfig);
+  if (!session?.user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const body = Body.parse(await req.json())
   await ensureMovieCached(body.movie)

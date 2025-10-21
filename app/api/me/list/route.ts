@@ -1,13 +1,18 @@
-import { auth } from '@/lib/auth'
+import { authConfig } from '@/lib/auth';
 import { prisma } from '@/lib/prisma'
+import { getServerSession } from 'next-auth';
+
+export const runtime = 'nodejs'
 
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await getServerSession(authConfig);
+  if (!session?.user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  const { searchParams } = new URL(req.url)
-  const status = searchParams.get('status') ?? undefined
-  const sort = searchParams.get('sort') || 'updated'
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status") ?? undefined;
+  const sort = searchParams.get("sort") ?? "updated";
 
   const orderBy = sort === 'release' ?
     { movie: { releaseDate: 'desc' as const } }

@@ -1,8 +1,9 @@
 import MovieCard from "@/components/MovieCard";
 import { getPopular, getTrending, getByReleaseDate } from "@/lib/tmdb";
 
-export default async function Home({ searchParams }: { searchParams?: { sort?: string } }) {
-	const sort = searchParams?.sort || "popular";
+export default async function Home({ searchParams }: { searchParams: Promise<{ sort?: string }> }) {
+	const sp = await searchParams;
+	const sort = sp?.sort ?? "popular";
 
 	const data =
 		sort === "trending"
@@ -11,8 +12,7 @@ export default async function Home({ searchParams }: { searchParams?: { sort?: s
 			? await getByReleaseDate()
 			: await getPopular();
 
-	const movies = data.results as any[];
-
+	const movies = (data.results ?? []) as any[];
 	return (
 		<div>
 			<div className="mb-4 flex gap-2">
@@ -35,7 +35,6 @@ export default async function Home({ searchParams }: { searchParams?: { sort?: s
 					Newest
 				</a>
 			</div>
-
 			<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
 				{movies.map((m) => (
 					<MovieCard key={m.id} movie={m} />

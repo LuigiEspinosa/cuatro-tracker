@@ -1,20 +1,27 @@
-import { auth } from "@/lib/auth";
+import { authConfig } from "@/lib/auth";
+import { getServerSession } from "next-auth";
+import { headers } from "next/headers";
 
 export default async function Watchlist({
 	searchParams,
 }: {
-	searchParams?: { status?: string; sort?: string };
+	searchParams: Promise<{ status?: string; sort?: string }>;
 }) {
-	const session = await auth();
-	if (!session) {
-		return <div className="p-6 bg-yellow-50 border rounded">Please sign in to view your list.</div>;
-	}
+	const sp = await searchParams;
+	const session = await getServerSession(authConfig);
+	if (!session) return <div className="p-6 bg-yellow-50 border rounded">Please sign in…</div>;
 
-	const url = new URL("/api/me/list", "http://localhost");
-	if (searchParams?.status) url.searchParams.set("status", searchParams.status);
-	if (searchParams?.sort) url.searchParams.set("sort", searchParams.sort);
+	const base = process.env.NEXTAUTH_URL || "http://localhost:3000";
+	const h = new Headers();
+	const cookie = (await headers()).get("cookie");
+	if (cookie) h.set("cookie", cookie);
 
-	const res = await fetch(url.toString(), { headers: { cookie: "" }, cache: "no-store" });
+	const qs = new URLSearchParams();
+	if (sp?.status) qs.set("status", sp.status);
+	if (sp?.sort) qs.set("sort", sp.sort);
+
+	const res = await fetch(`${base}/api/me/list?${qs}`, { headers: h, cache: "no-store" });
+	if (!res.ok) throw new Error(`/api/me/list ${res.status}`);
 	const items = await res.json();
 
 	return (
@@ -23,10 +30,8 @@ export default async function Watchlist({
 				{["WATCHLIST", "WATCHING", "COMPLETED", "DROPPED"].map((s) => (
 					<a
 						key={s}
-						className={`px-3 py-2 rounded border ${
-							searchParams?.status === s ? "bg-black text-white" : ""
-						}`}
-						href={`/watchlist?status=${s}`}
+						className={`px-3 py-2 rounded border ${sp?.status === s ? "bg-black text-white" : ""}`}
+						href={`/watchlist?status=${s}${sp?.sort ? `&sort=${sp.sort}` : ""}`}
 					>
 						{s}
 					</a>
@@ -37,10 +42,8 @@ export default async function Watchlist({
 				{["updated", "release", "popularity"].map((s) => (
 					<a
 						key={s}
-						className={`px-3 py-2 rounded border ${
-							searchParams?.sort === s ? "bg-black text-white" : ""
-						}`}
-						href={`/watchlist?status=${searchParams?.status || ""}&sort=${s}`}
+						className={`px-3 py-2 rounded border ${sp?.sort === s ? "bg-black text-white" : ""}`}
+						href={`/watchlist?${sp?.status ? `status=${sp.status}&` : ""}sort=${s}`}
 					>
 						{s}
 					</a>
