@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest'
-import { URL } from 'node:url'
 
 function sortByReleaseDate(a: any, b: any) {
   return (b?.release_date || '').localeCompare(a?.release_date || '')

@@ -1,38 +1,49 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Cuatro Tracker
 
-## Getting Started
+## Features
 
-First, run the development server:
+- Auth with NextAuth (GitHub provider by default)
+- Supabase Postgres via Prisma (NextAuth models)
+- TMDB v3 integration (Popular, Trending, Release date sorting, Search)
+- Per‑user tracking (watchlist, watching, completed, dropped) + rating/notes
+- Server Actions/Route Handlers for secure writes, cached TMDB reads
+- Type‑safe TMDB client, minimal server‑side caching
+- Tailwind UI, responsive grid, accessible components
+- Vitest unit tests for core utils
+- Vercel‑ready
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-```
+## How I approached it
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 1. Data model first
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+I defined Prisma models for the NextAuth tables (User/Account/Session/VerificationToken) plus two app tables:
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+- `Movie` caches minimal TMDB fields you'll reuse (title, dates, poster, popularity).
+- `UserMovie` ties a user to a tmdbId with status, optional rating and notes. Unique on (userId, tmdbId) so each user has exactly one record per movie.
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+### 2. Auth + DB plumbing
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+- NextAuth with the PrismaAdapter, `session: 'jwt'` for simplicity.
+- GitHub provider as a working example.
+- Prisma client with the standard dev "global" reuse pattern.
 
-## Learn More
+### 3. TMDB integration
 
-To learn more about Next.js, take a look at the following resources:
+- A tiny typed client in `lib/tmdb.ts` with helpers for popular, trending, discover (release desc), and search.
+- Responses are SSR-fetched (server) with a 60s revalidate to be kind to TMDB.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 4. Tracking flow
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+- `POST /api/track` accepts a minimal movie payload + desired status.
+- It upserts the Movie cache, then upserts the UserMovie row.
+- `GET /api/me/list` returns the signed-in user's list and supports status and sort (release, popularity, updated).
 
-## Deploy on Vercel
+### 5. UI
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Home page has sort tabs (Popular/Trending/Newest) and a responsive grid of MovieCards.
+- Search page uses TMDB search.
+- Watchlist page reads the signed-in user's list and lets you sort by updated/release/popularity.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+### 6. Tests
+
+- Vitest configured.
