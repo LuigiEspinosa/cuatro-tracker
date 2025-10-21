@@ -1,5 +1,6 @@
 import MovieCard from "@/components/MovieCard";
 import { getPopular, getTrending, getByReleaseDate } from "@/lib/tmdb";
+import Link from "next/link";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ sort?: string }> }) {
 	const sp = await searchParams;
@@ -16,24 +17,24 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
 	return (
 		<div>
 			<div className="mb-4 flex gap-2">
-				<a
+				<Link
 					className={`px-3 py-2 rounded border ${sort === "popular" ? "bg-black text-white" : ""}`}
 					href="/?sort=popular"
 				>
 					Popular
-				</a>
-				<a
+				</Link>
+				<Link
 					className={`px-3 py-2 rounded border ${sort === "trending" ? "bg-black text-white" : ""}`}
 					href="/?sort=trending"
 				>
 					Trending
-				</a>
-				<a
+				</Link>
+				<Link
 					className={`px-3 py-2 rounded border ${sort === "release" ? "bg-black text-white" : ""}`}
 					href="/?sort=release"
 				>
 					Newest
-				</a>
+				</Link>
 			</div>
 			<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
 				{movies.map((m) => (

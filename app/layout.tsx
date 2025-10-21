@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import AuthButton from "@/components/AuthButton";
 import { Providers } from "@/components/Providers";
+import Link from "next/link";
 
 export const metadata: Metadata = { title: "Cuatro Tracker", description: "Track Everything!" };
 
@@ -12,16 +13,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 				<Providers>
 					<header className="border-b bg-white">
 						<div className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
-							<a href="/" className="font-semibold">
+							<Link href="/" className="font-semibold">
 								Cuatro Tracker
-							</a>
+							</Link>
 							<nav className="flex gap-3 items-center">
-								<a href="/watchlist" className="hover:underline">
+								<Link href="/watchlist" className="hover:underline">
 									My List
-								</a>
-								<a href="/search" className="hover:underline">
+								</Link>
+								<Link href="/search" className="hover:underline">
 									Search
-								</a>
+								</Link>
 								<AuthButton />
 							</nav>
 						</div>

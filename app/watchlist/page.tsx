@@ -1,6 +1,7 @@
 import { authConfig } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { headers } from "next/headers";
+import Link from "next/link";
 
 export default async function Watchlist({
 	searchParams,
@@ -28,25 +29,25 @@ export default async function Watchlist({
 		<div>
 			<div className="mb-4 flex flex-wrap gap-2">
 				{["WATCHLIST", "WATCHING", "COMPLETED", "DROPPED"].map((s) => (
-					<a
+					<Link
 						key={s}
 						className={`px-3 py-2 rounded border ${sp?.status === s ? "bg-black text-white" : ""}`}
 						href={`/watchlist?status=${s}${sp?.sort ? `&sort=${sp.sort}` : ""}`}
 					>
 						{s}
-					</a>
+					</Link>
 				))}
 
 				<span className="mx-2" />
 
 				{["updated", "release", "popularity"].map((s) => (
-					<a
+					<Link
 						key={s}
 						className={`px-3 py-2 rounded border ${sp?.sort === s ? "bg-black text-white" : ""}`}
 						href={`/watchlist?${sp?.status ? `status=${sp.status}&` : ""}sort=${s}`}
 					>
 						{s}
-					</a>
+					</Link>
 				))}
 			</div>
 
