@@ -26,7 +26,7 @@ export async function GET(req: Request) {
   const where: any = { userId: (session.user as any).id }
   if (status) where.status = status
 
-  const [total, items] = await prisma.$transaction([
+  const [, items] = await prisma.$transaction([
     prisma.userMovie.count({ where }),
     prisma.userMovie.findMany({ where, include: { movie: true }, orderBy, skip: (page - 1) * pageSize, take: pageSize })
   ])

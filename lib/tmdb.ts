@@ -21,18 +21,30 @@ async function tmdb(path: string, init?: RequestInit) {
   return res.json();
 }
 
-export async function getPopular(page = 1) {
-  return tmdb(`/movie/popular?page=${page}`)
+export async function getPopular(page = 1, dir: 'asc' | 'desc' = 'desc') {
+  return tmdb(`/discover/movie?sort_by=popularity.${dir}&page=${page}`)
 }
 
-export async function getTrending(time_window: 'day' | 'week' = 'day') {
-  return tmdb(`/trending/movie/${time_window}`)
+export async function getTrending(time_window: 'day' | 'week' = 'day', page = 1) {
+  return tmdb(`/trending/movie/${time_window}?page=${page}`)
 }
 
 export async function searchMovies(q: string, page = 1) {
   return tmdb(`/search/movie?query=${encodeURIComponent(q)}&page=${page}`)
 }
 
-export async function getByReleaseDate(page = 1) {
-  return tmdb(`/discover/movie?sort_by=primary_release_date.desc&page=${page}`)
+export async function getByRelease(page = 1, dir: 'asc' | 'desc' = 'desc') {
+  const today = new Date()
+  const yyyy = today.getUTCFullYear()
+  const mm = String(today.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(today.getUTCDate()).padStart(2, '0')
+  const lte = `${yyyy}-${mm}-${dd}`
+
+  return tmdb(
+    `/discover/movie?sort_by=primary_release_date.${dir}&primary_release_date.lte=${lte}&page=${page}`
+  )
+}
+
+export async function getMovieDetails(id: number) {
+  return tmdb(`/movie/${id}?append_to_response=credits,release_dates,videos,images,recommendations,similar`)
 }
