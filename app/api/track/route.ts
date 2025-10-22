@@ -38,3 +38,18 @@ export async function POST(req: Request) {
 
   return Response.json(rec)
 }
+
+export async function DELETE(req: Request) {
+  const session = await getServerSession(authConfig);
+  if (!session?.user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const tmdbId = Number(searchParams.get('tmdbId'))
+  if (!tmdbId) return Response.json({ error: 'tmdbId required' }, { status: 400 })
+
+
+  await prisma.userMovie.delete({ where: { userId_tmdbId: { userId: (session.user as any).id, tmdbId } } }).catch(() => { })
+  return Response.json({ ok: true })
+}

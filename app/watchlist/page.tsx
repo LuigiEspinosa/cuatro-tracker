@@ -1,3 +1,4 @@
+import DeleteForm from "@/components/DeleteForm";
 import Pagination from "@/components/Pagination";
 import { authConfig } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -96,6 +97,8 @@ export default async function Watchlist({
 									: "—"}
 							</div>
 						</div>
+
+						<DeleteForm item={it} />
 					</li>
 				))}
 			</ul>
