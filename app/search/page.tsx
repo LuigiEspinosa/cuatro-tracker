@@ -1,11 +1,18 @@
 import MovieCard from "@/components/MovieCard";
+import Pagination from "@/components/Pagination";
 import { searchMovies } from "@/lib/tmdb";
 
-export default async function Search({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function Search({
+	searchParams,
+}: {
+	searchParams: Promise<{ q?: string; page?: string }>;
+}) {
 	const sp = await searchParams;
-	const q = sp?.q ?? "";
-	const data = q ? await searchMovies(q) : { results: [] as any[] };
-	const movies = (data.results ?? []) as any[];
+	const q = sp?.q || "";
+	const page = Math.max(1, parseInt(sp?.page || "1", 10));
+	const data = q ? await searchMovies(q, page) : { results: [], total_pages: 1 };
+	const movies = data.results as any[];
+	const totalPages = Math.min(500, data.total_pages || 1);
 
 	return (
 		<div>
@@ -24,6 +31,7 @@ export default async function Search({ searchParams }: { searchParams: Promise<{
 					<MovieCard key={m.id} movie={m} />
 				))}
 			</div>
+			{q && <Pagination page={page} totalPages={totalPages} />}
 		</div>
 	);
 }
