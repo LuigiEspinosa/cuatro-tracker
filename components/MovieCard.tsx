@@ -2,12 +2,14 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export default function MovieCard({ movie }: { movie: any }) {
 	const [saving, setSaving] = useState(false);
 
 	async function track(status: "WATCHLIST" | "WATCHING" | "COMPLETED" | "DROPPED") {
 		setSaving(true);
+
 		try {
 			await fetch("/api/track", {
 				method: "POST",
@@ -15,7 +17,9 @@ export default function MovieCard({ movie }: { movie: any }) {
 				body: JSON.stringify({ movie, status }),
 			});
 
-			alert(`Saved as ${status}`);
+			toast.success(`Saved as ${status}`);
+		} catch (e: any) {
+			toast.error(e.message || "Failed to save");
 		} finally {
 			setSaving(false);
 		}
