@@ -1,7 +1,12 @@
+import TrackerButtons from "@/components/TrackButtonts";
+import { authConfig } from "@/lib/auth";
 import { getMovieDetails } from "@/lib/tmdb";
+import { getServerSession } from "next-auth";
 import Image from "next/image";
 
 export default async function MovieDetails({ params }: { params: Promise<{ id: string }> }) {
+	const session = await getServerSession(authConfig);
+
 	const { id } = await params;
 	const data = await getMovieDetails(Number(id));
 
@@ -42,6 +47,8 @@ export default async function MovieDetails({ params }: { params: Promise<{ id: s
 					<div className="text-sm text-gray-600">Genres: {genres || "—"}</div>
 					{data.tagline && <div className="italic text-gray-700">{data.tagline}</div>}
 					{data.overview && <p className="text-gray-800">{data.overview}</p>}
+
+					{session?.user && <TrackerButtons movie={data} />}
 				</div>
 			</div>
 
