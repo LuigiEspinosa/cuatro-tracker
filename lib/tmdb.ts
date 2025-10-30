@@ -2,12 +2,12 @@ const TMDB_BASE = 'https://api.themoviedb.org/3'
 const key = process.env.TMDB_API_KEY!
 
 export type TMDBMovie = {
-  id: number,
-  title: string,
-  release_date?: string,
-  poster_path?: string,
-  backdrop_path?: string,
-  popularity?: number
+  id: number
+  title: string
+  release_date?: string | null
+  poster_path?: string | null
+  backdrop_path?: string | null
+  popularity?: number | null
 }
 
 async function tmdb(path: string, init?: RequestInit) {
