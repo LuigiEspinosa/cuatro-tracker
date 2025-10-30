@@ -47,6 +47,8 @@ export default async function Home({
 		return `/?${p.toString()}`;
 	}
 
+	const newOld = dir === "asc" ? "Oldest" : "Newest";
+
 	return (
 		<div>
 			<div className="mb-4 flex gap-2 items-center">
@@ -56,7 +58,7 @@ export default async function Home({
 						className={`px-3 py-2 rounded border ${sort === s ? "bg-black text-white" : ""}`}
 						href={linkFor({ sort: s, page: 1 })}
 					>
-						{s === "release" ? "Newest" : s.charAt(0).toUpperCase() + s.slice(1)}
+						{s === "release" ? newOld : s.charAt(0).toUpperCase() + s.slice(1)}
 					</Link>
 				))}
 

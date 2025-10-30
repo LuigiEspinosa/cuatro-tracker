@@ -13,7 +13,7 @@ export type TMDBMovie = {
 async function tmdb(path: string, init?: RequestInit) {
   const url = new URL(TMDB_BASE + path);
   url.searchParams.set('api_key', key);
-  url.searchParams.set('langauge', 'en-Us');
+  url.searchParams.set('language', 'en-Us');
 
   const res = await fetch(url, { ...init, next: { revalidate: 60 } });
   if (!res.ok) throw new Error(`TMDB ${res.status}`);
