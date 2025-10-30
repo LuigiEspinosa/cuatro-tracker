@@ -1,14 +1,26 @@
+import { FeedbackPanel } from "@/components/movie/FeedbackPanel";
+import { MovieCommentsList } from "@/components/movie/MovieCommentsList";
+import { NewMovieComment } from "@/components/movie/NewMovieComment";
 import TrackerButtons from "@/components/TrackButtonts";
 import { authConfig } from "@/lib/auth";
+import { getMovieComments } from "@/lib/queries/movieComments";
+import { getMyUserMovie } from "@/lib/queries/userMovie";
 import { getMovieDetails } from "@/lib/tmdb";
 import { getServerSession } from "next-auth";
 import Image from "next/image";
+import { Suspense } from "react";
 
 export default async function MovieDetails({ params }: { params: Promise<{ id: string }> }) {
 	const session = await getServerSession(authConfig);
 
 	const { id } = await params;
-	const data = await getMovieDetails(Number(id));
+	const tmdbId = Number(id);
+	const data = await getMovieDetails(tmdbId);
+
+	const [mine, { me, comments }] = await Promise.all([
+		getMyUserMovie(tmdbId),
+		getMovieComments(tmdbId),
+	]);
 
 	const poster = data.poster_path
 		? `https://image.tmdb.org/t/p/w500${data.poster_path}`
@@ -83,6 +95,12 @@ export default async function MovieDetails({ params }: { params: Promise<{ id: s
 					</ul>
 				</div>
 			)}
+
+			<Suspense fallback={<div>Loading Feedback...</div>}>
+				<FeedbackPanel tmdbId={tmdbId} initialRating={mine?.rating ?? null} />
+				<NewMovieComment tmdbId={tmdbId} canComment={!!me} />
+				<MovieCommentsList me={me} comments={comments} />
+			</Suspense>
 		</div>
 	);
 }
