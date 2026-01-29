@@ -2,12 +2,21 @@ const TMDB_BASE = 'https://api.themoviedb.org/3'
 const key = process.env.TMDB_API_KEY!
 
 export type TMDBMovie = {
-  id: number,
-  title: string,
-  release_date?: string,
-  poster_path?: string,
-  backdrop_path?: string,
-  popularity?: number
+  id: number
+  title: string
+  release_date?: string | null
+  poster_path?: string | null
+  backdrop_path?: string | null
+  popularity?: number | null
+}
+
+export type TMDBTv = {
+  id: number
+  name: string
+  first_air_date?: string | null
+  poster_path?: string | null
+  backdrop_path?: string | null
+  popularity?: number | null
 }
 
 async function tmdb(path: string, init?: RequestInit) {
@@ -47,4 +56,36 @@ export async function getByRelease(page = 1, dir: 'asc' | 'desc' = 'desc') {
 
 export async function getMovieDetails(id: number) {
   return tmdb(`/movie/${id}?append_to_response=credits,release_dates,videos,images,recommendations,similar`)
+}
+
+export async function getPopularTv(page = 1, dir: 'asc' | 'desc' = 'desc') {
+  return tmdb(`/discover/tv?sort_by=popularity.${dir}&page=${page}`)
+}
+
+export async function getTrendingTv(time_window: 'day' | 'week' = 'day', page = 1) {
+  return tmdb(`/trending/tv/${time_window}?page=${page}`)
+}
+
+export async function getByFirstAirDate(page = 1, dir: 'asc' | 'desc' = 'desc') {
+  const today = new Date()
+  const yyyy = today.getUTCFullYear()
+  const mm = String(today.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(today.getUTCDate()).padStart(2, '0')
+  const lte = `${yyyy}-${mm}-${dd}`
+
+  return tmdb(
+    `/discover/tv?sort_by=first_air_date.${dir}&first_air_date.lte=${lte}&page=${page}`
+  )
+}
+
+export async function getTvDetails(id: number) {
+  return tmdb(
+    `/tv/${id}?append_to_response=credits,aggregate_credits,content_ratings,external_ids,keywords,images,videos,recommendations,similar`
+  )
+}
+
+export async function getTvSeasonDetails(id: number, seasonNumber: number) {
+  return tmdb(
+    `/tv/${id}/season/${seasonNumber}?append_to_response=credits,external_ids,images,videos`
+  )
 }

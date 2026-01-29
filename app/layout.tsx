@@ -17,6 +17,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 								Cuatro Tracker
 							</Link>
 							<nav className="flex gap-3 items-center">
+								<Link href="/tv" className="hover:underline">
+									TV
+								</Link>
 								<Link href="/watchlist" className="hover:underline">
 									My List
 								</Link>

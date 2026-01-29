@@ -54,6 +54,7 @@ model User {
   sessions     Session[]
   userMovies   UserMovie[]
   MovieComment MovieComment[]
+  userEpisodes UserEpisode[]
 }
 
 model VerificationToken {
@@ -76,6 +77,27 @@ model Movie {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   userMovies   UserMovie[]
+}
+
+model Episode {
+  tmdbId         Int           @id
+  tvId           Int
+  seasonNumber   Int
+  episodeNumber  Int
+  name           String
+  airDate        DateTime?
+  stillPath      String?
+  runtime        Int?
+  overview       String?
+  productionCode String?
+  voteAverage    Float?
+  voteCount      Int?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  userEpisodes   UserEpisode[]
+
+  @@index([tvId])
+  @@index([seasonNumber, episodeNumber])
 }
 
 enum TrackStatus {
@@ -103,6 +125,23 @@ model UserMovie {
   @@unique([userId, tmdbId], name: "userId_tmdbId")
   @@index([userId])
   @@index([tmdbId])
+}
+
+model UserEpisode {
+  id            String      @id @default(cuid())
+  userId        String
+  tmdbEpisodeId Int
+  status        TrackStatus
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [tmdbEpisodeId], references: [tmdbId], onDelete: Cascade)
+
+  @@unique([userId, tmdbEpisodeId], name: "userId_tmdbEpisodeId")
+  @@index([userId])
+  @@index([tmdbEpisodeId])
 }
 
 model MovieComment {
