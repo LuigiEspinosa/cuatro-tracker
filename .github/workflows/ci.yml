@@ -37,25 +37,20 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        working-directory: cuatro-tracker
         run: pnpm install --frozen-lockfile
 
       - name: Generate prisma client
-        working-directory: cuatro-tracker
         run: pnpm prisma generate
 
       - name: Apply migrations
-        working-directory: cuatro-tracker
         env:
           DATABASE_URL: postgresql://tracker:test@localhost:5432/tracker_test
         run: pnpm prisma migrate deploy
 
       - name: Run tests
-        working-directory: cuatro-tracker
         env:
           DATABASE_URL: postgresql://tracker:test@localhost:5432/tracker_test
         run: pnpm test --coverage
 
       - name: Typecheck
-        working-directory: cuatro-tracker
         run: pnpm typecheck
