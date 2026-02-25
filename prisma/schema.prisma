@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---- Auth (NextAuth v4 Prisma adapter) ----
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String? // hashed with bcryptjs - used by credentials provider
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---- Media types ----
+
+enum MediaType {
+  MOVIE
+  TV_SHOW
+  TV_EPISODE
+  ANIME
+  MANGA
+  GAME
+}
+
+enum WatchStatus {
+  PLAN_TO_WATCH
+  WATCHING
+  COMPLETED
+  ON_HOLD
+  DROPPED
+}
+
+// ---- Core app models ----
+
+model MediaItem {
+  id             String    @id @default(cuid())
+  type           MediaType
+  title          String
+  original_title String?
+  release_date   DateTime? // THE sort field - normaliser functions must never leave this null
+  end_date       DateTime? // series/manga: last air date or completion date
+  poster_path    String? // path only e.g. /abc.jpg - construct full URL at render time
+  backdrop_path  String? // path only
+  overview       String?
+  genres         String[]
+  rating         Float? // source rating (TMDB vote_average, AniList meanScore, etc.)
+  popularity     Float?
+  status         String? // "Ended", "Continuing", "Finished Airing", etc.
+
+  // Source API foreign keys - null for manually added items
+  tmdb_id    Int? @unique
+  anilist_id Int? @unique
+  igdb_id    Int? @unique
+  steam_id   Int? @unique
+
+  // Self-relation for TV_EPISODE -> TV_SHOW and anime episode -> series
+  parent_id String?
+  parent    MediaItem?  @relation("MediaHierarchy", fields: [parent_id], references: [id])
+  children  MediaItem[] @relation("MediaHierarchy")
+
+  // Franchise grouping for chronological sorting across a series
+  franchise_id String?
+
+  user_entry UserEntry?
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+}
+
+model UserEntry {
+  id            String      @id @default(cuid())
+  media_item_id String      @unique
+  media_item    MediaItem   @relation(fields: [media_item_id], references: [id], onDelete: Cascade)
+  status        WatchStatus @default(PLAN_TO_WATCH)
+  user_rating   Float? // personal rating 1-10
+  progress      Int         @default(0) // episode / chapter / achievement count
+  notes         String?
+  started_at    DateTime?
+  completed_at  DateTime?
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @updatedAt
+}
+
+model Achievement {
+  id             String    @id @default(cuid())
+  game_id        String // MediaItem.id of the parent game
+  steam_api_name String
+  display_name   String
+  description    String?
+  icon_url       String?
+  unlocked       Boolean   @default(false)
+  unlocked_at    DateTime?
+
+  @@index([game_id])
+}
+
+model MergeSuggestion {
+  id         String   @id @default(cuid())
+  source_id  String // MediaItem to be merged away
+  target_id  String // MediaItem to keep
+  confidence Float // 0-1 similarity score
+  resolved   Boolean  @default(false)
+  created_at DateTime @default(now())
+}
