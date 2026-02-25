@@ -1,0 +1,7 @@
+:80 {
+	redir https://{host}{uri} 308
+}
+
+tracker.cuatro.dev {
+	reverse_proxy app:3000
+}
