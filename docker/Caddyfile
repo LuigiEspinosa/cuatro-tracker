@@ -1,7 +1,11 @@
-:80 {
-	redir https://{host}{uri} 308
+{
+	email admin@cuatro.dev
 }
 
 tracker.cuatro.dev {
 	reverse_proxy app:3000
+
+	tls {
+		dns hetzner {env.HETZNER_DNS_API_TOKEN}
+	}
 }

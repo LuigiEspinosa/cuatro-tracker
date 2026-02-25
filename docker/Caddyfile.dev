@@ -1,0 +1,8 @@
+# Development-only Caddyfile.
+# No domain, no TLS, no ACME challenges.
+# Use when running the full Docker stack locally to test without a real cert.
+# Access at http://localhost
+
+http://localhost {
+  reverse_proxy app:3000
+}
