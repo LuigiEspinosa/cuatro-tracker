@@ -79,7 +79,7 @@ importers:
         specifier: ^19
         version: 19.2.3(@types/react@19.2.14)
       '@vitest/coverage-v8':
-        specifier: ^3.0.4
+        specifier: ^3.2.4
         version: 3.2.4(vitest@3.2.4(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0))
       eslint:
         specifier: ^9

@@ -21,9 +21,9 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd pg_isready
-          --health-internal 10s
+          --health-interval 10s
           --health-timeout 5s
-          --health-retires 5
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -50,13 +50,13 @@ jobs:
       - name: Apply migrations
         working-directory: cuatro-tracker
         env:
-          DATABASE_URL: postgresql://trakcer:test@localhost:5432/tracker_test
+          DATABASE_URL: postgresql://tracker:test@localhost:5432/tracker_test
         run: pnpm prisma migrate deploy
 
       - name: Run tests
         working-directory: cuatro-tracker
         env:
-          DATABASE_URL: postgresql://trakcer:test@localhost:5432/tracker_test
+          DATABASE_URL: postgresql://tracker:test@localhost:5432/tracker_test
         run: pnpm test --coverage
 
       - name: Typecheck
