@@ -1,38 +1,79 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Cuatro Tracker
 
-## Getting Started
+A self-hosted, privacy-first media tracker. Tracks movies, TV shows, anime, manga, and video games in a unified
+PostgreSQL database.
 
-First, run the development server:
+The defining feature is a **chronological timeline** - every item is sortable by original release date across all
+media types, powered by four external APIs normalised into a single schema.
+
+**Live:** [tracker.cuatro.dev](https://tracker.cuatro.dev)
+
+## Stack
+
+| Layer         | Technology                                           |
+| ------------- | ---------------------------------------------------- |
+| Framework     | Next.js 15 (App Router, standalone output)           |
+| UI            | React 19                                             |
+| Language      | TypeScript 5.7 (strict, `moduleResolution: bundler`) |
+| Styling       | Tailwind CSS v4 (CSS-first, no config file)          |
+| Animation     | GSAP 3 + ScrollTrigger                               |
+| Database      | PostgreSQL 16 + Prisma 6                             |
+| Auth          | NextAuth v4 (email/password credentials)             |
+| Client state  | Zustand                                              |
+| Server state  | TanStack Query v5                                    |
+| Job queue     | BullMQ + Redis                                       |
+| Validation    | Zod v4                                               |
+| Reverse proxy | Caddy (auto-HTTPS)                                   |
+
+## External APIs
+
+| API           | Covers                          | Auth                      |
+| ------------- | ------------------------------- | ------------------------- |
+| TMDB          | Movies, TV, streaming providers | API key (free)            |
+| AniList       | Anime, manga (GraphQL)          | No key for public queries |
+| IGDB          | Games, covers, platforms        | Twitch app token (free)   |
+| Steam Web API | Library, achievements, playtime | API key + Steam ID        |
+
+## One-command deploy
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
+git clone https://github.com/your-username/cuatro-tracker /opt/tracker
+cd /opt/tracker/cuatro-tracker
+cp .env.example .env
+# fill in .env values
+docker compose up -d
+docker compose exec app pnpm prisma migrate deploy
+docker compose exec app pnpm prisma db seed
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Development
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+```bash
+  # Prerequisites: Node 22, pnpm 10, Docker
+  cd cuatro-tracker
+  cp .env.example .env.local
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+  # fill in DATABASE_URL pointing to local postgres
+  docker compose up -d postgres redis
+  pnpm install
+  pnpm prisma migrate dev
+  pnpm prisma db seed
+  pnpm dev
+```
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+## Build Phases
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+| Phase | Description                               | Status  |
+| ----- | ----------------------------------------- | ------- |
+| 0     | Scaffold, infra, Docker, CI               | Done    |
+| 1     | Auth (email/password, session middleware) | Pending |
+| 2     | API adapters and normaliser functions     | Pending |
+| 3     | Search and add to library                 | Pending |
+| 4     | Movies                                    | Pending |
+| 5     | TV shows and episodes                     | Pending |
+| 6     | Anime and manga                           | Pending |
+| 7     | Video games and Steam achievements        | Pending |
+| 8     | Chronological timeline                    | Pending |
+| 9     | Admin merge tool and bulk import          | Pending |
+| 10    | qBittorrent integration                   | Pending |
+| 11    | Polish and production hardening           | Pending |
