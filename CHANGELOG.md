@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-02-25
+
+### Fixed
+
+- Docker: copy `prisma/` before `pnpm install` so postinstall `prisma generate` finds the schema
+- Docker: add `export default nextConfig` to produce `.next/standalone` output
+- Docker: add postgres and redis healthchecks for `service_healthy` dependency conditions
+- Docker: add `migrate` service (builder stage) that runs `prisma migrate deploy` before app starts
+- Docker: switch Caddy DNS-01 provider from Hetzner to Cloudflare (Hetzner plugin requires apex zone)
+- CI: fix typos in healthcheck flags (`--health-internal`, `--health-retires`) and `DATABASE_URL` username
+- CI: remove `version:` from pnpm action-setup (conflicts with `packageManager` in package.json)
+- CI: remove `cache: pnpm` from setup-node (incompatible with action-setup install path)
+- CI: remove incorrect `working-directory: cuatro-tracker` (repo root is the app root)
+
 ## [0.1.0] - 2026-02-25
 
 ### Added
