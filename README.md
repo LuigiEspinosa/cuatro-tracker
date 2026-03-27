@@ -7,6 +7,7 @@ The defining feature is a **chronological timeline** - every item is sortable by
 media types, powered by four external APIs normalised into a single schema.
 
 **Live:** [tracker.cuatro.dev](https://tracker.cuatro.dev)
+**Design:** [Figma](https://www.figma.com/design/tltAHHZbUAtmHHklmHUTp1/Cuatro-Tracker?m=auto&t=1flYz4U3SUHFLwBX-1)
 
 ## Stack
 
