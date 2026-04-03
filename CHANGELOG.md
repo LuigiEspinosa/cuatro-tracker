@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.0] - 2026-04-03
+
+### Added
+
+- NextAuth v4 with credentials provider (email + password). JWT session strategy.
+- Route middleware protecting all app and API routes. Login page at `/login`.
+- Prisma admin user seed (`prisma/seed.ts`).
+
+### Fixed
+
+- `prisma/schema.prisma`: `release_date` is now non-nullable at the DB level.
+- `prisma/schema.prisma`: `Achievement.game_id` has a proper FK relation ith `onDelete: Cascade`.
+- `prisma/schema.prisma`: `MergeSuggestion.source_id` and `target_id` have FK relations.
+- `prisma/schema.prisma`: `MediaItem.parent` self-relation has explicit `onDelete: SetNull`.
+- `lib/auth.ts`: Email is normalized to lowercase before DB lookup.
+- `lib/auth.ts`: Null email guard added before returning user object from `authorizeCredentials`.
+- `lib/auth.ts`: Typo `'passwird'` corrected to `'password'` on credentials field type.
+- `lib/auth.ts`: `token.id` cast guarded with nullish coalescing.
+- `middleware.ts`: `/api/health` and `/api/ready` excluded from auth protection.
+- `lib/db.ts`: PrismaClient cached on `globalThis` in all environments.
+
 ## [0.2.0] - 2026-04-02
 
 ### Added

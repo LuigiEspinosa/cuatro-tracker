@@ -2,25 +2,26 @@
 
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { type FormEvent, useState } from 'react'
 
 export default function LoginPage() {
   const router = useRouter()
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
 
-  async function handleSubmit(e: {
-    preventDefault: () => void
-    currentTarget: HTMLFormElement | undefined
-  }) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
     setPending(true)
 
-    const form = new FormData(e.currentTarget)
+    const form = e.currentTarget
+    const email = (form.elements.namedItem('email') as HTMLInputElement).value
+    const password = (form.elements.namedItem('password') as HTMLInputElement)
+      .value
+
     const result = await signIn('credentials', {
-      email: form.get('email') as string,
-      password: form.get('password') as string,
+      email,
+      password,
       redirect: false,
     })
 
