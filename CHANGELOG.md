@@ -1,6 +1,19 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [0.2.0] - 2026-04-02
+
+### Added
+
+- NextAuth v4 credentials provider with Prisma adapter and JWT session strategy.
+- `authorizeCredentials` exported from `lib/auth.ts` for unit testing without booting NextAuth.
+- Route middleware (`middleware.ts`) protecting all routes except `/login` and `/api/auth/*`.
+- Login page at `/login` with email/password form and inline error feedback.
+- `SessionProvider` added to `app/providers.tsx`.
+- Five unit tests for  `authorizeCredentials` covering missing credentials, unknown user, wrong password, and valid sign-in.
+
+### Fixed
+
+- `staleTime` in TanStack Query config was `60 * 100` (6s), corrected to `60 * 1000` (60s).
 
 ## [0.1.1] - 2026-02-25
 
