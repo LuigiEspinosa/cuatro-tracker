@@ -81,7 +81,7 @@ model MediaItem {
   type           MediaType
   title          String
   original_title String?
-  release_date   DateTime? // THE sort field - normaliser functions must never leave this null
+  release_date   DateTime // THE sort field - normaliser functions must never leave this null
   end_date       DateTime? // series/manga: last air date or completion date
   poster_path    String? // path only e.g. /abc.jpg - construct full URL at render time
   backdrop_path  String? // path only
@@ -99,15 +99,19 @@ model MediaItem {
 
   // Self-relation for TV_EPISODE -> TV_SHOW and anime episode -> series
   parent_id String?
-  parent    MediaItem?  @relation("MediaHierarchy", fields: [parent_id], references: [id])
+  parent    MediaItem?  @relation("MediaHierarchy", fields: [parent_id], references: [id], onDelete: SetNull)
   children  MediaItem[] @relation("MediaHierarchy")
 
   // Franchise grouping for chronological sorting across a series
   franchise_id String?
 
-  user_entry UserEntry?
-  created_at DateTime   @default(now())
-  updated_at DateTime   @updatedAt
+  user_entry    UserEntry?
+  achievements  Achievement[]     @relation("AchievementGame")
+  merge_sources MergeSuggestion[] @relation("MergeSource")
+  merge_targets MergeSuggestion[] @relation("MergeTarget")
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 }
 
 model UserEntry {
@@ -127,6 +131,7 @@ model UserEntry {
 model Achievement {
   id             String    @id @default(cuid())
   game_id        String // MediaItem.id of the parent game
+  game           MediaItem @relation("AchievementGame", fields: [game_id], references: [id], onDelete: Cascade)
   steam_api_name String
   display_name   String
   description    String?
@@ -138,10 +143,12 @@ model Achievement {
 }
 
 model MergeSuggestion {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   source_id  String // MediaItem to be merged away
+  source     MediaItem @relation("MergeSource", fields: [source_id], references: [id], onDelete: Cascade)
   target_id  String // MediaItem to keep
+  target     MediaItem @relation("MergeTarget", fields: [target_id], references: [id], onDelete: Cascade)
   confidence Float // 0-1 similarity score
-  resolved   Boolean  @default(false)
-  created_at DateTime @default(now())
+  resolved   Boolean   @default(false)
+  created_at DateTime  @default(now())
 }

@@ -4,9 +4,9 @@ services:
       context: .
       dockerfile: docker/Dockerfile.caddy
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
     environment:
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
     volumes:
@@ -23,13 +23,13 @@ services:
       dockerfile: docker/Dockerfile
       target: builder
     working_dir: /app
-    command: ["pnpm", "prisma", "migrate", "deploy"]
+    command: ['pnpm', 'prisma', 'migrate', 'deploy']
     environment:
       DATABASE_URL: postgresql://tracker:${DB_PASS}@postgres:5432/tracker
     depends_on:
       postgres:
         condition: service_healthy
-    restart: "no"
+    restart: 'no'
 
   app:
     build:
@@ -57,6 +57,8 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    ports:
+      - '5432:5432'
     environment:
       - POSTGRES_DB=tracker
       - POSTGRES_USER=tracker
@@ -65,7 +67,7 @@ services:
       - pg_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "tracker", "-d", "tracker"]
+      test: ['CMD', 'pg_isready', '-U', 'tracker', '-d', 'tracker']
       interval: 5s
       timeout: 3s
       retries: 5
@@ -76,7 +78,7 @@ services:
       - redis_data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 5
