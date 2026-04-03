@@ -6,8 +6,8 @@ PostgreSQL database.
 The defining feature is a **chronological timeline** - every item is sortable by original release date across all
 media types, powered by four external APIs normalised into a single schema.
 
-**Live:** [tracker.cuatro.dev](https://tracker.cuatro.dev)
-**Design:** [Figma](https://www.figma.com/design/tltAHHZbUAtmHHklmHUTp1/Cuatro-Tracker?m=auto&t=1flYz4U3SUHFLwBX-1)
+- **Live:** [tracker.cuatro.dev](https://tracker.cuatro.dev)
+- **Design:** [Figma](https://www.figma.com/design/tltAHHZbUAtmHHklmHUTp1/Cuatro-Tracker?m=auto&t=1flYz4U3SUHFLwBX-1)
 
 ## Stack
 
@@ -61,20 +61,3 @@ docker compose exec app pnpm prisma db seed
   pnpm prisma db seed
   pnpm dev
 ```
-
-## Build Phases
-
-| Phase | Description                               | Status  |
-| ----- | ----------------------------------------- | ------- |
-| 0     | Scaffold, infra, Docker, CI               | Done    |
-| 1     | Auth (email/password, session middleware) | Pending |
-| 2     | API adapters and normaliser functions     | Pending |
-| 3     | Search and add to library                 | Pending |
-| 4     | Movies                                    | Pending |
-| 5     | TV shows and episodes                     | Pending |
-| 6     | Anime and manga                           | Pending |
-| 7     | Video games and Steam achievements        | Pending |
-| 8     | Chronological timeline                    | Pending |
-| 9     | Admin merge tool and bulk import          | Pending |
-| 10    | qBittorrent integration                   | Pending |
-| 11    | Polish and production hardening           | Pending |

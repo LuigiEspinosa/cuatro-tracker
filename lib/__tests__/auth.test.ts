@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import bcrypt from 'bcryptjs'
 
 vi.mock('@/lib/db', () => ({
@@ -10,6 +10,7 @@ import { authorizeCredentials } from '@/lib/auth'
 
 const findUnique = vi.mocked(db.user.findUnique)
 
+// bcrypt is slow - pre-hash once with minimal rounds for the whole suite
 let validHash: string
 beforeAll(async () => {
   validHash = await bcrypt.hash('correct', 4)
@@ -57,6 +58,10 @@ describe('authorizeCredentials', () => {
     } as Awaited<ReturnType<typeof db.user.findUnique>>)
     expect(
       await authorizeCredentials({ email: 'a@b.com', password: 'correct' }),
-    ).toEqual({ id: '1', email: 'a@b.com', name: 'Admin' })
+    ).toEqual({
+      id: '1',
+      email: 'a@b.com',
+      name: 'Admin',
+    })
   })
 })

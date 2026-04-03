@@ -4,7 +4,7 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 
-// Co-located augmentation: session.user.id is set in the jwt + session callbacks.
+// Co-located augmentation: session.user.id is set in the jwt + session callbacks below.
 declare module 'next-auth' {
   interface Session {
     user: { id: string; email: string; name?: string | null }
@@ -12,6 +12,7 @@ declare module 'next-auth' {
 }
 
 // Exported separately so unit tests can call it without importing the full NextAuth config.
+// db.user.findUnique throws when Postgres is down -> sign-in returns HTTP 500
 // A try/catch here would let us return null instead, but masking infra erros silently is worse.
 export async function authorizeCredentials(
   credentials: Record<'email' | 'password', string> | undefined,
@@ -44,7 +45,7 @@ export const authOptions: NextAuthOptions = {
       name: 'Credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'passwird' },
+        password: { label: 'Password', type: 'password' },
       },
       authorize: authorizeCredentials,
     }),
@@ -52,6 +53,7 @@ export const authOptions: NextAuthOptions = {
   pages: { signIn: '/login' },
   callbacks: {
     jwt({ token, user }) {
+      // user is only defined on the initial sign-in, not on subsequent JWT refreshes
       if (user) token.id = user.id
       return token
     },
