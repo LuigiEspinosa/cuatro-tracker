@@ -20,11 +20,11 @@ export async function authorizeCredentials(
   if (!credentials?.email || !credentials?.password) return null
 
   const user = await db.user.findUnique({
-    where: { email: credentials.email },
+    where: { email: credentials.email.trim().toLowerCase() },
     select: { id: true, email: true, name: true, password: true },
   })
 
-  if (!user?.password) return null
+  if (!user?.password || !user.email) return null
 
   const isValid = await bcrypt.compare(credentials.password, user.password)
   return isValid
@@ -58,7 +58,7 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     session({ session, token }) {
-      if (session.user) session.user.id = token.id as string
+      if (session.user) session.user.id = (token.id as string) ?? ''
       return session
     },
   },

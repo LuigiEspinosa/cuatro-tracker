@@ -14,5 +14,7 @@ export const config = {
   //    /_next/static   - JS/CSS bundles
   //    /_next/image    - image optimisation
   //    /favicon
-  matcher: ['/((?!login|api/auth|_next/static|_next/image|favicon\\.ico).*)'],
+  matcher: [
+    '/((?!login|api/auth|api/health|api/ready|_next/static|_next/image|favicon\\.ico).*)',
+  ],
 }
