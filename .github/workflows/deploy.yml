@@ -1,3 +1,6 @@
+# board-smoke-test: temproary marker added to verify the Github Project board's "Pull request merged" workflow.
+# Will be removed by story 1.4's real fix when it lands.
+
 name: Deploy
 
 on:
