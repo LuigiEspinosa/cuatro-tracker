@@ -5,7 +5,7 @@ import { env } from '@/lib/env'
 const prisma = new PrismaClient()
 
 async function main() {
-  const hash = await bcrypt.hash(process.env.ADMIN_PASS ?? 'changeme', 12)
+  const hash = await bcrypt.hash(env.ADMIN_PASS ?? 'changeme', 12)
 
   await prisma.user.upsert({
     where: { email: 'admin@tracker.local' },
