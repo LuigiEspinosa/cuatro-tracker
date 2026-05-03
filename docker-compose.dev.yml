@@ -14,7 +14,7 @@ services:
       - POSTGRES_USER=tracker
       - "POSTGRES_PASSWORD=${DB_PASS:?DB_PASS is required; see .env.example}"
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pg_dev_data:/var/lib/postgresql/data
     restart: unless-stopped
