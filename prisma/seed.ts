@@ -5,7 +5,7 @@ import { env } from '@/lib/env'
 const prisma = new PrismaClient()
 
 async function main() {
-  const hash = await bcrypt.hash(env.ADMIN_PASS ?? 'changeme', 12)
+  const hash = await bcrypt.hash(env.ADMIN_PASS, 12)
 
   await prisma.user.upsert({
     where: { email: 'admin@tracker.local' },
@@ -21,5 +21,14 @@ async function main() {
 }
 
 main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect())
+  .catch((err) => {
+    console.error('Seed failed: ', err)
+    process.exitCode = 1
+  })
+  .finally(async () => {
+    try {
+      await prisma.$disconnect()
+    } catch (err) {
+      console.error('Prisma disconnect failed: ', err)
+    }
+  })
