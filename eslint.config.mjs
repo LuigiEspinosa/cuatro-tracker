@@ -20,12 +20,20 @@ const eslintConfig = [
             "Use `import { env } from '@/lib/env'` instead of `process.env`. Add new vars to the Zod schema in lib/env.ts.",
         },
       ],
+      'no-console': 'error',
     },
   },
   {
     files: ['lib/env.ts', 'lib/__tests__/env.test.ts'],
     rules: {
-      'no-restricted-synrax': 'off',
+      'no-restricted-syntax': 'off',
+      'no-console': 'off',
+    },
+  },
+  {
+    files: ['lib/logger.ts', 'prisma/seed.ts'],
+    rules: {
+      'no-console': 'off',
     },
   },
 ]

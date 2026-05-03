@@ -30,6 +30,10 @@ const EnvSchema = z.object({
   DOWNLOAD_PATH: z.string().min(1),
 
   CLOUDFLARE_API_TOKEN: z.string().optional(),
+
+  LOG_LEVEL: z
+    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
+    .default('info'),
 })
 
 const parsed = EnvSchema.safeParse(process.env)
