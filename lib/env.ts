@@ -32,7 +32,7 @@ const EnvSchema = z.object({
   CLOUDFLARE_API_TOKEN: z.string().optional(),
 
   LOG_LEVEL: z
-    .enum(['fata', 'error', 'warn', 'info', 'debug', 'trace'])
+    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
 })
 

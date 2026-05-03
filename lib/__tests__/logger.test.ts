@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import type { DestinationStream } from 'pino'
-import { createLogger } from '@/lib/logger'
 
 const validEnv: Record<string, string> = {
   NEXTAUTH_SECRET: 'a'.repeat(32),
