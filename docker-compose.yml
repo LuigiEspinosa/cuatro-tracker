@@ -25,8 +25,8 @@ services:
     working_dir: /app
     command: [ "pnpm", "prisma", "migrate", "deploy" ]
     environment:
-      DATABASE_URL: postgresql://tracker:${DB_PASS:?DB_PASS is required; see
-        .env.example}@postgres:5432/tracker
+      DATABASE_URL: "postgresql://tracker:${DB_PASS:?DB_PASS is required; see
+        .env.example}@postgres:5432/tracker"
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,12 +69,10 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    ports:
-      - "5432:5432"
     environment:
       - POSTGRES_DB=tracker
       - POSTGRES_USER=tracker
-      - POSTGRES_PASSWORD=${DB_PASS:?DB_PASS is required; see .env.example}
+      - "POSTGRES_PASSWORD=${DB_PASS:?DB_PASS is required; see .env.example}"
     volumes:
       - pg_data:/var/lib/postgresql/data
     restart: unless-stopped
