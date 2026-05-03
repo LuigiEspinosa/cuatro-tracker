@@ -12,14 +12,14 @@ services:
     environment:
       - POSTGRES_DB=tracker
       - POSTGRES_USER=tracker
-      - POSTGRES_PASSWORD=${DB_PASS}
+      - "POSTGRES_PASSWORD=${DB_PASS:?DB_PASS is required; see .env.example}"
     ports:
       - "5432:5432"
     volumes:
       - pg_dev_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "tracker", "-d", "tracker"]
+      test: [ "CMD", "pg_isready", "-U", "tracker", "-d", "tracker" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -32,7 +32,7 @@ services:
       - redis_dev_data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5

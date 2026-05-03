@@ -4,9 +4,9 @@ services:
       context: .
       dockerfile: docker/Dockerfile.caddy
     ports:
-      - '80:80'
-      - '443:443'
-      - '443:443/udp'
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
     environment:
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
     volumes:
@@ -23,31 +23,43 @@ services:
       dockerfile: docker/Dockerfile
       target: builder
     working_dir: /app
-    command: ['pnpm', 'prisma', 'migrate', 'deploy']
+    command: [ "pnpm", "prisma", "migrate", "deploy" ]
     environment:
-      DATABASE_URL: postgresql://tracker:${DB_PASS}@postgres:5432/tracker
+      DATABASE_URL: postgresql://tracker:${DB_PASS:?DB_PASS is required; see
+        .env.example}@postgres:5432/tracker
     depends_on:
       postgres:
         condition: service_healthy
-    restart: 'no'
+    restart: "no"
 
   app:
     build:
       context: .
       dockerfile: docker/Dockerfile
     environment:
-      - DATABASE_URL=postgresql://tracker:${DB_PASS}@postgres:5432/tracker
+      - "DATABASE_URL=postgresql://tracker:${DB_PASS:?DB_PASS is required; see
+        .env.example}@postgres:5432/tracker"
       - REDIS_URL=redis://redis:6379
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-      - NEXTAUTH_URL=${NEXTAUTH_URL}
-      - TMDB_API_KEY=${TMDB_API_KEY}
-      - IGDB_CLIENT_ID=${IGDB_CLIENT_ID}
-      - IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET}
-      - STEAM_API_KEY=${STEAM_API_KEY}
-      - STEAM_USER_ID=${STEAM_USER_ID}
+      - "NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required; see
+        .env.example}"
+      - "NEXTAUTH_URL=${NEXTAUTH_URL:?NEXTAUTH_URL is required; see
+        .env.example}"
+      - "ADMIN_PASS=${ADMIN_PASS:?ADMIN_PASS is required; see .env.example}"
+      - "TMDB_API_KEY=${TMDB_API_KEY:?TMDB_API_KEY is required; see
+        .env.example}"
+      - "IGDB_CLIENT_ID=${IGDB_CLIENT_ID:?IGDB_CLIENT_ID is required; see
+        .env.example}"
+      - "IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:?IGDB_CLIENT_SECRET is
+        required; see .env.example}"
+      - "STEAM_API_KEY=${STEAM_API_KEY:?STEAM_API_KEY is required; see
+        .env.example}"
+      - "STEAM_USER_ID=${STEAM_USER_ID:?STEAM_USER_ID is required; see
+        .env.example}"
       - QBITTORRENT_HOST=http://qbittorrent:8080
-      - QBITTORRENT_USER=${QBITTORRENT_USER}
-      - QBITTORRENT_PASS=${QBITTORRENT_PASS}
+      - "QBITTORRENT_USER=${QBITTORRENT_USER:?QBITTORRENT_USER is required; see
+        .env.example}"
+      - "QBITTORRENT_PASS=${QBITTORRENT_PASS:?QBITTORRENT_PASS is required; see
+        .env.example}"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -58,16 +70,16 @@ services:
   postgres:
     image: postgres:16-alpine
     ports:
-      - '5432:5432'
+      - "5432:5432"
     environment:
       - POSTGRES_DB=tracker
       - POSTGRES_USER=tracker
-      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_PASSWORD=${DB_PASS:?DB_PASS is required; see .env.example}
     volumes:
       - pg_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ['CMD', 'pg_isready', '-U', 'tracker', '-d', 'tracker']
+      test: [ "CMD", "pg_isready", "-U", "tracker", "-d", "tracker" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -78,7 +90,7 @@ services:
       - redis_data:/data
     restart: unless-stopped
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -91,7 +103,8 @@ services:
       - PGID=1000
     volumes:
       - qb_config:/config
-      - ${DOWNLOAD_PATH:-/tmp/downloads}:/downloads
+      - "${DOWNLOAD_PATH:?DOWNLOAD_PATH is required; see
+        .env.example}:/downloads"
     restart: unless-stopped
     # Internal only - never expose port 8080 externally
 
