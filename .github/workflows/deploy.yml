@@ -1,6 +1,3 @@
-# board-smoke-test: temproary marker added to verify the Github Project board's "Pull request merged" workflow.
-# Will be removed by story 1.4's real fix when it lands.
-
 name: Deploy
 
 on:
@@ -9,10 +6,14 @@ on:
     types: [completed]
     branches: [main]
 
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event.worklow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
 
     steps:
       - name: Deploy to VPS
