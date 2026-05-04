@@ -19,6 +19,11 @@ const eslintConfig = [
           message:
             "Use `import { env } from '@/lib/env'` instead of `process.env`. Add new vars to the Zod schema in lib/env.ts.",
         },
+        {
+          selector: "NewExpression[callee.name='Redis']",
+          message:
+            "Use the shared `redis` singleton from '@/lib/redis' instead of constructing `new Redis(...)` directly. BullMQ Queue and Worker constructors should pass `{ connection: redis }`.",
+        },
       ],
       'no-console': 'error',
     },
@@ -28,6 +33,12 @@ const eslintConfig = [
     rules: {
       'no-restricted-syntax': 'off',
       'no-console': 'off',
+    },
+  },
+  {
+    files: ['lib/redis.ts'],
+    rules: {
+      'no-restricted-syntax': 'off',
     },
   },
   {
