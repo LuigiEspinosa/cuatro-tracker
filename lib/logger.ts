@@ -1,4 +1,5 @@
 import pino, { type DestinationStream, type LoggerOptions } from 'pino'
+import pretty from 'pino-pretty'
 import { env } from '@/lib/env'
 import { getRequestId } from './request-context'
 
@@ -33,14 +34,11 @@ export function createLogger(destination?: DestinationStream) {
     return pino(baseOptions(), destination)
   }
 
-  const options: LoggerOptions = {
-    ...baseOptions(),
-    transport:
-      env.NODE_ENV === 'production'
-        ? undefined
-        : { target: 'pino-pretty', options: { colorize: true } },
+  if (env.NODE_ENV === 'production') {
+    return pino(baseOptions())
   }
-  return pino(options)
+
+  return pino(baseOptions(), pretty({ colorize: true }))
 }
 
 export const logger = createLogger()
