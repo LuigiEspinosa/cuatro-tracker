@@ -25,15 +25,18 @@ export default withAuth(
   },
 )
 
+// ! Each excluded prefix MUST end in (?:/|$) so it anchors to a path-segment
+// ! boundary. Bare prefixes over-match: (?!login) excludes /loginz too, which
+// ! silently bypasses auth. Same rule applies whenever a new exclusion lands.
+// ! Filenames (favicon.ico, robots.txt, sitemap.xml, manifest.webmanifest)
+// ! escape the dot so /faviconxico does not match.
+// ! The matcher entry MUST be a string literal: Next.js statically parses
+// ! config.matcher at build time and silently drops the route if it sees a
+// ! const reference. The unit test reads config.matcher[0] at runtime to keep
+// ! the regex single-sourced.
 export const config = {
-  // Protect every route except:
-  //    /login          - the sign-in page itself
-  //    /api/auth       - NextAuth internal endpoints (session, csrf, providers)
-  //    /_next/static   - JS/CSS bundles
-  //    /_next/image    - image optimisation
-  //    /favicon
   matcher: [
-    '/((?!login|api/auth|api/health|api/ready|_next/static|_next/image|favicon\\.ico).*)',
+    '/((?!login(?:/|$)|api/auth(?:/|$)|api/health(?:/|$)|api/ready(?:/|$)|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest).*)',
   ],
   // ! AsyncLocalStorage requires the Node runtime;
   // ! Edge breaks ALS-based requestId propagation in route handlers.
