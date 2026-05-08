@@ -2,8 +2,14 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vite
 import bcrypt from 'bcryptjs'
 import { ZodError } from 'zod'
 
+const { logWarn } = vi.hoisted(() => ({ logWarn: vi.fn() }))
+
 vi.mock('@/lib/db', () => ({
   db: { user: { findUnique: vi.fn() } },
+}))
+
+vi.mock('@/lib/logger', () => ({
+  logger: { warn: logWarn, info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }))
 
 // validEnv must mirror the required fields in lib/env.ts EnvSchema.
@@ -99,6 +105,57 @@ describe('authorizeCredentials', () => {
       name: 'Admin',
     })
   })
+
+  it('returns null and warn-logs when bcrypt.compare throws on a malformed hash', async () => {
+    const { db } = await import('@/lib/db')
+    vi.mocked(db.user.findUnique).mockResolvedValue({
+      id: '1',
+      email: 'a@b.com',
+      name: 'Admin',
+      // 60 chars trips bcryptjs past the length short-circuit (returns false for length != 60)
+      // into the salt-version check, which throws Error('Invalid salt version: aa').
+      password: 'a'.repeat(60),
+    } as Awaited<ReturnType<typeof db.user.findUnique>>)
+    const { authorizeCredentials } = await import('@/lib/auth')
+
+    const result = await authorizeCredentials({
+      email: 'a@b.com',
+      password: 'whatever',
+    })
+
+    expect(result).toBeNull()
+    expect(logWarn).toHaveBeenCalledTimes(1)
+    expect(logWarn).toHaveBeenCalledWith(
+      {
+        userId: '1',
+        event: 'auth.bcrypt_compare_error',
+        err: expect.any(Error),
+      },
+      'bcrypt.compare threw on malformed hash',
+    )
+  })
+
+  it('returns null without logging when stored hash has wrong length (bcryptjs short-circuits to false)', async () => {
+    const { db } = await import('@/lib/db')
+    vi.mocked(db.user.findUnique).mockResolvedValue({
+      id: '1',
+      email: 'a@b.com',
+      name: 'Admin',
+      // 59 chars (anything != 60) trips the length short-circuit branch in bcryptjs
+      // which returns false synchronously without entering the salt-version check.
+      // The catch must NOT fire on this path.
+      password: 'a'.repeat(59),
+    } as Awaited<ReturnType<typeof db.user.findUnique>>)
+    const { authorizeCredentials } = await import('@/lib/auth')
+
+    const result = await authorizeCredentials({
+      email: 'a@b.com',
+      password: 'whatever',
+    })
+
+    expect(result).toBeNull()
+    expect(logWarn).not.toHaveBeenCalled()
+  })
 })
 
 describe('authOptions wiring', () => {
@@ -138,6 +195,38 @@ describe('authOptions wiring', () => {
       const secretIssue = issues.find((i) => i.path.includes('NEXTAUTH_SECRET'))
       expect(secretIssue).toBeDefined()
       expect(secretIssue?.code).toBe('too_small')
+    },
+  )
+})
+
+describe('authOptions.callbacks.session', () => {
+  it('returns the session with token.id assigned when token.id is a string', async () => {
+    const { authOptions } = await import('@/lib/auth')
+    const result = authOptions.callbacks!.session!({
+      session: { user: { email: 'a@b.com', name: null, id: '' }, expires: '' },
+      token: { id: 'user-uuid' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((result as any).user.id).toBe('user-uuid')
+  })
+
+  it.each([
+    { label: 'undefined', value: undefined },
+    { label: 'a number', value: 42 },
+    { label: 'an object', value: {} },
+    { label: 'an empty string', value: '' },
+  ])(
+    'throws Error("invalid token.id") when token.id is $label',
+    async ({ value }) => {
+      const { authOptions } = await import('@/lib/auth')
+      expect(() =>
+        authOptions.callbacks!.session!({
+          session: { user: { email: 'a@b.com', name: null, id: '' }, expires: '' },
+          token: { id: value },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any),
+      ).toThrow('invalid token.id')
     },
   )
 })

@@ -4,6 +4,7 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { env } from '@/lib/env'
+import { logger } from '@/lib/logger'
 
 // Co-located augmentation: session.user.id is set in the jwt + session callbacks below.
 declare module 'next-auth' {
@@ -27,7 +28,17 @@ export async function authorizeCredentials(
 
   if (!user?.password || !user.email) return null
 
-  const isValid = await bcrypt.compare(credentials.password, user.password)
+  let isValid: boolean
+  try {
+    isValid = await bcrypt.compare(credentials.password, user.password)
+  } catch (err) {
+    logger.warn(
+      { userId: user.id, event: 'auth.bcrypt_compare_error', err },
+      'bcrypt.compare threw on malformed hash',
+    )
+    return null
+  }
+
   return isValid
     ? { id: user.id, email: user.email ?? '', name: user.name }
     : null
@@ -60,7 +71,10 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     session({ session, token }) {
-      if (session.user) session.user.id = (token.id as string) ?? ''
+      if (typeof token.id !== 'string' || token.id.length === 0) {
+        throw new Error('invalid token.id')
+      }
+      if (session.user) session.user.id = token.id
       return session
     },
   },
