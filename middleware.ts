@@ -14,8 +14,10 @@ export function attachRequestId(req: NextRequest): NextResponse {
 }
 
 // withAuth reads the JWT cookie and redirects to pages.signIn when missing.
-// If NEXTAUTH_SECRET is wrong or missing, all JWTs fail to verify
-// and every authenticated user gets redirected to /login in a loop.
+// NEXTAUTH_SECRET is wired in lib/auth.ts via lib/env.ts. Production
+// `next build` catches a misconfigured deploy at build time. In dev under
+// `next dev --turbopack`, auth routes compile on first /api/auth/* request
+// so the Zod summary surfaces then, not at process startup.
 export default withAuth(
   function middleware(req) {
     return attachRequestId(req)
