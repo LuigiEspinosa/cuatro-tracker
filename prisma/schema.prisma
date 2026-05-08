@@ -7,6 +7,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ! Constraints below are enforced in raw SQL inside
+// ! prisma/migrations/20260508133713_phase2_constraint_hardening/migration.sql
+// ! and CANNOT be expressed in the Prisma DSL. Do not let `prisma migrate dev`
+// ! "fix" them - review the diff before applying any future migration that
+// ! touches these columns.
+// !   - User.email partial unique index (WHERE email IS NOT NULL)
+// !   - UserEntry.user_rating CHECK BETWEEN 1 AND 10 (NULL allowed)
+// !   - UserEntry.progress CHECK >= 0
+// !   - MergeSuggestion CHECK source_id <> target_id
+// !   - MergeSuggestion.confidence CHECK BETWEEN 0 AND 1
+
 // ---- Auth (NextAuth v4 Prisma adapter) ----
 
 model Account {
@@ -140,6 +151,7 @@ model Achievement {
   unlocked_at    DateTime?
 
   @@index([game_id])
+  @@unique([game_id, steam_api_name])
 }
 
 model MergeSuggestion {
