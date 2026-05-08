@@ -3,6 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
+import { env } from '@/lib/env'
 
 // Co-located augmentation: session.user.id is set in the jwt + session callbacks below.
 declare module 'next-auth' {
@@ -39,6 +40,7 @@ export async function authorizeCredentials(
  */
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db),
+  secret: env.NEXTAUTH_SECRET,
   session: { strategy: 'jwt' },
   providers: [
     CredentialsProvider({
