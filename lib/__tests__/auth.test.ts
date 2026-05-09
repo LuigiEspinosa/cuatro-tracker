@@ -74,6 +74,52 @@ describe('authorizeCredentials', () => {
     ).toBeNull()
   })
 
+  it('propagates findUnique rejection so DB-down stays unmasked', async () => {
+    const { db } = await import('@/lib/db')
+    vi.mocked(db.user.findUnique).mockRejectedValue(
+      new Error('Connection refused'),
+    )
+    const { authorizeCredentials } = await import('@/lib/auth')
+
+    await expect(
+      authorizeCredentials({ email: 'a@b.com', password: 'x' }),
+    ).rejects.toThrow()
+    expect(logWarn).not.toHaveBeenCalled()
+  })
+
+  it('normalises email to trim() + toLowerCase() before findUnique', async () => {
+    const { db } = await import('@/lib/db')
+    vi.mocked(db.user.findUnique).mockResolvedValue(null)
+    const { authorizeCredentials } = await import('@/lib/auth')
+
+    await authorizeCredentials({ email: '  A@B.com ', password: 'x' })
+
+    expect(db.user.findUnique).toHaveBeenCalledTimes(1)
+    expect(db.user.findUnique).toHaveBeenCalledWith({
+      where: { email: 'a@b.com' },
+      select: { id: true, email: true, name: true, password: true },
+    })
+  })
+
+  it('returns null when user exists but password column is null (OAuth-only user)', async () => {
+    const { db } = await import('@/lib/db')
+    vi.mocked(db.user.findUnique).mockResolvedValue({
+      id: '1',
+      email: 'a@b.com',
+      name: 'Admin',
+      password: null,
+    } as Awaited<ReturnType<typeof db.user.findUnique>>)
+    const { authorizeCredentials } = await import('@/lib/auth')
+
+    const result = await authorizeCredentials({
+      email: 'a@b.com',
+      password: 'x',
+    })
+
+    expect(result).toBeNull()
+    expect(logWarn).not.toHaveBeenCalled()
+  })
+
   it('returns null when password does not match', async () => {
     const { db } = await import('@/lib/db')
     vi.mocked(db.user.findUnique).mockResolvedValue({
