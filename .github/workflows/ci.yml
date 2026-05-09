@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,6 +25,16 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -42,6 +56,12 @@ jobs:
       - name: Generate prisma client
         run: pnpm prisma generate
 
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
       - name: Apply migrations
         env:
           DATABASE_URL: postgresql://tracker:test@localhost:5432/tracker_test
@@ -52,5 +72,24 @@ jobs:
           DATABASE_URL: postgresql://tracker:test@localhost:5432/tracker_test
         run: pnpm test --coverage
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Build
+        # Env block exists ONLY to satisfy lib/env.ts Zod validation at build-time module load.
+        # All values are CI-only placeholders. NEXTAUTH_SECRET is 64 a's (clears min(32) gate);
+        # never copy this shape into staging/prod. Real secrets land via the VPS .env file.
+        env:
+          DATABASE_URL: postgresql://tracker:test@localhost:5432/tracker_test
+          DB_PASS: test
+          REDIS_URL: redis://localhost:6379
+          NEXTAUTH_SECRET: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          NEXTAUTH_URL: http://localhost:3000
+          ADMIN_PASS: testpass123
+          TMDB_API_KEY: test
+          IGDB_CLIENT_ID: test
+          IGDB_CLIENT_SECRET: test
+          STEAM_API_KEY: test
+          STEAM_USER_ID: test
+          QBITTORRENT_HOST: http://localhost:8080
+          QBITTORRENT_USER: admin
+          QBITTORRENT_PASS: test
+          DOWNLOAD_PATH: /downloads
+        run: pnpm build

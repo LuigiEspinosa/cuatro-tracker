@@ -9,7 +9,7 @@
     "stack": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest --run --passWithNoTests",
     "test:e2e": "playwright test",
