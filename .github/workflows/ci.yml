@@ -92,4 +92,7 @@ jobs:
           QBITTORRENT_USER: admin
           QBITTORRENT_PASS: test
           DOWNLOAD_PATH: /downloads
+          SENTRY_DSN: https://placeholder@example.com/0
+          NEXT_PUBLIC_SENTRY_DSN: https://placeholder@example.com/0
+          NEXT_PUBLIC_UMAMI_WEBSITE_ID: placeholder-website-id
         run: pnpm build

@@ -56,6 +56,15 @@ const eslintConfig = [
     },
   },
   {
+    // NEXT_PUBLIC_ vars are baked into the client bundle at build time and cannot
+    // flow through lib/env.ts (server-side Zod schema). These files read NEXT_PUBLIC_
+    // vars directly from process.env by design.
+    files: ['app/layout.tsx', 'instrumentation-client.ts'],
+    rules: {
+      'no-restricted-syntax': 'off',
+    },
+  },
+  {
     files: ['lib/redis.ts'],
     rules: {
       'no-restricted-syntax': 'off',

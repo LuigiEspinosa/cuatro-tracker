@@ -4,5 +4,10 @@
 # Access at http://localhost
 
 http://localhost {
+  header {
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
   reverse_proxy app:3000
 }

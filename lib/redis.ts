@@ -35,5 +35,18 @@ export const redis = globalForRedis.redis ?? makeClient()
 globalForRedis.redis = redis
 
 export async function closeRedis(): Promise<void> {
-  await redis.quit()
+  try {
+    await redis.quit()
+  } catch (err) {
+    // redis.quit() throws synchronously if the client was never connected
+    // (lazyConnect: true in tests) or has already been closed. Both are
+    // acceptable terminal states for a graceful shutdown caller.
+    if (
+      err instanceof Error &&
+      /Connection is (already )?closed/i.test(err.message)
+    ) {
+      return
+    }
+    throw err
+  }
 }

@@ -31,6 +31,14 @@ const EnvSchema = z.object({
 
   CLOUDFLARE_API_TOKEN: z.string().optional(),
 
+  // Sentry — optional. Unset OR empty string means Sentry init is a no-op.
+  // The preprocess coerces compose's '${SENTRY_DSN:-}' (which yields '' when unset)
+  // to undefined so .url() doesn't reject empty string at module-load.
+  SENTRY_DSN: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().url().optional(),
+  ),
+
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
