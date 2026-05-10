@@ -14,7 +14,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     restart: unless-stopped
 
   migrate:
@@ -39,6 +40,7 @@ services:
     environment:
       - "DATABASE_URL=postgresql://tracker:${DB_PASS:?DB_PASS is required; see
         .env.example}@postgres:5432/tracker"
+      - "DB_PASS=${DB_PASS:?DB_PASS is required; see .env.example}"
       - REDIS_URL=redis://redis:6379
       - "NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required; see
         .env.example}"
@@ -61,6 +63,56 @@ services:
       - "QBITTORRENT_PASS=${QBITTORRENT_PASS:?QBITTORRENT_PASS is required; see
         .env.example}"
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
+      - NEXT_PUBLIC_UMAMI_WEBSITE_ID=${NEXT_PUBLIC_UMAMI_WEBSITE_ID:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 10s
+      start_period: 20s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: worker
+    environment:
+      - "DATABASE_URL=postgresql://tracker:${DB_PASS:?DB_PASS is required; see
+        .env.example}@postgres:5432/tracker"
+      - "DB_PASS=${DB_PASS:?DB_PASS is required; see .env.example}"
+      - REDIS_URL=redis://redis:6379
+      - "NEXTAUTH_SECRET=${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required; see
+        .env.example}"
+      - "NEXTAUTH_URL=${NEXTAUTH_URL:?NEXTAUTH_URL is required; see
+        .env.example}"
+      - "ADMIN_PASS=${ADMIN_PASS:?ADMIN_PASS is required; see .env.example}"
+      - "TMDB_API_KEY=${TMDB_API_KEY:?TMDB_API_KEY is required; see
+        .env.example}"
+      - "IGDB_CLIENT_ID=${IGDB_CLIENT_ID:?IGDB_CLIENT_ID is required; see
+        .env.example}"
+      - "IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:?IGDB_CLIENT_SECRET is
+        required; see .env.example}"
+      - "STEAM_API_KEY=${STEAM_API_KEY:?STEAM_API_KEY is required; see
+        .env.example}"
+      - "STEAM_USER_ID=${STEAM_USER_ID:?STEAM_USER_ID is required; see
+        .env.example}"
+      - QBITTORRENT_HOST=http://qbittorrent:8080
+      - "QBITTORRENT_USER=${QBITTORRENT_USER:?QBITTORRENT_USER is required; see
+        .env.example}"
+      - "QBITTORRENT_PASS=${QBITTORRENT_PASS:?QBITTORRENT_PASS is required; see
+        .env.example}"
+      - "DOWNLOAD_PATH=${DOWNLOAD_PATH:?DOWNLOAD_PATH is required; see
+        .env.example}"
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SENTRY_DSN=${SENTRY_DSN:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

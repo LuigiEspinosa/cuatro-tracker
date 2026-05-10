@@ -36,5 +36,22 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Runs Next.js standalone server. BullMQ worker is added here in Phase 3
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+  CMD wget --spider -q http://localhost:3000/api/health || exit 1
+
+# Runs Next.js standalone server. BullMQ worker runs as the `worker` sidecar service.
 CMD ["node", "server.js"]
+
+# ---- worker ----
+# Runs the BullMQ worker process (Story 1.23). Same image base as the runner; uses
+# tsx to execute worker.ts directly rather than building a separate JS bundle.
+FROM base AS worker
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json pnpm-lock.yaml tsconfig.json ./
+COPY worker.ts ./
+COPY lib ./lib
+COPY prisma ./prisma
+ENV NODE_ENV=production
+USER node
+CMD ["node_modules/.bin/tsx", "worker.ts"]
