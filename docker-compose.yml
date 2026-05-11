@@ -37,6 +37,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      target: runner
     environment:
       - "DATABASE_URL=postgresql://tracker:${DB_PASS:?DB_PASS is required; see
         .env.example}@postgres:5432/tracker"
