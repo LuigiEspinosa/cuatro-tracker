@@ -1,6 +1,11 @@
 import type { Metadata } from 'next'
 import type { Session } from 'next-auth'
-import { Geist, Geist_Mono } from 'next/font/google'
+import {
+  Cormorant_Garamond,
+  EB_Garamond,
+  IBM_Plex_Mono,
+  VT323,
+} from 'next/font/google'
 import Script from 'next/script'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -8,14 +13,45 @@ import { logger } from '@/lib/logger'
 import { Providers } from './providers'
 import './global.css'
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const displaySerif = Cormorant_Garamond({
+  variable: '--font-display',
   subsets: ['latin'],
+  weight: ['500', '600'],
+  style: ['normal'],
+  display: 'swap',
+  fallback: [
+    'Editorial New',
+    'Cormorant Garamond Display',
+    'EB Garamond',
+    'Georgia',
+    'serif',
+  ],
 })
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const bodySerif = EB_Garamond({
+  variable: '--font-body',
   subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  style: ['normal'],
+  display: 'swap',
+  fallback: ['Georgia', 'serif'],
+})
+
+const monoSans = IBM_Plex_Mono({
+  variable: '--font-mono',
+  subsets: ['latin'],
+  weight: ['400', '600'],
+  style: ['normal'],
+  display: 'swap',
+  fallback: ['ui-monospace', 'Menlo', 'monospace'],
+})
+
+const bitmapFace = VT323({
+  variable: '--font-bitmap',
+  subsets: ['latin'],
+  weight: ['400'],
+  display: 'swap',
+  fallback: ['ui-monospace', 'monospace'],
 })
 
 export const metadata: Metadata = {
@@ -42,7 +78,10 @@ export default async function RootLayout({
   const showUmami = Boolean(session) && Boolean(umamiId)
 
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      className={`${displaySerif.variable} ${bodySerif.variable} ${monoSans.variable} ${bitmapFace.variable}`}
+    >
       <head>
         {showUmami && (
           <Script
@@ -52,9 +91,7 @@ export default async function RootLayout({
           />
         )}
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>
