@@ -4,3 +4,4 @@ RUN xcaddy build \
 
 FROM caddy:2.11.2-alpine
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+COPY docker/Caddyfile /etc/caddy/Caddyfile
