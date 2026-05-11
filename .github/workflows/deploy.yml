@@ -12,27 +12,23 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
 
     steps:
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            cd /opt/cuatro-tracker
-            git pull origin main
-            docker compose up -d --build
-            docker image prune -f
-            for i in 1 2 3 4 5; do
-              if curl -fsS https://tracker.cuatro.dev/api/health > /dev/null; then
-                echo "health check passed in $i/5 attempts"
-                exit 0
-              fi
-              sleep 5
-            done
-            echo "health check FAILED after 5 attempts"
-            exit 1
+      - name: Deploy
+        working-directory: /opt/cuatro-tracker
+        run: |
+          git fetch origin
+          git reset --hard origin/main
+          docker compose up -d --build
+          docker image prune -f
+          for i in 1 2 3 4 5; do
+            if curl -fsS https://tracker.cuatro.dev/api/health > /dev/null; then
+              echo "health check passed in $i/5 attempts"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "health check FAILED after 5 attempts"
+          exit 1

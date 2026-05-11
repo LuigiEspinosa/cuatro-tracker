@@ -62,6 +62,8 @@ services:
         .env.example}"
       - "QBITTORRENT_PASS=${QBITTORRENT_PASS:?QBITTORRENT_PASS is required; see
         .env.example}"
+      - "DOWNLOAD_PATH=${DOWNLOAD_PATH:?DOWNLOAD_PATH is required; see
+        .env.example}"
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
