@@ -4,5 +4,5 @@
 body {
   background: var(--ground-base);
   color: var(--phosphor-cream);
-  font-family: var(--font-geist-sans), Arial, sans-serif;
+  font-family: var(--font-body);
 }
