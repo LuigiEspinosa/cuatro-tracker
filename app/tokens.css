@@ -1,0 +1,109 @@
+/* Tokens canonical to docs/design-prompts/00-design-system.md §0.2 + §0.5. */
+
+@theme {
+  --color-ground-base: #1A1426;
+  --color-ground-card: #221A30;
+  --color-ground-row-even: #1A1426;
+  --color-ground-row-odd: #1F1A2C;
+  --color-ground-admin: #1A1426;
+
+  --color-ground-pre-1980: #1A1226;
+  --color-ground-1980s: #181428;
+  --color-ground-1990s: #16182C;
+  --color-ground-2000s: #141A2A;
+  --color-ground-2010s: #181820;
+  --color-ground-2020s: #1A1426;
+
+  --color-phosphor-cream: #EFE6D4;
+  --color-phosphor-cream-dim: #B5AC9D;
+  --color-phosphor-cream-ghost: #7A7468;
+
+  --color-synth-purple: #7B5CFF;
+  --color-neon-blue: #3FA9FF;
+  --color-bubblegum-pink: #FF6FCF;
+  --color-plum-dim: #3A2C4E;
+  --color-magenta: #D6357C;
+
+  --color-led-completed: #5DD46B;
+  --color-led-in-progress: #3FA9FF;
+  --color-led-backlog: #5C4677;
+  --color-led-dropped: #D6357C;
+  --color-led-on-hold: #FFB347;
+
+  /* Rainbow stripe canonical top-to-bottom order: green, yellow, orange, pink, purple, blue. */
+  --color-rb-green: #5DD46B;
+  --color-rb-yellow: #FFE556;
+  --color-rb-orange: #FFB347;
+  --color-rb-pink: #FF6FCF;
+  --color-rb-purple: #7B5CFF;
+  --color-rb-blue: #3FA9FF;
+
+  --color-frame-stroke-movies: #B5AC9D;
+  --color-frame-stroke-tv: #7A7468;
+  --color-frame-stroke-anime: #9D8C66;
+  --color-frame-stroke-manga: #B5AC9D;
+  --color-frame-stroke-games: #5C4677;
+}
+
+:root {
+  color-scheme: dark;
+
+  --ground-base: var(--color-ground-base);
+  --ground-card: var(--color-ground-card);
+  --ground-row-even: var(--color-ground-row-even);
+  --ground-row-odd: var(--color-ground-row-odd);
+  --ground-admin: var(--color-ground-admin);
+
+  --ground-pre-1980: var(--color-ground-pre-1980);
+  --ground-1980s: var(--color-ground-1980s);
+  --ground-1990s: var(--color-ground-1990s);
+  --ground-2000s: var(--color-ground-2000s);
+  --ground-2010s: var(--color-ground-2010s);
+  --ground-2020s: var(--color-ground-2020s);
+
+  --phosphor-cream: var(--color-phosphor-cream);
+  --phosphor-cream-dim: var(--color-phosphor-cream-dim);
+  --phosphor-cream-ghost: var(--color-phosphor-cream-ghost);
+
+  --synth-purple: var(--color-synth-purple);
+  --neon-blue: var(--color-neon-blue);
+  --bubblegum-pink: var(--color-bubblegum-pink);
+  --plum-dim: var(--color-plum-dim);
+  --magenta: var(--color-magenta);
+
+  --led-completed: var(--color-led-completed);
+  --led-in-progress: var(--color-led-in-progress);
+  --led-backlog: var(--color-led-backlog);
+  --led-dropped: var(--color-led-dropped);
+  --led-on-hold: var(--color-led-on-hold);
+
+  --led-completed-glow: 0 0 8px #5DD46B66;
+  --led-in-progress-glow: 0 0 8px #3FA9FF66;
+  --led-backlog-glow: 0 0 6px #5C467788;
+  --led-dropped-glow: 0 0 8px #D6357C66;
+  --led-on-hold-glow: 0 0 8px #FFB34766;
+
+  --rb-green: var(--color-rb-green);
+  --rb-yellow: var(--color-rb-yellow);
+  --rb-orange: var(--color-rb-orange);
+  --rb-pink: var(--color-rb-pink);
+  --rb-purple: var(--color-rb-purple);
+  --rb-blue: var(--color-rb-blue);
+
+  --frame-stroke-movies: var(--color-frame-stroke-movies);
+  --frame-stroke-tv: var(--color-frame-stroke-tv);
+  --frame-stroke-anime: var(--color-frame-stroke-anime);
+  --frame-stroke-manga: var(--color-frame-stroke-manga);
+  --frame-stroke-games: var(--color-frame-stroke-games);
+
+  --frame-stroke-movies-glow: 0 0 8px #EFE6D466;
+  --frame-stroke-tv-glow: 0 0 8px #3FA9FF66;
+  --frame-stroke-anime-glow: 0 0 8px #FFB34766;
+  --frame-stroke-manga-glow: 0 0 6px #FF6FCF66;
+  --frame-stroke-games-glow: 0 0 10px #7B5CFF88;
+
+  --text-shadow-display: 0 0 8px #7B5CFF66;
+  --text-shadow-hero: 0 0 12px #7B5CFF88;
+
+  --shadow-hero-crt: 0 32px 64px -16px #00000088;
+}
