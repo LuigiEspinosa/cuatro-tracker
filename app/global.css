@@ -26,3 +26,78 @@ body {
     pointer-events: none;
   }
 }
+
+/* FramedCover (Story 2.6, design-system.md §0.2 + 09-frames.md).
+   The outer `.fc` carries a container-query context so the ≤48px collapse rule
+   is rendered-width-driven (per 09-frames.md §4) rather than prop-driven.
+   Per-medium hover/focus glow rides on data-medium so the CSS is one ruleset. */
+.fc {
+  container-type: inline-size;
+  container-name: framed-cover;
+  display: block;
+  position: relative;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: default;
+  outline: 0;
+  transition: box-shadow 150ms ease-out;
+  --fc-glow: none;
+}
+
+.fc:hover,
+.fc:focus-visible,
+.fc:focus-within {
+  box-shadow: var(--fc-glow, none);
+}
+
+.fc[data-medium='movies'] { --fc-glow: var(--frame-stroke-movies-glow); }
+.fc[data-medium='tv']     { --fc-glow: var(--frame-stroke-tv-glow); }
+.fc[data-medium='anime']  { --fc-glow: var(--frame-stroke-anime-glow); }
+.fc[data-medium='manga']  { --fc-glow: var(--frame-stroke-manga-glow); }
+.fc[data-medium='games']  { --fc-glow: var(--frame-stroke-games-glow); }
+
+.fc-chrome-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.fc-cover-cutout {
+  position: absolute;
+  overflow: hidden;
+  background: #3A2C4E;
+}
+
+.fc-cover-cutout > img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+/* ≤48px container-query collapse: hide all non-outer chrome detail, force the
+   outer stroke to 1px, and reset the TV inner cutout radius to 0 so the
+   collapsed state is a plain rectangular frame (per 09-frames.md §4). */
+@container framed-cover (max-width: 48px) {
+  .fc-chrome-spine,
+  .fc-chrome-banner,
+  .fc-chrome-sprocket-hole,
+  .fc-chrome-registration-mark,
+  .fc-chrome-marquee-glow,
+  .fc-chrome-inner-depth {
+    display: none;
+  }
+  .fc-chrome-outer-stroke {
+    stroke-width: 1px;
+  }
+  .fc-cover-cutout {
+    border-radius: 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc { transition: none; }
+}
