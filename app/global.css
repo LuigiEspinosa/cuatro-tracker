@@ -6,3 +6,23 @@ body {
   color: var(--phosphor-cream);
   font-family: var(--font-body);
 }
+
+/* Grain overlay utility (Story 2.3, design-system.md §0.5).
+   ALLOWED surfaces: cards, header bands, hero CRT bezel exteriors, section dividers.
+   FORBIDDEN surfaces: running-text containers (paragraphs, list rows, dense-content
+   blocks). bmad-code-review flags any application on a running-text container. */
+@utility bg-noise {
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url('/textures/noise-128.png');
+    background-size: 128px 128px;
+    background-repeat: repeat;
+    mix-blend-mode: overlay;
+    opacity: 0.05;
+    pointer-events: none;
+  }
+}
