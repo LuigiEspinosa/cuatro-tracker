@@ -8,7 +8,6 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useState, type ReactNode } from 'react'
 import { LenisProvider } from '@/components/atoms/LenisProvider'
 import { SentryErrorFallback } from '@/components/atoms/SentryErrorFallback'
-import { env } from '@/lib/env'
 
 export function Providers({
   children,
@@ -26,14 +25,12 @@ export function Providers({
       }),
   )
 
-  const isDev = env.NODE_ENV === 'development'
-
   return (
     <Sentry.ErrorBoundary fallback={SentryErrorFallback}>
       <SessionProvider session={session}>
         <QueryClientProvider client={queryClient}>
           <LenisProvider>{children}</LenisProvider>
-          {isDev ? <ReactQueryDevtools initialIsOpen={false} /> : null}
+          <ReactQueryDevtools initialIsOpen={false} />
         </QueryClientProvider>
       </SessionProvider>
     </Sentry.ErrorBoundary>
