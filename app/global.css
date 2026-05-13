@@ -190,3 +190,92 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .bs-welcome { animation: none; }
 }
+
+/* ChannelFlipTransition (Story 2.8). Portal-rendered viewport overlay used
+   around top-level nav. Symmetric 200 / 200 / 200 ms phases (band sweep,
+   hold black, fade back). The hook short-circuits before mounting under
+   prefers-reduced-motion; the media query below is defense in depth. */
+.cft {
+  position: fixed;
+  inset: 0;
+  pointer-events: auto;
+  z-index: 9999;
+}
+.cft-black-above {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: #000;
+  z-index: 8;
+}
+.cft-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform: translateY(-3px);
+  height: 6px;
+  background: var(--phosphor-cream);
+  box-shadow:
+    0 0 24px rgba(239, 230, 212, 0.95),
+    0 0 8px rgba(239, 230, 212, 1);
+  z-index: 9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cft { display: none; }
+}
+
+/* PhosphorLED (Story 2.9). Categorical watch-state dot. Color and glow halo
+   come from tokens.css (--led-*, --led-*-glow). The base rule reads the
+   custom properties; per-status data attributes set them. */
+.led {
+  display: inline-block;
+  border-radius: 50%;
+  background: var(--led-color, var(--phosphor-cream));
+  box-shadow: var(--led-glow, 0 0 6px rgba(239, 230, 212, 0.4));
+  vertical-align: middle;
+}
+.led[data-status='completed'] {
+  --led-color: var(--led-completed);
+  --led-glow: var(--led-completed-glow);
+}
+.led[data-status='in-progress'] {
+  --led-color: var(--led-in-progress);
+  --led-glow: var(--led-in-progress-glow);
+}
+.led[data-status='backlog'] {
+  --led-color: var(--led-backlog);
+  --led-glow: var(--led-backlog-glow);
+}
+.led[data-status='dropped'] {
+  --led-color: var(--led-dropped);
+  --led-glow: var(--led-dropped-glow);
+}
+.led[data-status='on-hold'] {
+  --led-color: var(--led-on-hold);
+  --led-glow: var(--led-on-hold-glow);
+}
+
+/* PhosphorBar (Story 2.9). Thin proportional progress bar. Filled portion
+   glows phosphor-cream; unfilled is ground-lift row tint. Width transition
+   smooths value changes; reduced-motion users snap instead. */
+.pb {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  background: var(--ground-row-odd);
+  overflow: hidden;
+}
+.pb-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--phosphor-cream);
+  box-shadow: 0 0 8px rgba(239, 230, 212, 0.6);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pb-fill { transition: width 200ms linear; }
+}
