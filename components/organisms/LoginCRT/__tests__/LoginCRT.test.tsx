@@ -58,21 +58,20 @@ describe('LoginCRT rendering', () => {
     expect(btn.disabled).toBe(false)
   })
 
-  it('error string renders the magenta error line', () => {
+  it('error string renders the StatusBanner with > ACCESS DENIED + INVALID EMAIL OR PASSWORD', () => {
     render(
       <LoginCRT onSubmit={vi.fn()} error='Invalid email or password.' />,
     )
-    const errorLine = screen.getByText('Invalid email or password.')
-    expect(errorLine).toBeInTheDocument()
-    expect(errorLine).toHaveClass('lc-error')
-    expect(errorLine.style.getPropertyValue('--bt-color')).toBe('var(--magenta)')
+    const banner = screen.getByRole('alert')
+    expect(banner).toHaveAttribute('data-variant', 'error')
+    expect(banner).toHaveClass('sb')
+    expect(screen.getByText('> ACCESS DENIED')).toBeInTheDocument()
+    expect(screen.getByText('INVALID EMAIL OR PASSWORD')).toBeInTheDocument()
   })
 
-  it('null/undefined error does NOT render the error line', () => {
+  it('null/undefined error does NOT render the StatusBanner', () => {
     render(<LoginCRT onSubmit={vi.fn()} error={null} />)
-    expect(
-      screen.queryByText('Invalid email or password.'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('threads reducedMotionOverride to both TerminalInputs', () => {
@@ -139,5 +138,75 @@ describe('LoginCRT phase prop (Story 3.2)', () => {
       />,
     )
     expect(screen.getByTestId('flip-overlay')).toBeInTheDocument()
+  })
+})
+
+describe('LoginCRT error-truncating phase + StatusBanner (Story 3.3)', () => {
+  it('phase=error-truncating applies the shake class to .lc-screen and keeps the boot mounted with truncate=true', () => {
+    const { container } = render(
+      <LoginCRT
+        onSubmit={vi.fn()}
+        phase='error-truncating'
+        reducedMotionOverride={true}
+      />,
+    )
+    expect(container.querySelector('.lc-screen-shake')).not.toBeNull()
+    const boot = screen.getByRole('status', { name: /system boot sequence/i })
+    expect(boot).toHaveClass('bs-truncating')
+  })
+
+  it('phase=error-truncating does NOT render the StatusBanner (banner appears after onBootTruncate flips phase to idle)', () => {
+    render(
+      <LoginCRT
+        onSubmit={vi.fn()}
+        phase='error-truncating'
+        error='Invalid email or password.'
+        reducedMotionOverride={true}
+      />,
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('phase=idle + error string renders StatusBanner with > ACCESS DENIED + INVALID EMAIL OR PASSWORD', () => {
+    render(
+      <LoginCRT
+        onSubmit={vi.fn()}
+        phase='idle'
+        error='Invalid email or password.'
+      />,
+    )
+    const banner = screen.getByRole('alert')
+    expect(banner).toHaveAttribute('data-variant', 'error')
+    expect(screen.getByText('> ACCESS DENIED')).toBeInTheDocument()
+    expect(screen.getByText('INVALID EMAIL OR PASSWORD')).toBeInTheDocument()
+  })
+
+  it('focus moves to the password field on the null → error transition', () => {
+    const { rerender } = render(
+      <LoginCRT onSubmit={vi.fn()} phase='idle' error={null} />,
+    )
+    expect(document.activeElement).not.toBe(screen.getByLabelText('PASSWORD'))
+
+    rerender(
+      <LoginCRT
+        onSubmit={vi.fn()}
+        phase='idle'
+        error='Invalid email or password.'
+      />,
+    )
+    expect(document.activeElement).toBe(screen.getByLabelText('PASSWORD'))
+  })
+
+  it('the original BitmapText magenta error line is REMOVED in favor of StatusBanner', () => {
+    render(
+      <LoginCRT
+        onSubmit={vi.fn()}
+        phase='idle'
+        error='Invalid email or password.'
+      />,
+    )
+    expect(
+      screen.queryByText('Invalid email or password.'),
+    ).not.toBeInTheDocument()
   })
 })

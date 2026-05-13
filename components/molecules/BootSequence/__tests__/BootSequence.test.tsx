@@ -284,3 +284,149 @@ describe('BootSequence hold-at-frame (Story 3.2)', () => {
     expect(onComplete).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('BootSequence truncate (Story 3.3)', () => {
+  it('truncate=true applies the bs-truncating class to the boot container', () => {
+    const onComplete = vi.fn()
+    const { getByRole } = render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        truncate={true}
+      />,
+    )
+    const container = getByRole('status')
+    expect(container).toHaveClass('bs-truncating')
+    expect(container).toHaveAttribute('data-truncating', 'true')
+  })
+
+  it('truncate=true fires onTruncate after the 350ms dissolve under non-reduced motion', async () => {
+    const onComplete = vi.fn()
+    const onTruncate = vi.fn()
+    const { rerender } = render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        totalDuration={1200}
+        truncate={false}
+        onTruncate={onTruncate}
+      />,
+    )
+    rerender(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        totalDuration={1200}
+        truncate={true}
+        onTruncate={onTruncate}
+      />,
+    )
+    expect(onTruncate).not.toHaveBeenCalled()
+    await new Promise((resolve) => setTimeout(resolve, 450))
+    expect(onTruncate).toHaveBeenCalledTimes(1)
+  })
+
+  it('truncate=true under reduced motion fires onTruncate within 1 RAF (no dissolve wait)', async () => {
+    const onComplete = vi.fn()
+    const onTruncate = vi.fn()
+    render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={true}
+        truncate={true}
+        onTruncate={onTruncate}
+      />,
+    )
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))),
+    )
+    expect(onTruncate).toHaveBeenCalledTimes(1)
+  })
+
+  it('truncate kills the main timeline; onComplete does not fire post-truncate', async () => {
+    const onComplete = vi.fn()
+    const onTruncate = vi.fn()
+    const { rerender } = render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        totalDuration={300}
+        truncate={false}
+        onTruncate={onTruncate}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    rerender(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        totalDuration={300}
+        truncate={true}
+        onTruncate={onTruncate}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    expect(onComplete).not.toHaveBeenCalled()
+    expect(onTruncate).toHaveBeenCalledTimes(1)
+  })
+
+  it('onTruncate fires once per truncate true transition (EH-2: recoverable across retries)', async () => {
+    const onComplete = vi.fn()
+    const onTruncate = vi.fn()
+    const { rerender } = render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        truncate={false}
+        onTruncate={onTruncate}
+      />,
+    )
+    rerender(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        truncate={true}
+        onTruncate={onTruncate}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 450))
+    expect(onTruncate).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        truncate={false}
+        onTruncate={onTruncate}
+      />,
+    )
+    rerender(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        truncate={true}
+        onTruncate={onTruncate}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 450))
+    expect(onTruncate).toHaveBeenCalledTimes(2)
+  })
+
+  it('keydown during truncate=true does NOT fire fireComplete (EH-3 fix)', async () => {
+    const onComplete = vi.fn()
+    const onTruncate = vi.fn()
+    render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        truncate={true}
+        onTruncate={onTruncate}
+      />,
+    )
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+    })
+    expect(onComplete).not.toHaveBeenCalled()
+  })
+})

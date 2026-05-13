@@ -27,22 +27,33 @@ vi.mock('@/components/molecules/BootSequence', async (importOriginal) => {
     ...actual,
     BootSequence: ({
       onComplete,
+      onTruncate,
       holdReleased,
       holdAtFrame,
+      truncate,
       reducedMotionOverride,
     }: {
       onComplete: () => void
+      onTruncate?: () => void
       holdReleased?: boolean
       holdAtFrame?: number
+      truncate?: boolean
       reducedMotionOverride?: boolean
     }) => {
-      const shouldFire =
-        typeof holdAtFrame === 'number'
+      const shouldFireComplete =
+        !truncate &&
+        (typeof holdAtFrame === 'number'
           ? holdReleased === true
-          : reducedMotionOverride === true || holdReleased === true
+          : reducedMotionOverride === true || holdReleased === true)
       React.useEffect(() => {
-        if (shouldFire) onComplete()
-      }, [shouldFire, onComplete])
+        if (shouldFireComplete) onComplete()
+      }, [shouldFireComplete, onComplete])
+      React.useEffect(() => {
+        if (!truncate) return
+        if (!onTruncate) return
+        const id = setTimeout(() => onTruncate(), 0)
+        return () => clearTimeout(id)
+      }, [truncate, onTruncate])
       return <div role='status' aria-label='System boot sequence' data-mock='true' />
     },
   }
@@ -80,17 +91,16 @@ describe('LoginPage submit flow', () => {
     })
   })
 
-  it('on error: renders the Invalid email or password. line and does NOT navigate', async () => {
+  it('on error: enters error-truncating phase then settles to idle with the > ACCESS DENIED banner; does NOT navigate', async () => {
     signInMock.mockResolvedValue({ ok: false, error: 'CredentialsSignin' })
     render(<LoginPage />)
     const email = screen.getByLabelText('EMAIL') as HTMLInputElement
     fireEvent.submit(email.closest('form')!)
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Invalid email or password.'),
-      ).toBeInTheDocument()
+      expect(screen.getByText('> ACCESS DENIED')).toBeInTheDocument()
     })
+    expect(screen.getByText('INVALID EMAIL OR PASSWORD')).toBeInTheDocument()
     expect(navigateMock).not.toHaveBeenCalled()
     expect(refreshMock).not.toHaveBeenCalled()
   })
@@ -107,6 +117,33 @@ describe('LoginPage submit flow', () => {
       }) as HTMLButtonElement
       expect(btn.disabled).toBe(false)
     })
+  })
+
+  it('on error: focus moves to the password field for retry', async () => {
+    signInMock.mockResolvedValue({ ok: false, error: 'CredentialsSignin' })
+    render(<LoginPage />)
+    const email = screen.getByLabelText('EMAIL') as HTMLInputElement
+    fireEvent.submit(email.closest('form')!)
+
+    await waitFor(() => {
+      expect(screen.getByText('> ACCESS DENIED')).toBeInTheDocument()
+    })
+    expect(document.activeElement).toBe(screen.getByLabelText('PASSWORD'))
+  })
+
+  it('on error: form values are retained (email defaultValue + typed password)', async () => {
+    signInMock.mockResolvedValue({ ok: false, error: 'CredentialsSignin' })
+    render(<LoginPage />)
+    const email = screen.getByLabelText('EMAIL') as HTMLInputElement
+    const password = screen.getByLabelText('PASSWORD') as HTMLInputElement
+    fireEvent.change(password, { target: { value: 'wrong-pass' } })
+    fireEvent.submit(email.closest('form')!)
+
+    await waitFor(() => {
+      expect(screen.getByText('> ACCESS DENIED')).toBeInTheDocument()
+    })
+    expect(email.value).toBe('admin@tracker.local')
+    expect(password.value).toBe('wrong-pass')
   })
 
   it('on success: flips phase to pending then success and waits for boot before navigating', async () => {
