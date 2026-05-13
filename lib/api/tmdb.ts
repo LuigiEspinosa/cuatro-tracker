@@ -185,14 +185,19 @@ async function tmdbFetch<T extends z.ZodType>(
     })
   } catch (err) {
     const durationMs = Date.now() - startedAt
+    const isTimeout =
+      err instanceof Error &&
+      (err.name === 'TimeoutError' || err.name === 'AbortError')
     logger.error(
       { endpoint, durationMs, err },
-      'tmdb_fetch_network_error',
+      isTimeout ? 'tmdb_fetch_timeout' : 'tmdb_fetch_network_error',
     )
-    throw new TmdbApiError(`TMDB fetch failed: ${endpoint}`, {
-      endpoint,
-      cause: err,
-    })
+    throw new TmdbApiError(
+      isTimeout
+        ? `TMDB request timed out after ${TMDB_TIMEOUT_MS}ms: ${endpoint}`
+        : `TMDB fetch failed: ${endpoint}`,
+      { endpoint, cause: err },
+    )
   }
 
   const durationMs = Date.now() - startedAt
