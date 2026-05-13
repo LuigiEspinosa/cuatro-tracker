@@ -23,6 +23,8 @@ export type BootSequenceProps = {
   onComplete: () => void
   totalDuration?: number
   reducedMotionOverride?: boolean
+  holdAtFrame?: number
+  holdReleased?: boolean
 }
 
 const MODIFIER_ONLY_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'])
@@ -32,6 +34,8 @@ export function BootSequence({
   onComplete,
   totalDuration,
   reducedMotionOverride,
+  holdAtFrame,
+  holdReleased,
 }: BootSequenceProps) {
   const initialReduced = readInitialReducedMotion(reducedMotionOverride)
   const reduced = useReducedMotion(reducedMotionOverride)
@@ -40,7 +44,12 @@ export function BootSequence({
   )
   const completedRef = useRef(false)
   const timelineRef = useRef<gsap.core.Timeline | null>(null)
+  const holdReleasedRef = useRef(holdReleased ?? false)
   const totalMs = safeTotalDurationMs(totalDuration)
+
+  useEffect(() => {
+    holdReleasedRef.current = holdReleased ?? false
+  }, [holdReleased])
 
   const fireComplete = useCallback(() => {
     if (completedRef.current) return
@@ -51,14 +60,20 @@ export function BootSequence({
   useEffect(() => {
     if (!reduced) return
     setCurrentFrame(BOOT_FINAL_FRAME_NO_WELCOME)
+    if (typeof holdAtFrame === 'number' && !holdReleased) return
     const raf = requestAnimationFrame(() => fireComplete())
     return () => cancelAnimationFrame(raf)
-  }, [reduced, fireComplete])
+  }, [reduced, fireComplete, holdAtFrame, holdReleased])
 
   useEffect(() => {
     if (reduced) return
     const scaled = scaleFrames(BOOT_FRAMES, totalMs)
     const lastFrame = showWelcome ? BOOT_FINAL_FRAME_WITH_WELCOME : BOOT_FINAL_FRAME_NO_WELCOME
+    const shouldHold =
+      typeof holdAtFrame === 'number' &&
+      Number.isFinite(holdAtFrame) &&
+      holdAtFrame >= 1 &&
+      holdAtFrame < lastFrame
     const tl = gsap.timeline()
     timelineRef.current = tl
     for (const frame of scaled) {
@@ -68,13 +83,25 @@ export function BootSequence({
         undefined,
         frame.startMs / 1000
       )
+      if (shouldHold && frame.index === holdAtFrame) {
+        tl.call(() => {
+          if (!holdReleasedRef.current) tl.pause()
+        })
+      }
     }
     tl.call(fireComplete, undefined, finalCallbackMs(showWelcome, totalMs) / 1000)
     return () => {
       tl.kill()
       timelineRef.current = null
     }
-  }, [reduced, showWelcome, totalMs, fireComplete])
+  }, [reduced, showWelcome, totalMs, fireComplete, holdAtFrame])
+
+  useEffect(() => {
+    if (reduced) return
+    if (typeof holdAtFrame !== 'number') return
+    if (!holdReleased) return
+    timelineRef.current?.resume()
+  }, [reduced, holdAtFrame, holdReleased])
 
   useEffect(() => {
     if (reduced) return
@@ -83,6 +110,7 @@ export function BootSequence({
       if (e.repeat) return
       if (e.isComposing) return
       if (MODIFIER_ONLY_KEYS.has(e.key)) return
+      if (typeof holdAtFrame === 'number' && !holdReleasedRef.current) return
       const finalFrame = showWelcome ? BOOT_FINAL_FRAME_WITH_WELCOME : BOOT_FINAL_FRAME_NO_WELCOME
       timelineRef.current?.kill()
       timelineRef.current = null
@@ -95,7 +123,7 @@ export function BootSequence({
       window.removeEventListener('keydown', handler)
       if (rafId !== null) cancelAnimationFrame(rafId)
     }
-  }, [reduced, showWelcome, fireComplete])
+  }, [reduced, showWelcome, fireComplete, holdAtFrame])
 
   const showHeader = currentFrame >= 2
   const showVersion = currentFrame >= 3

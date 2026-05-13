@@ -1,10 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { signInMock, pushMock, refreshMock } = vi.hoisted(() => ({
+const { signInMock, pushMock, refreshMock, navigateMock } = vi.hoisted(() => ({
   signInMock: vi.fn(),
   pushMock: vi.fn(),
   refreshMock: vi.fn(),
+  navigateMock: vi.fn(),
 }))
 
 vi.mock('next-auth/react', () => ({
@@ -15,12 +16,46 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock, refresh: refreshMock }),
 }))
 
+vi.mock('@/components/molecules/ChannelFlipTransition/useChannelFlipNavigate', () => ({
+  useChannelFlipNavigate: () => ({ navigate: navigateMock, overlay: null }),
+}))
+
+vi.mock('@/components/molecules/BootSequence', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/molecules/BootSequence')>()
+  const React = await import('react')
+  return {
+    ...actual,
+    BootSequence: ({
+      onComplete,
+      holdReleased,
+      holdAtFrame,
+      reducedMotionOverride,
+    }: {
+      onComplete: () => void
+      holdReleased?: boolean
+      holdAtFrame?: number
+      reducedMotionOverride?: boolean
+    }) => {
+      const shouldFire =
+        typeof holdAtFrame === 'number'
+          ? holdReleased === true
+          : reducedMotionOverride === true || holdReleased === true
+      React.useEffect(() => {
+        if (shouldFire) onComplete()
+      }, [shouldFire, onComplete])
+      return <div role='status' aria-label='System boot sequence' data-mock='true' />
+    },
+  }
+})
+
 import LoginPage from '../page'
 
 beforeEach(() => {
   signInMock.mockReset()
   pushMock.mockReset()
   refreshMock.mockReset()
+  navigateMock.mockReset()
+  navigateMock.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -45,18 +80,6 @@ describe('LoginPage submit flow', () => {
     })
   })
 
-  it('on success: routes to / and refreshes', async () => {
-    signInMock.mockResolvedValue({ ok: true, error: null })
-    render(<LoginPage />)
-    const email = screen.getByLabelText('EMAIL') as HTMLInputElement
-    fireEvent.submit(email.closest('form')!)
-
-    await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith('/')
-      expect(refreshMock).toHaveBeenCalled()
-    })
-  })
-
   it('on error: renders the Invalid email or password. line and does NOT navigate', async () => {
     signInMock.mockResolvedValue({ ok: false, error: 'CredentialsSignin' })
     render(<LoginPage />)
@@ -68,7 +91,7 @@ describe('LoginPage submit flow', () => {
         screen.getByText('Invalid email or password.'),
       ).toBeInTheDocument()
     })
-    expect(pushMock).not.toHaveBeenCalled()
+    expect(navigateMock).not.toHaveBeenCalled()
     expect(refreshMock).not.toHaveBeenCalled()
   })
 
@@ -84,5 +107,70 @@ describe('LoginPage submit flow', () => {
       }) as HTMLButtonElement
       expect(btn.disabled).toBe(false)
     })
+  })
+
+  it('on success: flips phase to pending then success and waits for boot before navigating', async () => {
+    signInMock.mockResolvedValue({ ok: true, error: null })
+    render(<LoginPage />)
+    const email = screen.getByLabelText('EMAIL') as HTMLInputElement
+    const submitForm = email.closest('form')!
+
+    expect(
+      screen.queryByRole('status', { name: /system boot sequence/i }),
+    ).not.toBeInTheDocument()
+
+    fireEvent.submit(submitForm)
+
+    await waitFor(() => {
+      expect(signInMock).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(
+        screen.getByRole('status', { name: /system boot sequence/i }),
+      ).toBeInTheDocument()
+    })
+  })
+
+  it('on success: onBootComplete triggers navigate(/) then router.refresh()', async () => {
+    signInMock.mockResolvedValue({ ok: true, error: null })
+    render(<LoginPage />)
+    const email = screen.getByLabelText('EMAIL') as HTMLInputElement
+    fireEvent.submit(email.closest('form')!)
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/')
+    }, { timeout: 3000 })
+    await waitFor(() => {
+      expect(refreshMock).toHaveBeenCalled()
+    })
+  })
+
+  it('AC-3 slow-auth: boot mounts before signIn resolves and navigate fires only AFTER auth succeeds', async () => {
+    let resolveSignIn!: (value: { ok: boolean; error: null }) => void
+    signInMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSignIn = resolve
+        }),
+    )
+    render(<LoginPage />)
+    const email = screen.getByLabelText('EMAIL') as HTMLInputElement
+    fireEvent.submit(email.closest('form')!)
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('status', { name: /system boot sequence/i }),
+      ).toBeInTheDocument()
+    })
+    expect(navigateMock).not.toHaveBeenCalled()
+
+    resolveSignIn({ ok: true, error: null })
+
+    await waitFor(
+      () => {
+        expect(navigateMock).toHaveBeenCalledWith('/')
+      },
+      { timeout: 3000 },
+    )
   })
 })

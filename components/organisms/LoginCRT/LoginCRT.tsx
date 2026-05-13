@@ -1,15 +1,21 @@
 'use client'
 
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import { BitmapText } from '@/components/atoms/BitmapText'
 import { CRTPixelButton } from '@/components/atoms/CRTPixelButton'
 import { TerminalInput } from '@/components/atoms/TerminalInput'
 import { CRTBezel } from '@/components/molecules/CRTBezel'
+import { BootSequence } from '@/components/molecules/BootSequence'
+
+export type LoginCRTPhase = 'idle' | 'pending' | 'success'
 
 export type LoginCRTProps = {
   onSubmit: (data: { email: string; password: string }) => Promise<void> | void
   error?: string | null
   pending?: boolean
+  phase?: LoginCRTPhase
+  onBootComplete?: () => void
+  channelFlipOverlay?: ReactNode
   defaultEmail?: string
   reducedMotionOverride?: boolean
 }
@@ -18,12 +24,19 @@ export function LoginCRT({
   onSubmit,
   error,
   pending = false,
+  phase = 'idle',
+  onBootComplete,
+  channelFlipOverlay,
   defaultEmail = 'admin@tracker.local',
   reducedMotionOverride,
 }: LoginCRTProps) {
+  const isBusy = phase !== 'idle' || pending
+  const showBoot = phase === 'pending' || phase === 'success'
+  const formClass = isBusy ? 'lc-form lc-form-faded' : 'lc-form'
+
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (pending) return
+    if (isBusy) return
     const form = e.currentTarget
     const email = (form.elements.namedItem('email') as HTMLInputElement).value
     const password = (form.elements.namedItem('password') as HTMLInputElement).value
@@ -56,7 +69,7 @@ export function LoginCRT({
           (C) CUATRO DEVELOPMENT STUDIO, 2026. ALL RIGHTS RESERVED.
         </BitmapText>
 
-        <form className='lc-form' onSubmit={handleSubmit} noValidate>
+        <form className={formClass} onSubmit={handleSubmit} noValidate>
           <TerminalInput
             name='email'
             type='email'
@@ -79,11 +92,20 @@ export function LoginCRT({
               {error}
             </BitmapText>
           ) : null}
-          <CRTPixelButton type='submit' disabled={pending}>
+          <CRTPixelButton type='submit' disabled={isBusy}>
             {'> LOG IN'}
           </CRTPixelButton>
         </form>
       </div>
+      {showBoot ? (
+        <BootSequence
+          onComplete={onBootComplete ?? (() => undefined)}
+          holdAtFrame={9}
+          holdReleased={phase === 'success'}
+          reducedMotionOverride={reducedMotionOverride}
+        />
+      ) : null}
+      {channelFlipOverlay}
     </CRTBezel>
   )
 }

@@ -125,3 +125,162 @@ describe('BootSequence onComplete fires once (AC-1)', () => {
     expect(onComplete).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('BootSequence hold-at-frame (Story 3.2)', () => {
+  it('holdAtFrame=9 + holdReleased=false: timeline pauses at frame 9; onComplete does not fire', async () => {
+    const onComplete = vi.fn()
+    const { getByRole } = render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        totalDuration={300}
+        holdAtFrame={9}
+        holdReleased={false}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    const container = getByRole('status')
+    expect(container).toHaveAttribute('data-frame', '9')
+    expect(onComplete).not.toHaveBeenCalled()
+  })
+
+  it('flipping holdReleased=true resumes the timeline to frame 10 and fires onComplete', async () => {
+    const onComplete = vi.fn()
+    const { rerender, getByRole } = render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        totalDuration={300}
+        holdAtFrame={9}
+        holdReleased={false}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    expect(getByRole('status')).toHaveAttribute('data-frame', '9')
+    expect(onComplete).not.toHaveBeenCalled()
+
+    rerender(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        totalDuration={300}
+        holdAtFrame={9}
+        holdReleased={true}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(getByRole('status')).toHaveAttribute('data-frame', '10')
+    expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('omitting holdAtFrame keeps default behavior (no pause, runs to completion)', async () => {
+    const onComplete = vi.fn()
+    renderBoot({ reducedMotionOverride: false, onComplete, totalDuration: 200 })
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('reduced-motion + holdAtFrame + holdReleased=false: jumps to frame 9 but does NOT fire onComplete', async () => {
+    const onComplete = vi.fn()
+    const { getByRole } = render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={true}
+        holdAtFrame={9}
+        holdReleased={false}
+      />,
+    )
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))),
+    )
+    expect(getByRole('status')).toHaveAttribute('data-frame', '9')
+    expect(onComplete).not.toHaveBeenCalled()
+  })
+
+  it('reduced-motion + holdReleased=true: jumps to frame 9 AND fires onComplete', async () => {
+    const onComplete = vi.fn()
+    const { rerender, getByRole } = render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={true}
+        holdAtFrame={9}
+        holdReleased={false}
+      />,
+    )
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))),
+    )
+    expect(onComplete).not.toHaveBeenCalled()
+
+    rerender(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={true}
+        holdAtFrame={9}
+        holdReleased={true}
+      />,
+    )
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))),
+    )
+    expect(getByRole('status')).toHaveAttribute('data-frame', '9')
+    expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('non-reduced + holdReleased flips true BEFORE timeline reaches holdAtFrame: no deadlock', async () => {
+    const onComplete = vi.fn()
+    const { rerender } = render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        totalDuration={300}
+        holdAtFrame={9}
+        holdReleased={false}
+      />,
+    )
+    rerender(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        totalDuration={300}
+        holdAtFrame={9}
+        holdReleased={true}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('non-reduced + keydown during hold: ignored until holdReleased=true', async () => {
+    const onComplete = vi.fn()
+    const { rerender } = render(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        totalDuration={300}
+        holdAtFrame={9}
+        holdReleased={false}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    expect(onComplete).not.toHaveBeenCalled()
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+    })
+    expect(onComplete).not.toHaveBeenCalled()
+
+    rerender(
+      <BootSequence
+        onComplete={onComplete}
+        reducedMotionOverride={false}
+        totalDuration={300}
+        holdAtFrame={9}
+        holdReleased={true}
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+})

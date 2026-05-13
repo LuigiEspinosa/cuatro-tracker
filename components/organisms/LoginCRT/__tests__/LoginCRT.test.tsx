@@ -90,3 +90,54 @@ describe('LoginCRT rendering', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 })
+
+describe('LoginCRT phase prop (Story 3.2)', () => {
+  it('phase=idle does NOT mount the boot overlay', () => {
+    render(<LoginCRT onSubmit={vi.fn()} phase='idle' />)
+    expect(
+      screen.queryByRole('status', { name: /system boot sequence/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('phase=pending mounts the boot overlay AND applies lc-form-faded to the form', () => {
+    render(<LoginCRT onSubmit={vi.fn()} phase='pending' reducedMotionOverride={true} />)
+    expect(
+      screen.getByRole('status', { name: /system boot sequence/i }),
+    ).toBeInTheDocument()
+    const email = screen.getByLabelText('EMAIL') as HTMLInputElement
+    expect(email.closest('form')).toHaveClass('lc-form-faded')
+  })
+
+  it('phase=pending disables the submit button', () => {
+    render(<LoginCRT onSubmit={vi.fn()} phase='pending' reducedMotionOverride={true} />)
+    const btn = screen.getByRole('button', { name: '> LOG IN' }) as HTMLButtonElement
+    expect(btn.disabled).toBe(true)
+  })
+
+  it('phase=pending blocks form-level submit (Enter key) from re-invoking onSubmit', () => {
+    const onSubmit = vi.fn()
+    render(<LoginCRT onSubmit={onSubmit} phase='pending' reducedMotionOverride={true} />)
+    const email = screen.getByLabelText('EMAIL') as HTMLInputElement
+    fireEvent.submit(email.closest('form')!)
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('phase=success keeps the boot mounted with holdReleased=true (renders welcome line under reduced-motion)', () => {
+    render(<LoginCRT onSubmit={vi.fn()} phase='success' reducedMotionOverride={true} />)
+    expect(
+      screen.getByRole('status', { name: /system boot sequence/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('passes channelFlipOverlay slot content into the bezel', () => {
+    render(
+      <LoginCRT
+        onSubmit={vi.fn()}
+        phase='success'
+        reducedMotionOverride={true}
+        channelFlipOverlay={<div data-testid='flip-overlay' />}
+      />,
+    )
+    expect(screen.getByTestId('flip-overlay')).toBeInTheDocument()
+  })
+})
