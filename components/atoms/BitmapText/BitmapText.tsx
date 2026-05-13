@@ -1,6 +1,11 @@
 import type { CSSProperties, JSX, ReactNode } from 'react'
 
-export type BitmapTextTone = 'cream' | 'cream-dim' | 'cream-ghost' | 'magenta'
+export type BitmapTextTone =
+  | 'cream'
+  | 'cream-dim'
+  | 'cream-ghost'
+  | 'magenta'
+  | 'orange'
 
 export type BitmapTextProps = {
   children: ReactNode
@@ -16,6 +21,7 @@ const TONE_VAR: Record<BitmapTextTone, string> = {
   'cream-dim': 'var(--phosphor-cream-dim)',
   'cream-ghost': 'var(--phosphor-cream-ghost)',
   magenta: 'var(--magenta)',
+  orange: 'var(--rb-orange)',
 }
 
 const GLOW_SHADOW: Record<BitmapTextTone, string> = {
@@ -23,6 +29,7 @@ const GLOW_SHADOW: Record<BitmapTextTone, string> = {
   'cream-dim': '0 0 8px rgba(239, 230, 212, 0.4)',
   'cream-ghost': '0 0 8px rgba(239, 230, 212, 0.4)',
   magenta: '0 0 8px rgba(214, 53, 124, 0.55)',
+  orange: '0 0 8px rgba(255, 179, 71, 0.55)',
 }
 
 export function BitmapText({

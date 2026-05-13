@@ -25,7 +25,11 @@ export type BootSequenceProps = {
   reducedMotionOverride?: boolean
   holdAtFrame?: number
   holdReleased?: boolean
+  truncate?: boolean
+  onTruncate?: () => void
 }
+
+const TRUNCATE_TOTAL_MS = 350
 
 const MODIFIER_ONLY_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'])
 
@@ -36,6 +40,8 @@ export function BootSequence({
   reducedMotionOverride,
   holdAtFrame,
   holdReleased,
+  truncate,
+  onTruncate,
 }: BootSequenceProps) {
   const initialReduced = readInitialReducedMotion(reducedMotionOverride)
   const reduced = useReducedMotion(reducedMotionOverride)
@@ -110,6 +116,7 @@ export function BootSequence({
       if (e.repeat) return
       if (e.isComposing) return
       if (MODIFIER_ONLY_KEYS.has(e.key)) return
+      if (truncate) return
       if (typeof holdAtFrame === 'number' && !holdReleasedRef.current) return
       const finalFrame = showWelcome ? BOOT_FINAL_FRAME_WITH_WELCOME : BOOT_FINAL_FRAME_NO_WELCOME
       timelineRef.current?.kill()
@@ -123,7 +130,26 @@ export function BootSequence({
       window.removeEventListener('keydown', handler)
       if (rafId !== null) cancelAnimationFrame(rafId)
     }
-  }, [reduced, showWelcome, fireComplete, holdAtFrame])
+  }, [reduced, showWelcome, fireComplete, holdAtFrame, truncate])
+
+  const truncatedRef = useRef(false)
+  useEffect(() => {
+    if (!truncate) {
+      truncatedRef.current = false
+      return
+    }
+    if (truncatedRef.current) return
+    truncatedRef.current = true
+    timelineRef.current?.kill()
+    timelineRef.current = null
+    if (!onTruncate) return
+    if (reduced) {
+      const raf = requestAnimationFrame(() => onTruncate())
+      return () => cancelAnimationFrame(raf)
+    }
+    const timer = window.setTimeout(() => onTruncate(), TRUNCATE_TOTAL_MS)
+    return () => window.clearTimeout(timer)
+  }, [truncate, onTruncate, reduced])
 
   const showHeader = currentFrame >= 2
   const showVersion = currentFrame >= 3
@@ -132,13 +158,16 @@ export function BootSequence({
   const showReady = currentFrame >= 9
   const showWelcomeLine = currentFrame >= 10 && showWelcome
 
+  const cls = truncate ? 'bs bs-truncating' : 'bs'
+
   return (
     <div
-      className='bs'
+      className={cls}
       role='status'
       aria-live='polite'
       aria-label='System boot sequence'
       data-frame={currentFrame}
+      data-truncating={truncate ? 'true' : undefined}
     >
       {showHeader && (
         <div className='bs-header' aria-hidden='true'>

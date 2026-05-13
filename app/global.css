@@ -593,10 +593,56 @@ body {
   transition: opacity 150ms linear;
 }
 
-.lc-error {
+.lc-screen-shake {
+  animation: lc-glitch-shake 150ms steps(5);
+}
+
+@keyframes lc-glitch-shake {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-2px, 0); }
+  40% { transform: translate(2px, 0); }
+  60% { transform: translate(-2px, 0); }
+  80% { transform: translate(1px, 0); }
+  100% { transform: translate(0, 0); }
+}
+
+/* StatusBanner (Story 3.3). Two-line system message: bitmap primary +
+   small-caps secondary. Magenta error variant used on login; cream / cream-dim
+   variants reserved for Story 9 Steam-private banner + Story 13 404 / empty states. */
+.sb {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.sb-primary {
   margin: 0;
-  letter-spacing: 0.04em;
-  overflow-wrap: anywhere;
+}
+
+.sb-secondary {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  color: var(--phosphor-cream-dim);
+  text-transform: uppercase;
+}
+
+.bs-truncating {
+  animation: bs-dissolve 200ms 150ms forwards ease-out;
+  pointer-events: none;
+}
+
+@keyframes bs-dissolve {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lc-screen-shake { animation: none; }
+  .bs-truncating { animation: none; opacity: 0; }
 }
 
 .bt {

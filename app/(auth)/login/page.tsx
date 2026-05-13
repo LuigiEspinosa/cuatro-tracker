@@ -29,8 +29,7 @@ export default function LoginPage() {
     })
 
     if (result?.error) {
-      setError('Invalid email or password.')
-      setPhase('idle')
+      setPhase('error-truncating')
       return
     }
 
@@ -42,6 +41,11 @@ export default function LoginPage() {
     router.refresh()
   }, [navigate, router])
 
+  const onBootTruncate = useCallback(() => {
+    setError('Invalid email or password.')
+    setPhase('idle')
+  }, [])
+
   return (
     <main className='lc'>
       <LoginCRT
@@ -49,6 +53,7 @@ export default function LoginPage() {
         error={error}
         phase={phase}
         onBootComplete={onBootComplete}
+        onBootTruncate={onBootTruncate}
         channelFlipOverlay={overlay}
       />
     </main>

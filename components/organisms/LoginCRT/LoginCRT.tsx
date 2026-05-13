@@ -1,13 +1,14 @@
 'use client'
 
-import type { FormEvent, ReactNode } from 'react'
+import { useEffect, useRef, type FormEvent, type ReactNode } from 'react'
 import { BitmapText } from '@/components/atoms/BitmapText'
 import { CRTPixelButton } from '@/components/atoms/CRTPixelButton'
 import { TerminalInput } from '@/components/atoms/TerminalInput'
 import { CRTBezel } from '@/components/molecules/CRTBezel'
 import { BootSequence } from '@/components/molecules/BootSequence'
+import { StatusBanner } from '@/components/molecules/StatusBanner'
 
-export type LoginCRTPhase = 'idle' | 'pending' | 'success'
+export type LoginCRTPhase = 'idle' | 'pending' | 'success' | 'error-truncating'
 
 export type LoginCRTProps = {
   onSubmit: (data: { email: string; password: string }) => Promise<void> | void
@@ -15,10 +16,14 @@ export type LoginCRTProps = {
   pending?: boolean
   phase?: LoginCRTPhase
   onBootComplete?: () => void
+  onBootTruncate?: () => void
   channelFlipOverlay?: ReactNode
   defaultEmail?: string
   reducedMotionOverride?: boolean
 }
+
+const ERROR_BANNER_PRIMARY = '> ACCESS DENIED'
+const ERROR_BANNER_SECONDARY = 'INVALID EMAIL OR PASSWORD'
 
 export function LoginCRT({
   onSubmit,
@@ -26,13 +31,31 @@ export function LoginCRT({
   pending = false,
   phase = 'idle',
   onBootComplete,
+  onBootTruncate,
   channelFlipOverlay,
   defaultEmail = 'admin@tracker.local',
   reducedMotionOverride,
 }: LoginCRTProps) {
   const isBusy = phase !== 'idle' || pending
-  const showBoot = phase === 'pending' || phase === 'success'
+  const showBoot = phase === 'pending' || phase === 'success' || phase === 'error-truncating'
+  const isTruncating = phase === 'error-truncating'
   const formClass = isBusy ? 'lc-form lc-form-faded' : 'lc-form'
+  const screenClass = isTruncating ? 'lc-screen lc-screen-shake' : 'lc-screen'
+
+  const passwordRef = useRef<HTMLInputElement | null>(null)
+  const prevErrorRef = useRef<string | null | undefined>(error)
+
+  useEffect(() => {
+    if (!error) {
+      prevErrorRef.current = error
+      return
+    }
+    if (prevErrorRef.current === error) return
+    prevErrorRef.current = error
+    if (phase === 'idle') {
+      passwordRef.current?.focus()
+    }
+  }, [error, phase])
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -45,7 +68,7 @@ export function LoginCRT({
 
   return (
     <CRTBezel>
-      <div className='lc-screen'>
+      <div className={screenClass}>
         <header className='bt-header'>
           <span className='bt-blocks' aria-hidden='true'>
             <span className='bt-b1'>▓</span>
@@ -80,6 +103,7 @@ export function LoginCRT({
             reducedMotionOverride={reducedMotionOverride}
           />
           <TerminalInput
+            ref={passwordRef}
             name='password'
             type='password'
             label='PASSWORD'
@@ -87,10 +111,12 @@ export function LoginCRT({
             autoComplete='current-password'
             reducedMotionOverride={reducedMotionOverride}
           />
-          {error ? (
-            <BitmapText size={18} tone='magenta' as='p' className='lc-error'>
-              {error}
-            </BitmapText>
+          {error && phase === 'idle' ? (
+            <StatusBanner
+              variant='error'
+              primary={ERROR_BANNER_PRIMARY}
+              secondary={ERROR_BANNER_SECONDARY}
+            />
           ) : null}
           <CRTPixelButton type='submit' disabled={isBusy}>
             {'> LOG IN'}
@@ -100,8 +126,10 @@ export function LoginCRT({
       {showBoot ? (
         <BootSequence
           onComplete={onBootComplete ?? (() => undefined)}
+          onTruncate={onBootTruncate ?? (() => undefined)}
           holdAtFrame={9}
           holdReleased={phase === 'success'}
+          truncate={isTruncating}
           reducedMotionOverride={reducedMotionOverride}
         />
       ) : null}
