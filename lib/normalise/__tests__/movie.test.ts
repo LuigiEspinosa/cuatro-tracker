@@ -197,7 +197,35 @@ describe('lib/normalise/movie', () => {
     })
   })
 
-  describe('original_title and overview nullable handling', () => {
+  describe('nullable / empty source-field handling', () => {
+    it('maps an empty genres array through unchanged', async () => {
+      const { normaliseTmdbMovie } = await import('@/lib/normalise/movie')
+
+      const result = normaliseTmdbMovie({ ...validMovie, genres: [] })
+
+      expect(result.genres).toEqual([])
+    })
+
+    it('preserves null poster_path (TMDB returns null for movies without art)', async () => {
+      const { normaliseTmdbMovie } = await import('@/lib/normalise/movie')
+
+      const result = normaliseTmdbMovie({ ...validMovie, poster_path: null })
+
+      expect(result.poster_path).toBeNull()
+    })
+
+    it('preserves null backdrop_path', async () => {
+      const { normaliseTmdbMovie } = await import('@/lib/normalise/movie')
+
+      const result = normaliseTmdbMovie({
+        ...validMovie,
+        backdrop_path: null,
+      })
+
+      expect(result.backdrop_path).toBeNull()
+    })
+
+
     it('writes null when original_title is absent from the source', async () => {
       const { normaliseTmdbMovie } = await import('@/lib/normalise/movie')
 
