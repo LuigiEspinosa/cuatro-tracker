@@ -41,6 +41,20 @@ describe('lib/search/media-dispatcher: getDispatcher', () => {
     expect(typeof result?.normalise).toBe('function')
   })
 
+  it("the (tmdb, MOVIE) dispatcher's fetch calls getMovie with the source ID", async () => {
+    const { searchMulti: _ } = await import('@/lib/api/tmdb')
+    const { getDispatcher } = await import('@/lib/search/media-dispatcher')
+    const tmdb = await import('@/lib/api/tmdb')
+    const spy = vi
+      .spyOn(tmdb, 'getMovie')
+      .mockResolvedValue({} as never)
+
+    const dispatcher = getDispatcher('tmdb', MediaType.MOVIE)
+    await dispatcher?.fetch(550)
+
+    expect(spy).toHaveBeenCalledWith(550)
+  })
+
   it('returns null for every other (source, type) tuple in E4', async () => {
     const { getDispatcher } = await import('@/lib/search/media-dispatcher')
 

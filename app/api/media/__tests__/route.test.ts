@@ -428,6 +428,53 @@ describe('POST /api/media', () => {
       )
     })
 
+    it('returns idempotent 200 when ensureUserEntry hits P2002 (concurrent UserEntry create)', async () => {
+      const existing = newMediaItem({ user_entry: null })
+      dbMock.mediaItem.findUnique
+        .mockResolvedValueOnce(existing)
+        .mockResolvedValueOnce(
+          newMediaItem({ user_entry: newUserEntry() }),
+        )
+      dbMock.userEntry.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError(
+          'Unique constraint failed on the fields: (`media_item_id`)',
+          { code: 'P2002', clientVersion: '6.0.0' },
+        ),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 550, type: MediaType.MOVIE }),
+      )
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.merged).toBe(false)
+      expect(body.mediaItem.user_entry.status).toBe(WatchStatus.PLAN_TO_WATCH)
+    })
+
+    it('skips cross-merge when the normaliser fell back to the 1970 sentinel', async () => {
+      tmdbMock.getMovie.mockResolvedValue({
+        ...validTmdbMovie,
+        release_date: '',
+      })
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      dbMock.mediaItem.create.mockResolvedValue(
+        newMediaItem({
+          release_date: new Date('1970-01-01T00:00:00Z'),
+          user_entry: newUserEntry(),
+        }),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 550, type: MediaType.MOVIE }),
+      )
+
+      expect(res.status).toBe(201)
+      expect(dbMock.mediaItem.findMany).not.toHaveBeenCalled()
+    })
+
     it('returns 422 when the normaliser throws ZodError (upstream payload shape drift)', async () => {
       tmdbMock.getMovie.mockResolvedValue({ ...validTmdbMovie, title: 1234 })
       const { POST } = await import('@/app/api/media/route')
@@ -442,7 +489,7 @@ describe('POST /api/media', () => {
       expect(body.issues).toBeDefined()
     })
 
-    it('returns 400 on Prisma constraint violation (P2002 race lost → idempotent retry)', async () => {
+    it('returns 200 idempotent when P2002 race-loss is detected (concurrent POST won)', async () => {
       tmdbMock.getMovie.mockResolvedValue(validTmdbMovie)
       dbMock.mediaItem.findUnique
         .mockResolvedValueOnce(null)
@@ -485,6 +532,7 @@ describe('POST /api/media', () => {
       const body = await res.json()
       expect(body.error).toBe('constraint_violation')
       expect(body.code).toBe('P2004')
+      expect(body.message).toBeUndefined()
       expect(loggerMock.warn).toHaveBeenCalledWith(
         expect.objectContaining({
           event: 'media.constraint_violation',

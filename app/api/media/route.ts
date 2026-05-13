@@ -108,12 +108,30 @@ async function ensureUserEntry(
   mediaItem: MediaItemWithUserEntry,
 ): Promise<{ mediaItem: MediaItemWithUserEntry; created: boolean }> {
   if (mediaItem.user_entry) return { mediaItem, created: false }
-  const userEntry: UserEntry = await db.userEntry.create({
-    data: { media_item_id: mediaItem.id, ...NEW_USER_ENTRY },
-  })
-  return {
-    mediaItem: { ...mediaItem, user_entry: userEntry },
-    created: true,
+  try {
+    const userEntry: UserEntry = await db.userEntry.create({
+      data: { media_item_id: mediaItem.id, ...NEW_USER_ENTRY },
+    })
+    return {
+      mediaItem: { ...mediaItem, user_entry: userEntry },
+      created: true,
+    }
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === 'P2002'
+    ) {
+      // Concurrent POST won the race on UserEntry.media_item_id @unique.
+      // Re-fetch the row + its entry and treat the response as idempotent.
+      const refetched = await db.mediaItem.findUnique({
+        where: { id: mediaItem.id },
+        include: { user_entry: true },
+      })
+      if (refetched?.user_entry) {
+        return { mediaItem: refetched, created: false }
+      }
+    }
+    throw err
   }
 }
 
@@ -227,7 +245,12 @@ async function handler(req: NextRequest): Promise<NextResponse> {
       ? normalised.release_date.getUTCFullYear()
       : new Date(normalised.release_date as string).getUTCFullYear()
     const normalisedKey = normaliseTitle(normalised.title)
-    const candidates = await findCrossSourceCandidates(source, releaseYear)
+    // Skip cross-merge when the normaliser fell back to the 1970 sentinel —
+    // every undated item shares that year bucket and would falsely collide.
+    const candidates =
+      releaseYear === 1970
+        ? []
+        : await findCrossSourceCandidates(source, releaseYear)
     const crossMatch = candidates.find(
       (c) => normaliseTitle(c.title) === normalisedKey,
     )
@@ -272,8 +295,9 @@ async function handler(req: NextRequest): Promise<NextResponse> {
         },
         'database constraint violation',
       )
+      // Omit err.message in the response to avoid leaking schema column names.
       return jsonResponse(
-        { error: 'constraint_violation', code: err.code, message: err.message },
+        { error: 'constraint_violation', code: err.code },
         400,
       )
     }
