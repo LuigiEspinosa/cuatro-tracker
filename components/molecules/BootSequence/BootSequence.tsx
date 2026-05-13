@@ -2,6 +2,7 @@
 
 import gsap from 'gsap'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { readInitialReducedMotion, useReducedMotion } from '@/lib/hooks/useReducedMotion'
 import {
   BOOT_COPYRIGHT_LINE,
   BOOT_FINAL_FRAME_NO_WELCOME,
@@ -26,34 +27,6 @@ export type BootSequenceProps = {
 
 const MODIFIER_ONLY_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'])
 
-function readInitialReducedMotion(override?: boolean): boolean {
-  if (typeof override === 'boolean') return override
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-}
-
-function usePrefersReducedMotion(
-  override: boolean | undefined,
-  initial: boolean
-): boolean {
-  const [reduced, setReduced] = useState<boolean>(initial)
-
-  useEffect(() => {
-    if (typeof override === 'boolean') {
-      setReduced(override)
-      return
-    }
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
-    const mql = window.matchMedia('(prefers-reduced-motion: reduce)')
-    setReduced(mql.matches)
-    const onChange = (e: MediaQueryListEvent) => setReduced(e.matches)
-    mql.addEventListener('change', onChange)
-    return () => mql.removeEventListener('change', onChange)
-  }, [override])
-
-  return reduced
-}
-
 export function BootSequence({
   showWelcome = true,
   onComplete,
@@ -61,7 +34,7 @@ export function BootSequence({
   reducedMotionOverride,
 }: BootSequenceProps) {
   const initialReduced = readInitialReducedMotion(reducedMotionOverride)
-  const reduced = usePrefersReducedMotion(reducedMotionOverride, initialReduced)
+  const reduced = useReducedMotion(reducedMotionOverride)
   const [currentFrame, setCurrentFrame] = useState<number>(() =>
     initialReduced ? BOOT_FINAL_FRAME_NO_WELCOME : 1
   )

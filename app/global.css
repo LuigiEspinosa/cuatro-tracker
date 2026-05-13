@@ -279,3 +279,71 @@ body {
 @media (prefers-reduced-motion: no-preference) {
   .pb-fill { transition: width 200ms linear; }
 }
+
+/* StickyYearBand (Story 2.10). Sticky band the timeline (Epic 10) plugs into.
+   Two-layer year stack lets GSAP cross-fade outgoing vs incoming opacity over
+   250ms with phosphor-glow ramp; reduced-motion users see the new year snap
+   in place without the second layer ever mounting. */
+.syb {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 24px 12px;
+  background: var(--ground-base);
+}
+
+.syb-year-stack {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: center;
+  line-height: 1;
+}
+
+.syb-year {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--phosphor-cream);
+  text-shadow: var(--text-shadow-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.syb-year-outgoing {
+  position: absolute;
+  inset: 0;
+  display: block;
+  text-align: center;
+}
+
+.syb-year-incoming {
+  position: relative;
+  display: block;
+  text-align: center;
+}
+
+.syb-month {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: var(--phosphor-cream-dim);
+  text-transform: uppercase;
+}
+
+.syb-rule {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  width: 100%;
+  height: 4px;
+  margin-top: 10px;
+}
+
+.syb-rule-band {
+  display: block;
+  height: 100%;
+}
