@@ -96,3 +96,88 @@ jobs:
           NEXT_PUBLIC_SENTRY_DSN: https://placeholder@example.com/0
           NEXT_PUBLIC_UMAMI_WEBSITE_ID: placeholder-website-id
         run: pnpm build
+
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: tracker_test
+          POSTGRES_USER: tracker
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://tracker:test@localhost:5432/tracker_test
+      DB_PASS: test
+      REDIS_URL: redis://localhost:6379
+      NEXTAUTH_SECRET: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      ADMIN_PASS: testpass123
+      TMDB_API_KEY: test
+      IGDB_CLIENT_ID: test
+      IGDB_CLIENT_SECRET: test
+      STEAM_API_KEY: test
+      STEAM_USER_ID: test
+      QBITTORRENT_HOST: http://localhost:8080
+      QBITTORRENT_USER: admin
+      QBITTORRENT_PASS: test
+      DOWNLOAD_PATH: /downloads
+      SENTRY_DSN: https://placeholder@example.com/0
+      NEXT_PUBLIC_SENTRY_DSN: https://placeholder@example.com/0
+      NEXT_PUBLIC_UMAMI_WEBSITE_ID: placeholder-website-id
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate prisma client
+        run: pnpm prisma generate
+
+      - name: Apply migrations
+        run: pnpm prisma migrate deploy
+
+      - name: Seed admin user
+        run: pnpm prisma db seed
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run e2e tests
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

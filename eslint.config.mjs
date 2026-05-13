@@ -76,6 +76,16 @@ const eslintConfig = [
       'no-console': 'off',
     },
   },
+  {
+    // Playwright config + e2e specs run under Node (Playwright runner), not the
+    // Next.js bundle. They read CI / PORT / ADMIN_PASS directly from process.env
+    // by design — these are tooling vars, not application secrets routed through
+    // lib/env.ts's Zod schema.
+    files: ['playwright.config.ts', 'e2e/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': 'off',
+    },
+  },
 ]
 
 export default eslintConfig
