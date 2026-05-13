@@ -347,3 +347,147 @@ body {
   display: block;
   height: 100%;
 }
+
+/* LogoMark (Story 2.11). Authenticated app's top-left brand mark: three rainbow
+   blocks (green/yellow/orange) + "CUATRO TRACKER" wordmark in display serif. */
+.lm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  color: var(--phosphor-cream);
+}
+
+.lm-blocks {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.lm-block {
+  display: inline-block;
+  width: 10px;
+  height: 18px;
+}
+
+.lm-b1 { background: var(--rb-green); }
+.lm-b2 { background: var(--rb-yellow); }
+.lm-b3 { background: var(--rb-orange); }
+
+.lm-wordmark {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--phosphor-cream);
+}
+
+/* MainNav (Story 2.11). Authenticated app top nav: LogoMark + 4 nav buttons
+   (Timeline / Library / Search / Admin) + session menu. Nav buttons drive
+   ChannelFlipTransition via useChannelFlipNavigate; active route gets a 4px
+   6-band rainbow underline. Hidden on /login via component-side pathname check. */
+.mn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 32px;
+  background: var(--ground-base);
+  border-bottom: 1px solid var(--phosphor-cream-ghost);
+}
+
+.mn-left {
+  display: inline-flex;
+  align-items: center;
+}
+
+.mn-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mn-link-item {
+  position: relative;
+  display: inline-flex;
+}
+
+.mn-link {
+  position: relative;
+  padding: 6px 4px 10px;
+  background: transparent;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: var(--phosphor-cream-dim);
+  text-transform: uppercase;
+  cursor: pointer;
+  outline: 0;
+}
+
+.mn-link:hover {
+  color: var(--phosphor-cream);
+}
+
+.mn-link:focus-visible {
+  color: var(--phosphor-cream);
+  box-shadow: 0 0 0 2px var(--phosphor-cream);
+}
+
+.mn-link-active {
+  color: var(--phosphor-cream);
+}
+
+.mn-link-underline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  height: 4px;
+}
+
+.mn-link-underline-band {
+  display: block;
+  height: 100%;
+}
+
+.mn-session {
+  display: inline-flex;
+  align-items: center;
+}
+
+.mn-session-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  background: transparent;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: var(--phosphor-cream-dim);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.mn-session-button:hover,
+.mn-session-button:focus-visible {
+  color: var(--phosphor-cream);
+}
+
+.mn-session-sep {
+  color: var(--phosphor-cream-ghost);
+}
+
+.mn-session-action {
+  color: inherit;
+}

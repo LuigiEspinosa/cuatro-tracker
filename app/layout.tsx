@@ -10,6 +10,7 @@ import Script from 'next/script'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { logger } from '@/lib/logger'
+import { MainNav } from '@/components/organisms/MainNav'
 import { Providers } from './providers'
 import './global.css'
 
@@ -74,7 +75,7 @@ export default async function RootLayout({
     )
   }
 
-  const umamiId = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID
+  const umamiId = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID?.trim()
   const showUmami = Boolean(session) && Boolean(umamiId)
 
   return (
@@ -92,7 +93,10 @@ export default async function RootLayout({
         )}
       </head>
       <body className="antialiased">
-        <Providers>{children}</Providers>
+        <Providers session={session}>
+          <MainNav />
+          {children}
+        </Providers>
       </body>
     </html>
   )
