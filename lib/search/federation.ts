@@ -28,7 +28,10 @@ export type AdapterCapability = {
 }
 
 export function normaliseTitle(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return s
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, '')
 }
 
 function extractYear(dateString: string | undefined | null): number | undefined {

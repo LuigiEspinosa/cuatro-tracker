@@ -12,7 +12,7 @@ import {
 export const dynamic = 'force-dynamic'
 
 const SearchQuerySchema = z.object({
-  q: z.string().min(1).max(200),
+  q: z.string().trim().min(1).max(200),
   type: z.enum(['movie', 'tv', 'anime', 'game']).optional(),
 })
 

@@ -102,6 +102,14 @@ describe('GET /api/search', () => {
       expect(res.status).toBe(400)
     })
 
+    it('returns 400 when q is whitespace-only (Zod .trim() then .min(1))', async () => {
+      const { GET } = await import('@/app/api/search/route')
+
+      const res = await GET(makeRequest('/api/search?q=%20%20%20'))
+
+      expect(res.status).toBe(400)
+    })
+
     it('returns 400 when q exceeds 200 characters', async () => {
       const { GET } = await import('@/app/api/search/route')
 

@@ -74,6 +74,30 @@ describe('lib/search/federation: normaliseTitle', () => {
 
     expect(normaliseTitle('The Office')).toBe('theoffice')
   })
+
+  it('preserves non-Latin characters (Japanese / Korean / Chinese) for anime + manga matching', async () => {
+    const { normaliseTitle } = await import('@/lib/search/federation')
+
+    expect(normaliseTitle('進撃の巨人')).toBe('進撃の巨人')
+    expect(normaliseTitle('ワンピース')).toBe('ワンピース')
+    expect(normaliseTitle('진격의 거인')).toBe('진격의거인')
+  })
+
+  it('preserves accented characters via NFC (Pokémon stays Pokémon)', async () => {
+    const { normaliseTitle } = await import('@/lib/search/federation')
+
+    expect(normaliseTitle('Pokémon')).toBe('pokémon')
+    expect(normaliseTitle('Léon')).toBe('léon')
+    expect(normaliseTitle('Spinal Tap')).toBe('spinaltap')
+  })
+
+  it('treats canonically equivalent Unicode sequences as the same key (NFC)', async () => {
+    const { normaliseTitle } = await import('@/lib/search/federation')
+
+    const composed = 'café'
+    const decomposed = 'café'
+    expect(normaliseTitle(composed)).toBe(normaliseTitle(decomposed))
+  })
 })
 
 describe('lib/search/federation: dedupResults', () => {
