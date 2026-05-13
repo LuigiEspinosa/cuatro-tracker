@@ -78,6 +78,9 @@ importers:
       '@eslint/eslintrc':
         specifier: ^3.3.4
         version: 3.3.5
+      '@next/env':
+        specifier: ^15.5.13
+        version: 15.5.13
       '@playwright/test':
         specifier: ^1.60.0
         version: 1.60.0
