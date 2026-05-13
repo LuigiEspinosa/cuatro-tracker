@@ -101,3 +101,92 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .fc { transition: none; }
 }
+
+/* BootSequence (Story 2.7). 10-frame login boot animation. Mirrors the bundle's
+   login-styles.css boot section (lines 142-189, 314-356). VT323 bitmap face only.
+   Reduced-motion users skip the timeline and see a static READY. frame; the
+   welcome flash never renders for them, so the @keyframes is gated by a media
+   query as defense in depth. */
+.bs {
+  position: absolute;
+  inset: 0;
+  background: var(--ground-base);
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 38px 46px 42px;
+  color: var(--phosphor-cream);
+}
+
+.bs-header {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-bitmap);
+  font-size: 30px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-shadow: 0 0 8px rgba(239, 230, 212, 0.4);
+}
+.bs-label { padding: 0 8px; }
+.bs-blocks { display: inline-flex; gap: 1px; text-shadow: none; }
+.bs-blocks span { display: inline-block; }
+.bs-b1 { color: var(--rb-green); }
+.bs-b2 { color: var(--rb-yellow); }
+.bs-b3 { color: var(--rb-orange); }
+
+.bs-version {
+  margin-top: 10px;
+  font-family: var(--font-bitmap);
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  color: var(--phosphor-cream);
+}
+
+.bs-copyright {
+  margin-top: 4px;
+  font-family: var(--font-bitmap);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: var(--phosphor-cream-dim);
+}
+
+.bs-progress {
+  margin-top: 28px;
+  font-family: var(--font-bitmap);
+  font-size: 22px;
+  color: var(--phosphor-cream);
+  letter-spacing: 2px;
+  white-space: pre;
+  font-variant-numeric: tabular-nums;
+}
+
+.bs-ready {
+  margin-top: 18px;
+  font-family: var(--font-bitmap);
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  color: var(--phosphor-cream);
+}
+
+.bs-welcome {
+  margin-top: 12px;
+  font-family: var(--font-bitmap);
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  color: var(--phosphor-cream);
+  text-shadow:
+    0 0 12px rgba(239, 230, 212, 0.7),
+    0 0 6px rgba(239, 230, 212, 0.4);
+  animation: bs-welcome-pulse 600ms ease-out;
+}
+
+@keyframes bs-welcome-pulse {
+  0% { opacity: 0; text-shadow: 0 0 0 transparent; }
+  20% { opacity: 1; text-shadow: 0 0 16px rgba(239, 230, 212, 0.95); }
+  100% { opacity: 1; text-shadow: 0 0 6px rgba(239, 230, 212, 0.4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bs-welcome { animation: none; }
+}
