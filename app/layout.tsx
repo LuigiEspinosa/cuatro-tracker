@@ -41,7 +41,7 @@ const bodySerif = EB_Garamond({
 const monoSans = IBM_Plex_Mono({
   variable: '--font-mono',
   subsets: ['latin'],
-  weight: ['400', '600'],
+  weight: ['400', '500', '600'],
   style: ['normal'],
   display: 'swap',
   fallback: ['ui-monospace', 'Menlo', 'monospace'],
