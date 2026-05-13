@@ -37,6 +37,9 @@ const cases: Case[] = [
   { path: '/dashboard', expected: 'gate' },
   { path: '/timeline', expected: 'gate' },
   { path: '/api/media', expected: 'gate' },
+  { path: '/api/media/foo', expected: 'gate' },
+  { path: '/api/search', expected: 'gate' },
+  { path: '/api/search/foo', expected: 'gate' },
 ]
 
 describe('middleware matcher', () => {
