@@ -587,6 +587,12 @@ body {
   gap: 20px;
 }
 
+.lc-form-faded {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 150ms linear;
+}
+
 .lc-error {
   margin: 0;
   letter-spacing: 0.04em;

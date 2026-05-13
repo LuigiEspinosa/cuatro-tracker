@@ -2,13 +2,15 @@
 
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { LoginCRT } from '@/components/organisms/LoginCRT'
+import { useCallback, useState } from 'react'
+import { LoginCRT, type LoginCRTPhase } from '@/components/organisms/LoginCRT'
+import { useChannelFlipNavigate } from '@/components/molecules/ChannelFlipTransition/useChannelFlipNavigate'
 
 export default function LoginPage() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
+  const [phase, setPhase] = useState<LoginCRTPhase>('idle')
+  const { navigate, overlay } = useChannelFlipNavigate()
 
   async function handleSubmit({
     email,
@@ -18,7 +20,7 @@ export default function LoginPage() {
     password: string
   }) {
     setError(null)
-    setPending(true)
+    setPhase('pending')
 
     const result = await signIn('credentials', {
       email,
@@ -26,20 +28,29 @@ export default function LoginPage() {
       redirect: false,
     })
 
-    setPending(false)
-
     if (result?.error) {
       setError('Invalid email or password.')
+      setPhase('idle')
       return
     }
 
-    router.push('/')
-    router.refresh()
+    setPhase('success')
   }
+
+  const onBootComplete = useCallback(async () => {
+    await navigate('/')
+    router.refresh()
+  }, [navigate, router])
 
   return (
     <main className='lc'>
-      <LoginCRT onSubmit={handleSubmit} error={error} pending={pending} />
+      <LoginCRT
+        onSubmit={handleSubmit}
+        error={error}
+        phase={phase}
+        onBootComplete={onBootComplete}
+        channelFlipOverlay={overlay}
+      />
     </main>
   )
 }

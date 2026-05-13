@@ -1,2 +1,2 @@
 export { LoginCRT } from './LoginCRT'
-export type { LoginCRTProps } from './LoginCRT'
+export type { LoginCRTProps, LoginCRTPhase } from './LoginCRT'
