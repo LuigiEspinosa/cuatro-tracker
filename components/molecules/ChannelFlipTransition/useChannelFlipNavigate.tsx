@@ -3,6 +3,7 @@
 import gsap from 'gsap'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion'
 import { ChannelFlipTransition } from './ChannelFlipTransition'
 import { safeTotalDurationMs, scalePhases } from './flip-frames'
 
@@ -13,31 +14,6 @@ export type UseChannelFlipNavigateOptions = {
 
 export type ChannelFlipNavigate = (target: string) => Promise<void>
 
-function readInitialReducedMotion(override?: boolean): boolean {
-  if (typeof override === 'boolean') return override
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-}
-
-function usePrefersReducedMotion(override: boolean | undefined, initial: boolean): boolean {
-  const [reduced, setReduced] = useState<boolean>(initial)
-
-  useEffect(() => {
-    if (typeof override === 'boolean') {
-      setReduced(override)
-      return
-    }
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
-    const mql = window.matchMedia('(prefers-reduced-motion: reduce)')
-    setReduced(mql.matches)
-    const onChange = (e: MediaQueryListEvent) => setReduced(e.matches)
-    mql.addEventListener('change', onChange)
-    return () => mql.removeEventListener('change', onChange)
-  }, [override])
-
-  return reduced
-}
-
 export function useChannelFlipNavigate(
   options: UseChannelFlipNavigateOptions = {}
 ): {
@@ -46,8 +22,7 @@ export function useChannelFlipNavigate(
 } {
   const { totalDuration, reducedMotionOverride } = options
   const router = useRouter()
-  const initialReduced = readInitialReducedMotion(reducedMotionOverride)
-  const reduced = usePrefersReducedMotion(reducedMotionOverride, initialReduced)
+  const reduced = useReducedMotion(reducedMotionOverride)
   const [progress, setProgress] = useState(0)
   const timelineRef = useRef<gsap.core.Timeline | null>(null)
   const rafRef = useRef<number | null>(null)

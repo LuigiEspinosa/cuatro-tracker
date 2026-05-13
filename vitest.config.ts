@@ -9,6 +9,7 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['components/**/*.test.tsx', 'jsdom'],
       ['app/**/*.test.tsx', 'jsdom'],
+      ['lib/**/*.test.tsx', 'jsdom'],
     ],
   },
   esbuild: {
