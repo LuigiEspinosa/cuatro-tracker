@@ -190,3 +190,38 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .bs-welcome { animation: none; }
 }
+
+/* ChannelFlipTransition (Story 2.8). Portal-rendered viewport overlay used
+   around top-level nav. Symmetric 200 / 200 / 200 ms phases (band sweep,
+   hold black, fade back). The hook short-circuits before mounting under
+   prefers-reduced-motion; the media query below is defense in depth. */
+.cft {
+  position: fixed;
+  inset: 0;
+  pointer-events: auto;
+  z-index: 9999;
+}
+.cft-black-above {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: #000;
+  z-index: 8;
+}
+.cft-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform: translateY(-3px);
+  height: 6px;
+  background: var(--phosphor-cream);
+  box-shadow:
+    0 0 24px rgba(239, 230, 212, 0.95),
+    0 0 8px rgba(239, 230, 212, 1);
+  z-index: 9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cft { display: none; }
+}
