@@ -491,3 +491,288 @@ body {
 .mn-session-action {
   color: inherit;
 }
+
+/* LoginCRT (Story 3.1). Login screen visual chrome: CRT bezel + bitmap header
+   + terminal inputs + CRT-pixel submit. Mirrors the bundle's
+   login-styles.css (lines 78-279) re-namespaced to the .lc / .crt / .bt / .ti /
+   .cpb prefixes. The bezel exterior is the only .bg-noise consumer here
+   (design-system §0.5 allows hero CRT bezel exteriors); the inner .crt-screen-wrap
+   stays grain-free as a running-content surface. */
+.lc {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    ellipse at center,
+    var(--ground-base) 0%,
+    var(--ground-base) 45%,
+    #15101f 100%
+  );
+  padding: 24px;
+}
+
+.crt {
+  position: relative;
+  width: 720px;
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+  filter:
+    drop-shadow(0 32px 48px rgba(0, 0, 0, 0.55))
+    drop-shadow(0 8px 16px rgba(0, 0, 0, 0.4));
+}
+
+.crt > svg.crt-shell {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.crt-screen-wrap {
+  position: absolute;
+  left: 7.8%;
+  top: 7.4%;
+  width: 84.4%;
+  height: 73.5%;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ground-base);
+  box-shadow:
+    inset 0 0 60px rgba(0, 0, 0, 0.85),
+    inset 0 0 12px rgba(123, 92, 255, 0.18),
+    inset 0 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.crt-screen-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%),
+    repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.18) 2px 3px);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.crt-screen-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 140% 90% at 50% -20%,
+    rgba(239, 230, 212, 0.08),
+    transparent 55%
+  );
+  pointer-events: none;
+  z-index: 5;
+}
+
+.lc-screen {
+  position: absolute;
+  inset: 0;
+  padding: 38px 46px 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--phosphor-cream);
+  z-index: 2;
+}
+
+.lc-form {
+  margin-top: 28px;
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.lc-error {
+  margin: 0;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.bt {
+  font-family: var(--font-bitmap);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: var(--bt-color, var(--phosphor-cream));
+}
+
+.bt-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  margin-top: 0;
+}
+
+.bt-blocks {
+  display: inline-flex;
+  gap: 1px;
+  font-family: var(--font-bitmap);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.bt-blocks span {
+  display: inline-block;
+}
+
+.bt-b1 {
+  color: var(--rb-green);
+}
+
+.bt-b2 {
+  color: var(--rb-yellow);
+}
+
+.bt-b3 {
+  color: var(--rb-orange);
+}
+
+.ti {
+  display: block;
+}
+
+.ti-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  color: var(--phosphor-cream-dim);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.ti-wrap {
+  position: relative;
+  border-bottom: 1px solid var(--phosphor-cream-ghost);
+  display: flex;
+  align-items: center;
+  padding: 6px 2px;
+  transition: border-color 120ms linear, box-shadow 120ms linear;
+}
+
+.ti-wrap[data-focused='true'] {
+  border-bottom: 2px solid var(--neon-blue);
+  box-shadow:
+    0 1px 0 0 var(--neon-blue),
+    0 6px 12px -6px rgba(63, 169, 255, 0.4),
+    0 0 6px rgba(63, 169, 255, 0.4);
+}
+
+.ti-field {
+  background: transparent;
+  border: 0;
+  outline: none;
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--phosphor-cream);
+  padding: 0 2px;
+  letter-spacing: 0.02em;
+  /* Native caret hidden because .ti-cursor draws the indicator. */
+  caret-color: transparent;
+}
+
+.ti-field::placeholder {
+  color: var(--phosphor-cream-ghost);
+}
+
+.ti-field::selection {
+  background: rgba(63, 169, 255, 0.35);
+}
+
+.ti-cursor {
+  display: none;
+  width: 9px;
+  height: 18px;
+  background: var(--phosphor-cream);
+  margin-left: 2px;
+  vertical-align: middle;
+}
+
+.ti-wrap[data-focused='true'] .ti-cursor {
+  display: inline-block;
+  animation: ti-blink 1s steps(1) infinite;
+}
+
+@keyframes ti-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ti-wrap[data-focused='true'] .ti-cursor {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+.ti-wrap[data-rm='false'][data-focused='true'] .ti-cursor {
+  animation: ti-blink 1s steps(1) infinite;
+  opacity: 1;
+}
+
+.ti-wrap[data-rm='true'][data-focused='true'] .ti-cursor {
+  animation: none;
+  opacity: 1;
+}
+
+.cpb {
+  margin-top: 6px;
+  width: 100%;
+  font-family: var(--font-bitmap);
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  color: var(--phosphor-cream);
+  background: transparent;
+  border: 1px solid var(--phosphor-cream);
+  padding: 12px 18px;
+  cursor: pointer;
+  transition:
+    background 100ms linear,
+    color 100ms linear,
+    border-width 100ms linear,
+    text-shadow 120ms linear;
+  text-align: center;
+}
+
+.cpb:hover,
+.cpb:focus-visible {
+  outline: none;
+  background: var(--phosphor-cream);
+  color: var(--ground-base);
+  border-width: 2px;
+  padding: 11px 17px;
+  text-shadow: 0 0 6px rgba(239, 230, 212, 0.55);
+}
+
+.cpb[disabled] {
+  border-color: var(--phosphor-cream-ghost);
+  color: var(--phosphor-cream-ghost);
+  cursor: not-allowed;
+  background: transparent;
+  text-shadow: none;
+}
+
+.cpb[data-inline='true'] {
+  width: auto;
+}
+
+@media (max-width: 480px) {
+  .crt {
+    width: 340px;
+  }
+  .lc-screen {
+    padding: 22px 22px 26px;
+  }
+  .lc-form {
+    max-width: 100%;
+    margin-top: 22px;
+    gap: 16px;
+  }
+}
