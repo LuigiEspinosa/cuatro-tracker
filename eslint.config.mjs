@@ -49,7 +49,7 @@ const eslintConfig = [
     },
   },
   {
-    files: ['lib/env.ts', 'lib/__tests__/env.test.ts'],
+    files: ['lib/env.ts', 'lib/__tests__/env.test.ts', 'tests/setup.ts'],
     rules: {
       'no-restricted-syntax': 'off',
       'no-console': 'off',
