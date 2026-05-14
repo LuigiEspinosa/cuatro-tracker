@@ -48,6 +48,13 @@ describe('MainNav rendering (AC-3)', () => {
     expect(screen.getByRole('button', { name: 'Admin' })).toBeInTheDocument()
   })
 
+  it('wraps the LogoMark in a button that navigates to /', () => {
+    render(<MainNav />)
+    const button = screen.getByRole('button', { name: 'Go to dashboard' })
+    fireEvent.click(button)
+    expect(navigateMock).toHaveBeenCalledWith('/')
+  })
+
   it('hides on /login', () => {
     pathnameRef.current = '/login'
     const { container } = render(<MainNav />)
