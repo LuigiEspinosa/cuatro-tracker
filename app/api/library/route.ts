@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { type MediaItem, MediaType, type UserEntry, WatchStatus } from '@prisma/client'
+import { type MediaItem, MediaType, type Prisma, type UserEntry, WatchStatus } from '@prisma/client'
 import { db } from '@/lib/db'
 import { logger } from '@/lib/logger'
 import { withRequest } from '@/lib/request-context'
@@ -22,10 +22,11 @@ export const dynamic = 'force-dynamic'
 const LibraryQuerySchema = z.object({
   status: z.nativeEnum(WatchStatus).optional(),
   order: z
-    .enum(['updated_at_desc', 'created_at_desc'])
+    .enum(['updated_at_desc', 'created_at_desc', 'release_date_desc'])
     .optional()
     .default('updated_at_desc'),
   limit: z.coerce.number().int().positive().max(100).optional().default(20),
+  released_within_days: z.coerce.number().int().positive().max(3650).optional(),
 })
 
 type UserEntryWithMedia = UserEntry & { media_item: MediaItem }
@@ -114,15 +115,36 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     )
   }
 
-  const { status, order, limit } = parsed.data
+  const { status, order, limit, released_within_days } = parsed.data
+
+  // `released_within_days` filters by joined MediaItem.release_date and forces
+  // ordering by release_date DESC regardless of the `order` param. This matches
+  // the dashboard's "Recently Released" band semantics (Story 5.4 AC-5).
+  const effectiveOrder = released_within_days !== undefined ? 'release_date_desc' : order
+
+  const where: Prisma.UserEntryWhereInput = {}
+  if (status) where.status = status
+  if (released_within_days !== undefined) {
+    // AC-5 reads "released in the last 30 days" — past-tense. The lower bound
+    // (gte: floor) drops anything older than the window; the upper bound
+    // (lte: now) drops future-dated releases (TMDB returns unreleased movies
+    // with future release_date, and they should NOT surface as "recently
+    // released"). 1970 sentinel rows for "unknown release date" are naturally
+    // excluded by the floor (UNIX epoch < NOW - any positive N days).
+    const now = new Date()
+    const floor = new Date(now.getTime() - released_within_days * 24 * 60 * 60 * 1000)
+    where.media_item = { release_date: { gte: floor, lte: now } }
+  }
 
   const orderBy =
-    order === 'created_at_desc'
-      ? { created_at: 'desc' as const }
-      : { updated_at: 'desc' as const }
+    effectiveOrder === 'release_date_desc'
+      ? { media_item: { release_date: 'desc' as const } }
+      : effectiveOrder === 'created_at_desc'
+        ? { created_at: 'desc' as const }
+        : { updated_at: 'desc' as const }
 
   const entries = await db.userEntry.findMany({
-    where: status ? { status } : undefined,
+    where: Object.keys(where).length > 0 ? where : undefined,
     include: { media_item: true },
     orderBy,
     take: limit,

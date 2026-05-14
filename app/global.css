@@ -1638,3 +1638,166 @@ body {
   outline: 2px solid var(--neon-blue);
   outline-offset: 3px;
 }
+
+/* ============================================================
+   HorizontalCoverScroller (Story 5.4). Bounded horizontal scroll of FramedCover
+   `scroller` cards (144×216) with snap, right-edge fade-to-ground, italic title
+   + small-caps medium-progress meta, ArrowLeft/Right roving-tabindex nav.
+   Bundle source: 02-dashboard/cuatro-tracker/project/dashboard-styles.css
+   lines 464-535 (.cover-scroller / .cover-cell), renamed to .hcs / .hcs-cell.
+   ============================================================ */
+
+.hcs-wrap {
+  position: relative;
+}
+
+.hcs-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  background: linear-gradient(90deg, transparent, var(--ground-base));
+  pointer-events: none;
+  z-index: 3;
+}
+
+.hcs {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 4px 0 8px;
+  list-style: none;
+  margin: 0;
+}
+
+.hcs::-webkit-scrollbar { height: 6px; }
+.hcs::-webkit-scrollbar-track { background: transparent; }
+.hcs::-webkit-scrollbar-thumb { background: var(--phosphor-cream-ghost); }
+
+.hcs-cell {
+  flex: 0 0 auto;
+  width: 144px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  outline: none;
+}
+
+.hcs-cell-frame {
+  width: 144px;
+  height: 216px;
+  position: relative;
+}
+
+.hcs-cell:focus-visible .hcs-cell-frame {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 2px;
+  box-shadow: 0 0 12px rgba(63, 169, 255, 0.45);
+}
+
+.hcs-cell-title {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--phosphor-cream);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hcs-cell-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+/* ============================================================
+   DashboardSystemWidget (Story 5.4 OI #6). Zero state = ghost-bordered box
+   with `> NO ACTIVE DOWNLOADS · qBT · IDLE`. Active state = throughput meta +
+   one row per torrent (italic name + PhosphorBar + bitmap percentage). Epic 12
+   (Story 12.3) wires real qBittorrent data through.
+   Bundle source: dashboard-styles.css lines 560-625 (.now-downloading),
+   renamed to .dsw to match the in-repo widget identifier.
+   ============================================================ */
+
+.dsw {
+  margin-top: 8px;
+  border: 1px solid var(--phosphor-cream-ghost);
+  padding: 16px 20px;
+  background: var(--ground-base);
+}
+
+.dsw-head {
+  font-family: var(--font-bitmap);
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+
+.dsw-label {
+  color: var(--phosphor-cream);
+}
+
+.dsw-zero .dsw-label {
+  color: var(--phosphor-cream-dim);
+}
+
+.dsw-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-ghost);
+  font-variant-numeric: tabular-nums;
+}
+
+.dsw-rows {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dsw-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px 70px;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+.dsw-row-name {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--phosphor-cream);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.dsw-row-pct {
+  font-family: var(--font-bitmap);
+  font-size: 18px;
+  color: var(--phosphor-cream);
+  text-align: right;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
