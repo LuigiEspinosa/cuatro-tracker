@@ -185,6 +185,10 @@ describe('GET /api/library', () => {
     expect(item.sourceLabel).toBe('From TMDB')
     expect(item.progressLabel).toBe('WATCHING')
     expect(item.progressPct).toBe(0)
+    expect(item.tmdbId).toBe(550)
+    expect(item.anilistId).toBeNull()
+    expect(item.igdbId).toBeNull()
+    expect(item.steamId).toBeNull()
   })
 
   it('formats progressLabel as "X% WATCHED" for movies with mid progress', async () => {
