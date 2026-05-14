@@ -1,5 +1,21 @@
 import { Prisma, MediaType } from '@prisma/client'
-import { TmdbMovieSchema } from '@/lib/api/tmdb'
+import { TmdbMovieSchema, TmdbCreditsSchema } from '@/lib/api/tmdb'
+
+export type NormalisedCastMember = {
+  id: number
+  name: string
+  role: string
+  order: number
+  profile_path: string | null
+}
+
+export type NormalisedCrewMember = {
+  id: number
+  name: string
+  role: string
+  order: number
+  profile_path: string | null
+}
 
 const RELEASE_DATE_SENTINEL = new Date('1970-01-01T00:00:00Z')
 
@@ -41,5 +57,28 @@ export function normaliseTmdbMovie(raw: unknown): Prisma.MediaItemCreateInput {
     popularity: source.popularity,
     genres: source.genres.map((g) => g.name),
     tmdb_id: source.id,
+  }
+}
+
+export function normaliseTmdbCredits(raw: unknown): {
+  cast: NormalisedCastMember[]
+  crew: NormalisedCrewMember[]
+} {
+  const source = TmdbCreditsSchema.parse(raw)
+  return {
+    cast: source.cast.map((c) => ({
+      id: c.id,
+      name: c.name,
+      role: c.character ?? '',
+      order: c.order,
+      profile_path: c.profile_path,
+    })),
+    crew: source.crew.map((c, idx) => ({
+      id: c.id,
+      name: c.name,
+      role: c.job,
+      order: idx,
+      profile_path: c.profile_path,
+    })),
   }
 }

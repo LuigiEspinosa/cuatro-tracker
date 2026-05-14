@@ -118,6 +118,49 @@ const validEpisode = {
   runtime: 62,
 }
 
+const validMovieCredits = {
+  id: 550,
+  cast: [
+    {
+      id: 287,
+      name: 'Brad Pitt',
+      character: 'Tyler Durden',
+      order: 0,
+      profile_path: '/bp.jpg',
+    },
+    {
+      id: 819,
+      name: 'Edward Norton',
+      character: 'The Narrator',
+      order: 1,
+      profile_path: '/en.jpg',
+    },
+    {
+      id: 1283,
+      name: 'Helena Bonham Carter',
+      character: 'Marla Singer',
+      order: 2,
+      profile_path: null,
+    },
+  ],
+  crew: [
+    {
+      id: 7467,
+      name: 'David Fincher',
+      job: 'Director',
+      department: 'Directing',
+      profile_path: '/df.jpg',
+    },
+    {
+      id: 7468,
+      name: 'Jim Uhls',
+      job: 'Screenplay',
+      department: 'Writing',
+      profile_path: null,
+    },
+  ],
+}
+
 const validSearchMultiResponse = {
   page: 1,
   results: [
@@ -252,6 +295,107 @@ describe('lib/api/tmdb', () => {
         fieldPath: 'release_date',
       })
     })
+
+    it('does NOT append append_to_response when called without options', async () => {
+      mockFetchOk(validMovie)
+      const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+      const { getMovie } = await import('@/lib/api/tmdb')
+
+      await getMovie(550)
+
+      const calledUrl = fetchMock.mock.calls[0]?.[0] as string
+      expect(calledUrl).not.toContain('append_to_response')
+    })
+
+    it('with { withCredits: true } returns TmdbMovie augmented with credits.cast + credits.crew', async () => {
+      mockFetchOk({ ...validMovie, credits: validMovieCredits })
+      const { getMovie } = await import('@/lib/api/tmdb')
+
+      const result = await getMovie(550, { withCredits: true })
+
+      expect(result).toMatchObject({ id: 550, title: 'Fight Club' })
+      expect(result.credits.cast).toHaveLength(3)
+      expect(result.credits.crew).toHaveLength(2)
+      expect(result.credits.cast[0]).toMatchObject({
+        id: 287,
+        name: 'Brad Pitt',
+        character: 'Tyler Durden',
+        order: 0,
+      })
+      expect(result.credits.crew[0]).toMatchObject({
+        id: 7467,
+        name: 'David Fincher',
+        job: 'Director',
+      })
+    })
+
+    it('with { withCredits: true } adds append_to_response=credits to the request URL', async () => {
+      mockFetchOk({ ...validMovie, credits: validMovieCredits })
+      const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+      const { getMovie } = await import('@/lib/api/tmdb')
+
+      await getMovie(550, { withCredits: true })
+
+      const calledUrl = fetchMock.mock.calls[0]?.[0] as string
+      expect(calledUrl).toContain('/movie/550')
+      expect(calledUrl).toContain('append_to_response=credits')
+    })
+
+    it('with { withCredits: true } throws TmdbApiError with fieldPath rooted under credits when a cast entry is tampered', async () => {
+      mockFetchOk({
+        ...validMovie,
+        credits: {
+          cast: [{ id: 'not-a-number' }],
+          crew: [],
+        },
+      })
+      const { getMovie, TmdbApiError } = await import('@/lib/api/tmdb')
+
+      const promise = getMovie(550, { withCredits: true })
+      await expect(promise).rejects.toBeInstanceOf(TmdbApiError)
+      await expect(promise).rejects.toMatchObject({
+        endpoint: '/movie/550',
+        fieldPath: expect.stringMatching(/^credits\.cast\.0/),
+      })
+    })
+  })
+
+  describe('getMovieCredits', () => {
+    it('parses a valid /movie/:id/credits response', async () => {
+      mockFetchOk(validMovieCredits)
+      const { getMovieCredits } = await import('@/lib/api/tmdb')
+
+      const result = await getMovieCredits(550)
+
+      expect(result.cast).toHaveLength(3)
+      expect(result.crew).toHaveLength(2)
+      expect(result.cast[0]).toMatchObject({
+        id: 287,
+        name: 'Brad Pitt',
+        character: 'Tyler Durden',
+      })
+    })
+
+    it('returns empty arrays when TMDB reports no cast and no crew', async () => {
+      mockFetchOk({ id: 550, cast: [], crew: [] })
+      const { getMovieCredits } = await import('@/lib/api/tmdb')
+
+      const result = await getMovieCredits(550)
+
+      expect(result.cast).toEqual([])
+      expect(result.crew).toEqual([])
+    })
+
+    it('builds the expected /movie/:id/credits path', async () => {
+      mockFetchOk(validMovieCredits)
+      const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+      const { getMovieCredits } = await import('@/lib/api/tmdb')
+
+      await getMovieCredits(550)
+
+      const calledUrl = fetchMock.mock.calls[0]?.[0] as string
+      expect(calledUrl).toContain('/movie/550/credits')
+    })
   })
 
   describe('getTv', () => {
@@ -319,28 +463,49 @@ describe('lib/api/tmdb', () => {
   })
 
   describe('getWatchProviders', () => {
-    it('returns the slice for the requested country', async () => {
+    it('returns the requested country slice with all four arrays guaranteed present', async () => {
       mockFetchOk(validWatchProvidersResponse)
       const { getWatchProviders } = await import('@/lib/api/tmdb')
 
       const result = await getWatchProviders('movie', 550, 'CO')
 
-      expect(result).toMatchObject({
-        link: 'https://www.themoviedb.org/movie/550/watch?locale=CO',
+      expect(result.link).toBe(
+        'https://www.themoviedb.org/movie/550/watch?locale=CO',
+      )
+      expect(result.flatrate).toEqual([])
+      expect(result.rent).toEqual([])
+      expect(result.buy).toHaveLength(1)
+      expect(result.buy[0]).toMatchObject({
+        provider_id: 2,
+        provider_name: 'Apple TV',
       })
-      expect(result?.buy).toHaveLength(1)
     })
 
-    it('returns null when the country has no providers', async () => {
+    it('populates flatrate when present and leaves rent + buy as empty arrays', async () => {
+      mockFetchOk(validWatchProvidersResponse)
+      const { getWatchProviders } = await import('@/lib/api/tmdb')
+
+      const result = await getWatchProviders('movie', 550, 'US')
+
+      expect(result.flatrate).toHaveLength(1)
+      expect(result.flatrate[0]).toMatchObject({
+        provider_id: 8,
+        provider_name: 'Netflix',
+      })
+      expect(result.rent).toEqual([])
+      expect(result.buy).toEqual([])
+    })
+
+    it('returns always-shape empty payload when the country has no providers (never null)', async () => {
       mockFetchOk(validWatchProvidersResponse)
       const { getWatchProviders } = await import('@/lib/api/tmdb')
 
       const result = await getWatchProviders('movie', 550, 'ZZ')
 
-      expect(result).toBeNull()
+      expect(result).toEqual({ link: '', flatrate: [], rent: [], buy: [] })
     })
 
-    it('throws TmdbApiError when a provider entry has an invalid link', async () => {
+    it('throws TmdbApiError when the wire payload has an invalid link', async () => {
       mockFetchOk({
         id: 550,
         results: {
