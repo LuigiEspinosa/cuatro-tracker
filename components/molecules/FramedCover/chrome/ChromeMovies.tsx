@@ -31,7 +31,7 @@ export function ChromeMovies({ size, dims, hex }: ChromeProps) {
         strokeWidth={strokeW}
         className='fc-chrome-outer-stroke'
       />
-      {size === 'card' && (
+      {(size === 'card' || size === 'scroller' || size === 'hero-cover') && (
         <line
           x1={padL - 0.5}
           y1={strokeW}

@@ -1512,3 +1512,129 @@ body {
 .dsec-body {
   display: block;
 }
+
+/* ============================================================
+   CurrentlyActiveCarousel (Story 5.3). CRT-bezel hero rotator with
+   side-by-side cover + info layout (per Story 5.3 OI #1), dot-matrix
+   progress indicator row below the bezel.
+   ============================================================ */
+
+.cac-screen {
+  display: flex !important;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 20px 24px !important;
+  text-align: left;
+}
+
+.cac-cover {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.cac-info {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cac-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.cac-title {
+  margin: 2px 0 4px;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1.15;
+  color: var(--phosphor-cream);
+  text-shadow: 0 0 8px rgba(239, 230, 212, 0.4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.cac-meta {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cac-meta-sep {
+  color: var(--phosphor-cream-ghost);
+}
+
+.cac-progress {
+  margin-top: 6px;
+  width: 100%;
+  height: 4px;
+  background: rgba(122, 116, 104, 0.25);
+  overflow: hidden;
+}
+
+.cac-progress-fill {
+  height: 100%;
+  background: var(--phosphor-cream);
+  box-shadow: 0 0 8px rgba(239, 230, 212, 0.45);
+  transition: width 200ms linear;
+}
+
+.cac-source {
+  margin: 8px 0 0;
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--phosphor-cream-dim);
+}
+
+.cac-dot-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.cac-dot {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--phosphor-cream-ghost);
+  background: transparent;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  transition: background 150ms linear, box-shadow 150ms linear, border-color 150ms linear;
+}
+
+.cac-dot-active {
+  background: var(--phosphor-cream);
+  border-color: var(--phosphor-cream);
+  box-shadow: 0 0 8px rgba(239, 230, 212, 0.5);
+}
+
+.cac-dot:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 3px;
+}

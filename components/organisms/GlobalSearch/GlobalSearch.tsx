@@ -165,6 +165,14 @@ export function GlobalSearch() {
       }
       const lowerType = body.type.toLowerCase().split('_')[0]
       void queryClient.invalidateQueries({ queryKey: ['library', lowerType] })
+      // Story 5.4 dashboard invalidations: the rotator + Recently Added band
+      // refetch so newly-added items show up immediately on /.
+      void queryClient.invalidateQueries({
+        queryKey: ['library', { status: 'WATCHING' }],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['dashboard', 'recently-added'],
+      })
       toast.success('ADDED TO LIBRARY', {
         description: `Source: ${body.source.toUpperCase()} · ${body.type.replace(/_/g, ' ')}`,
       })

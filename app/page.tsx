@@ -1,31 +1,31 @@
 'use client'
 
-import { CRTBezel } from '@/components/molecules/CRTBezel'
+import { useQuery } from '@tanstack/react-query'
 import { EmptyStateCard } from '@/components/molecules/EmptyStateCard'
 import { useChannelFlipNavigate } from '@/components/molecules/ChannelFlipTransition'
+import { CurrentlyActiveCarousel } from '@/components/organisms/CurrentlyActiveCarousel'
 import { SectionBand } from '@/components/organisms/SectionBand'
+import type { LibraryListResponse } from '@/lib/types/library'
+
+async function fetchActiveLibrary(): Promise<LibraryListResponse> {
+  const res = await fetch('/api/library?status=WATCHING&order=updated_at_desc&limit=5', {
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`library fetch failed: ${res.status}`)
+  return (await res.json()) as LibraryListResponse
+}
 
 export default function DashboardPage() {
-  const { navigate, overlay } = useChannelFlipNavigate()
+  const { overlay } = useChannelFlipNavigate()
+  const watchingQuery = useQuery({
+    queryKey: ['library', { status: 'WATCHING' }],
+    queryFn: fetchActiveLibrary,
+  })
+  const watchingItems = watchingQuery.data?.items ?? []
 
   return (
     <main className='dash'>
-      <section className='dash-hero' aria-label='Currently active'>
-        <CRTBezel size='hero' className='dash-hero-bezel'>
-          <div className='dash-hero-screen'>
-            <EmptyStateCard
-              variant='hero'
-              headline='LIBRARY EMPTY'
-              secondLine='ADD AN ITEM TO BEGIN'
-              subtitle='Search any title across TMDB, AniList, IGDB or Steam to start your collection.'
-              ctaLabel='ADD'
-              onCta={() => {
-                void navigate('/search')
-              }}
-            />
-          </div>
-        </CRTBezel>
-      </section>
+      <CurrentlyActiveCarousel items={watchingItems} />
 
       <SectionBand title='Up Next'>
         <EmptyStateCard
