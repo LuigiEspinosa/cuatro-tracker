@@ -1382,6 +1382,34 @@ body {
   color: var(--phosphor-cream);
 }
 
+/* Story 5.5 first-load gate. `.dash-invisible` covers the SSR / pre-useEffect
+   window so the dashboard mounts (queries fire) but doesn't paint before the
+   boot phase resolves. `.dash-ghost` mirrors the bundle's "10% ghost beneath"
+   reveal during boot. Reduced-motion users skip both states entirely. */
+.dash-invisible {
+  visibility: hidden;
+}
+
+.dash-ghost {
+  opacity: 0.10;
+  filter: blur(1px);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-ghost { filter: none; }
+}
+
+/* Fixed-position overlay wrapper for the BootSequence on first-load. z-index 40
+   covers MainNav + dashboard chrome per the bundle's `.boot-overlay-full`. The
+   BootSequence molecule (Story 2.7) renders inside. */
+.dash-boot-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--ground-base);
+}
+
 .dash-hero {
   display: flex;
   align-items: center;
