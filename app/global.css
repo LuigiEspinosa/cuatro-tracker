@@ -401,6 +401,23 @@ body {
   align-items: center;
 }
 
+.mn-logo-link {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.mn-logo-link:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 4px;
+}
+
 .mn-links {
   display: inline-flex;
   align-items: center;

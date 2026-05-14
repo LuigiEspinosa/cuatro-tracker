@@ -30,7 +30,16 @@ export function MainNav() {
   return (
     <nav className='mn' aria-label='Primary navigation'>
       <div className='mn-left'>
-        <LogoMark />
+        <button
+          type='button'
+          onClick={() => {
+            void navigate('/')
+          }}
+          aria-label='Go to dashboard'
+          className='mn-logo-link'
+        >
+          <LogoMark />
+        </button>
       </div>
       <ul className='mn-links'>
         {NAV_LINKS.map((link) => {
