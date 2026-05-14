@@ -1347,3 +1347,151 @@ body {
   color: var(--phosphor-cream) !important;
   margin-top: 4px !important;
 }
+
+/* ============================================================
+   Dashboard scaffold (Story 5.2). Page composition: hero placeholder
+   (CRT bezel + LIBRARY EMPTY state) + three SectionBand molecules each
+   wrapping an EmptyStateCard. DashboardSystemWidget deferred to 5.4.
+   ============================================================ */
+
+.dash {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  color: var(--phosphor-cream);
+}
+
+.dash-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 0 8px;
+}
+
+.dash-hero-bezel {
+  width: min(520px, 100%);
+}
+
+.dash-hero-screen {
+  position: absolute;
+  inset: 0;
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--phosphor-cream);
+  z-index: 2;
+}
+
+/* EmptyStateCard (molecule, Story 5.2). Bitmap headline + optional
+   second bitmap line + optional ghost workhorse-serif subtitle + optional
+   CRT-pixel CTA. Hero variant is centered with larger spacing; band variant
+   is compact and left-aligned. */
+
+.esc {
+  display: flex;
+  flex-direction: column;
+}
+
+.esc[data-variant='hero'] {
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.esc[data-variant='band'] {
+  align-items: flex-start;
+  text-align: left;
+  gap: 6px;
+  padding: 24px 16px;
+}
+
+.esc-headline {
+  margin: 0;
+  letter-spacing: 0.04em;
+}
+
+.esc-second-line {
+  margin: 0;
+  letter-spacing: 0.04em;
+}
+
+.esc-subtitle {
+  margin: 4px 0 0;
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--phosphor-cream-dim);
+  max-width: 36rem;
+}
+
+.esc[data-variant='band'] .esc-subtitle {
+  font-size: 14px;
+  max-width: 28rem;
+}
+
+.esc-cta {
+  margin-top: 16px;
+  min-width: 140px;
+  width: auto;
+}
+
+/* SectionBand (organism, Story 5.2). Display-serif title + optional count chip
+   + 4-band rainbow rule + body slot. Hosts the three dashboard bands and
+   future detail-page sections. */
+
+.dsec {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dsec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dsec-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  color: var(--phosphor-cream);
+}
+
+.dsec-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dsec-rule {
+  display: flex;
+  width: 100%;
+  height: 4px;
+  margin: 0 0 8px;
+}
+
+.dsec-rule-band {
+  flex: 1 1 0;
+  height: 100%;
+}
+
+.dsec-body {
+  display: block;
+}
