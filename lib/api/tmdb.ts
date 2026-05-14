@@ -1,10 +1,21 @@
 import { z } from 'zod'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
+import {
+  TmdbImageSizeSchema,
+  getImageUrl,
+  type TmdbImageSize,
+} from '@/lib/api/tmdb-images'
 
 const TMDB_BASE = 'https://api.themoviedb.org/3'
-const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p'
 const TMDB_TIMEOUT_MS = 8000
+
+// Re-export the image-URL helper so server-side callers can keep importing
+// `getImageUrl` / `TmdbImageSize` from `@/lib/api/tmdb`. Client components
+// should import from `@/lib/api/tmdb-images` directly to avoid pulling in
+// logger / env / pino into the browser bundle.
+export { TmdbImageSizeSchema, getImageUrl }
+export type { TmdbImageSize }
 
 export class TmdbApiError extends Error {
   readonly endpoint: string
@@ -27,17 +38,6 @@ export class TmdbApiError extends Error {
     this.fieldPath = opts.fieldPath
   }
 }
-
-export const TmdbImageSizeSchema = z.enum([
-  'w92',
-  'w154',
-  'w185',
-  'w342',
-  'w500',
-  'w780',
-  'original',
-])
-export type TmdbImageSize = z.infer<typeof TmdbImageSizeSchema>
 
 const TmdbGenreSchema = z.object({
   id: z.number(),
@@ -291,12 +291,4 @@ export async function getWatchProviders(
     TmdbWatchProvidersResponseSchema,
   )
   return response.results[country] ?? null
-}
-
-export function getImageUrl(
-  path: string | null,
-  size: TmdbImageSize,
-): string | null {
-  if (path === null) return null
-  return `${TMDB_IMAGE_BASE}/${size}${path}`
 }

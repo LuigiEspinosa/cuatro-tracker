@@ -4,7 +4,7 @@ import { type KeyboardEvent, useMemo, useRef, useEffect } from 'react'
 import { CRTPixelButton } from '@/components/atoms/CRTPixelButton'
 import { PhosphorLED, type PhosphorLEDStatus } from '@/components/atoms/PhosphorLED'
 import { FramedCover } from '@/components/molecules/FramedCover'
-import { getImageUrl } from '@/lib/api/tmdb'
+import { getImageUrl } from '@/lib/api/tmdb-images'
 import type { UnifiedSearchResult } from '@/lib/search/federation'
 
 type WatchStatus = 'PLAN_TO_WATCH' | 'WATCHING' | 'COMPLETED' | 'ON_HOLD' | 'DROPPED'
