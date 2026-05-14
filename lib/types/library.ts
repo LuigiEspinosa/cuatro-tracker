@@ -21,6 +21,10 @@ export type LibraryItem = {
   progressLabel: string | null // e.g. "S2 EP4 / 10" or "42% WATCHED" — null for movies + when no progress data exists
   progressPct: number | null // 0-100, for inline phosphor progress bar visualization
   sourceLabel: string | null // e.g. "From TMDB" — for hero source-description line
+  tmdbId: number | null // MediaItem.tmdb_id mirror; GlobalSearch intersects on it for the inLibrary chip
+  anilistId: number | null
+  igdbId: number | null
+  steamId: number | null
   createdAt: string // ISO, UserEntry.created_at
   updatedAt: string // ISO, UserEntry.updated_at
 }

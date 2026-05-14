@@ -96,6 +96,10 @@ function serializeLibraryItem(entry: UserEntryWithMedia): LibraryItem {
     progressLabel: formatProgressLabel(mediaItem.type, entry.status, entry.progress),
     progressPct: formatProgressPct(mediaItem.type, entry.status, entry.progress),
     sourceLabel: deriveSourceLabel(mediaItem),
+    tmdbId: mediaItem.tmdb_id,
+    anilistId: mediaItem.anilist_id,
+    igdbId: mediaItem.igdb_id,
+    steamId: mediaItem.steam_id,
     createdAt: entry.created_at.toISOString(),
     updatedAt: entry.updated_at.toISOString(),
   }

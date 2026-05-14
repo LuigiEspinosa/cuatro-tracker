@@ -43,6 +43,43 @@ function renderGS() {
   )
 }
 
+/* Route fetch mocks by URL so the library-subscription call (`/api/library?limit=100`)
+ * and the search call (`/api/search`) each receive their own fresh Response.
+ * A single shared `mockResolvedValue(new Response(...))` is broken — Response
+ * bodies can only be consumed once and the library subscription fires on mount,
+ * before the search query. */
+function routedFetchMock(routes: {
+  search?: () => Response
+  library?: () => Response
+  media?: (init?: RequestInit) => Response
+}): ReturnType<typeof vi.fn> {
+  return vi.fn(async (url: unknown, init?: RequestInit) => {
+    const u = typeof url === 'string' ? url : ''
+    if (u.includes('/api/library')) {
+      return (
+        routes.library?.() ??
+        new Response(JSON.stringify({ items: [] }), { status: 200 })
+      )
+    }
+    if (u.includes('/api/search')) {
+      return (
+        routes.search?.() ??
+        new Response(
+          JSON.stringify({ results: [], partialFailure: false }),
+          { status: 200 },
+        )
+      )
+    }
+    if (u.includes('/api/media')) {
+      return (
+        routes.media?.(init) ??
+        new Response(JSON.stringify({ mediaItem: { id: 'x' } }), { status: 201 })
+      )
+    }
+    return new Response('not_routed', { status: 500 })
+  })
+}
+
 function fightResults(): UnifiedSearchResult[] {
   return [
     {
@@ -89,18 +126,19 @@ describe('GlobalSearch', () => {
   })
 
   it('renders the idle empty state when query is empty', () => {
-    vi.stubGlobal('fetch', vi.fn())
+    vi.stubGlobal('fetch', routedFetchMock({}))
     renderGS()
     expect(screen.getByText(/START TYPING TO SEARCH/)).toBeInTheDocument()
   })
 
   it('fires GET /api/search and renders results grouped by media type', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ results: fightResults(), partialFailure: false }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
-    )
+    const fetchMock = routedFetchMock({
+      search: () =>
+        new Response(
+          JSON.stringify({ results: fightResults(), partialFailure: false }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    })
     vi.stubGlobal('fetch', fetchMock)
     renderGS()
 
@@ -129,12 +167,13 @@ describe('GlobalSearch', () => {
   it('shows the partial-failure banner when the API flags partialFailure', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({ results: fightResults(), partialFailure: true }),
-          { status: 200 },
-        ),
-      ),
+      routedFetchMock({
+        search: () =>
+          new Response(
+            JSON.stringify({ results: fightResults(), partialFailure: true }),
+            { status: 200 },
+          ),
+      }),
     )
     renderGS()
 
@@ -147,15 +186,7 @@ describe('GlobalSearch', () => {
   })
 
   it('shows the zero-results empty state when results are empty', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({ results: [], partialFailure: false }),
-          { status: 200 },
-        ),
-      ),
-    )
+    vi.stubGlobal('fetch', routedFetchMock({}))
     renderGS()
 
     flushQuery('zzz')
@@ -168,7 +199,9 @@ describe('GlobalSearch', () => {
   it('handles network error as zero results', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(new Response('boom', { status: 500 })),
+      routedFetchMock({
+        search: () => new Response('boom', { status: 500 }),
+      }),
     )
     renderGS()
 
@@ -182,12 +215,13 @@ describe('GlobalSearch', () => {
   it('arrow-down cycles focus through results', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({ results: fightResults(), partialFailure: false }),
-          { status: 200 },
-        ),
-      ),
+      routedFetchMock({
+        search: () =>
+          new Response(
+            JSON.stringify({ results: fightResults(), partialFailure: false }),
+            { status: 200 },
+          ),
+      }),
     )
     const { container } = renderGS()
 
@@ -212,12 +246,13 @@ describe('GlobalSearch', () => {
   it('Escape clears the input', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({ results: fightResults(), partialFailure: false }),
-          { status: 200 },
-        ),
-      ),
+      routedFetchMock({
+        search: () =>
+          new Response(
+            JSON.stringify({ results: fightResults(), partialFailure: false }),
+            { status: 200 },
+          ),
+      }),
     )
     const { container } = renderGS()
     flushQuery('fight')
@@ -239,18 +274,19 @@ describe('GlobalSearch', () => {
 
   it('POST /api/media on add click + fires success toast', async () => {
     let postBody: unknown = null
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (typeof url === 'string' && url.includes('/api/search')) {
-        return new Response(
+    const fetchMock = routedFetchMock({
+      search: () =>
+        new Response(
           JSON.stringify({ results: fightResults(), partialFailure: false }),
           { status: 200 },
+        ),
+      media: (init) => {
+        postBody = init?.body ? JSON.parse(init.body as string) : null
+        return new Response(
+          JSON.stringify({ mediaItem: { id: 'x' }, merged: false }),
+          { status: 201 },
         )
-      }
-      postBody = init?.body ? JSON.parse(init.body as string) : null
-      return new Response(
-        JSON.stringify({ mediaItem: { id: 'x' }, merged: false }),
-        { status: 201 },
-      )
+      },
     })
     vi.stubGlobal('fetch', fetchMock)
 
@@ -276,17 +312,17 @@ describe('GlobalSearch', () => {
   })
 
   it('fires destructive toast on add failure', async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (typeof url === 'string' && url.includes('/api/search')) {
-        return new Response(
+    const fetchMock = routedFetchMock({
+      search: () =>
+        new Response(
           JSON.stringify({ results: fightResults(), partialFailure: false }),
           { status: 200 },
-        )
-      }
-      return new Response(
-        JSON.stringify({ error: 'upstream_failed' }),
-        { status: 502 },
-      )
+        ),
+      media: () =>
+        new Response(
+          JSON.stringify({ error: 'upstream_failed' }),
+          { status: 502 },
+        ),
     })
     vi.stubGlobal('fetch', fetchMock)
 
@@ -307,12 +343,7 @@ describe('GlobalSearch', () => {
   })
 
   it('sends type=movie when MOVIES filter is active', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ results: [], partialFailure: false }),
-        { status: 200 },
-      ),
-    )
+    const fetchMock = routedFetchMock({})
     vi.stubGlobal('fetch', fetchMock)
 
     renderGS()
@@ -328,15 +359,76 @@ describe('GlobalSearch', () => {
     })
   })
 
+  it('flips the inLibrary chip on a row whose tmdb_id is in the library subscription', async () => {
+    // Library returns Fight Club (tmdb_id 550); search returns Fight Club + Cobra Kai.
+    // Only Fight Club should render the IN LIBRARY chip.
+    vi.stubGlobal(
+      'fetch',
+      routedFetchMock({
+        library: () =>
+          new Response(
+            JSON.stringify({
+              items: [
+                {
+                  id: 'entry-1',
+                  mediaItemId: 'm-1',
+                  mediaType: 'MOVIE',
+                  status: 'WATCHING',
+                  title: 'Fight Club',
+                  posterPath: '/poster.jpg',
+                  year: 1999,
+                  releaseDate: '1999-10-15T00:00:00.000Z',
+                  progressLabel: null,
+                  progressPct: null,
+                  sourceLabel: 'From TMDB',
+                  tmdbId: 550,
+                  anilistId: null,
+                  igdbId: null,
+                  steamId: null,
+                  createdAt: '2026-05-10T00:00:00.000Z',
+                  updatedAt: '2026-05-10T00:00:00.000Z',
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
+        search: () =>
+          new Response(
+            JSON.stringify({ results: fightResults(), partialFailure: false }),
+            { status: 200 },
+          ),
+      }),
+    )
+    renderGS()
+
+    flushQuery('fight')
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: 'Fight Club' }),
+      ).toBeInTheDocument()
+    })
+
+    // The library subscription is independent — wait for both data sets.
+    await waitFor(() => {
+      expect(screen.getByText('✓ IN LIBRARY')).toBeInTheDocument()
+    })
+
+    // Cobra Kai (tmdb 77169) is NOT in the library → still shows ADD button.
+    const addButtons = screen.getAllByRole('button', { name: /ADD TO LIBRARY/ })
+    expect(addButtons).toHaveLength(1)
+  })
+
   it('Enter on a focused row navigates to the detail route stub', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({ results: fightResults(), partialFailure: false }),
-          { status: 200 },
-        ),
-      ),
+      routedFetchMock({
+        search: () =>
+          new Response(
+            JSON.stringify({ results: fightResults(), partialFailure: false }),
+            { status: 200 },
+          ),
+      }),
     )
     const { container } = renderGS()
     flushQuery('fight')

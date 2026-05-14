@@ -16,6 +16,7 @@ import { SearchInput, type SearchInputHandle } from '@/components/molecules/Sear
 import { FilterChips, type FilterId } from '@/components/molecules/FilterChips'
 import { SearchResultRow } from '@/components/molecules/SearchResultRow'
 import type { UnifiedSearchResult } from '@/lib/search/federation'
+import type { LibraryItem, LibraryListResponse } from '@/lib/types/library'
 
 type SearchResponse = {
   results: UnifiedSearchResult[]
@@ -110,6 +111,29 @@ async function fetchSearch(
   return (await res.json()) as SearchResponse
 }
 
+async function fetchLibrary(): Promise<LibraryListResponse> {
+  const res = await fetch('/api/library?limit=100', {
+    credentials: 'include',
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`library_fetch_failed:${res.status}`)
+  return (await res.json()) as LibraryListResponse
+}
+
+/* Build a Set of "<source>:<sourceId>" keys from the current library; the
+ * search result chip flips when a result's `(primary_source, source_id)` key
+ * is in this set. Single library subscription per OI #3 — not per-result. */
+function buildLibraryKeySet(items: readonly LibraryItem[]): Set<string> {
+  const set = new Set<string>()
+  for (const it of items) {
+    if (it.tmdbId !== null) set.add(`tmdb:${it.tmdbId}`)
+    if (it.anilistId !== null) set.add(`anilist:${it.anilistId}`)
+    if (it.igdbId !== null) set.add(`igdb:${it.igdbId}`)
+    if (it.steamId !== null) set.add(`steam:${it.steamId}`)
+  }
+  return set
+}
+
 async function addToLibrary(body: AddBody): Promise<unknown> {
   const res = await fetch('/api/media', {
     method: 'POST',
@@ -144,6 +168,19 @@ export function GlobalSearch() {
     refetchOnWindowFocus: false,
   })
 
+  // One library subscription powers the `inLibrary` chip flip on every result
+  // row. The dashboard mutations invalidate ['library', ...] keys so the set
+  // refreshes after each add. Per Story 5.4 OI #3: do NOT fan out per result.
+  const libraryQuery = useQuery<LibraryListResponse, Error>({
+    queryKey: ['library', 'all'],
+    queryFn: fetchLibrary,
+  })
+
+  const libraryKeys = useMemo(
+    () => buildLibraryKeySet(libraryQuery.data?.items ?? []),
+    [libraryQuery.data?.items],
+  )
+
   const addMutation = useMutation<unknown, Error, AddBody, { key: string }>({
     mutationFn: addToLibrary,
     onMutate: (body) => {
@@ -173,6 +210,9 @@ export function GlobalSearch() {
       void queryClient.invalidateQueries({
         queryKey: ['dashboard', 'recently-added'],
       })
+      // inLibrary chip flip: refetch the full-library subscription so the just-
+      // added result row flips to `✓ IN LIBRARY` on the next render.
+      void queryClient.invalidateQueries({ queryKey: ['library', 'all'] })
       toast.success('ADDED TO LIBRARY', {
         description: `Source: ${body.source.toUpperCase()} · ${body.type.replace(/_/g, ' ')}`,
       })
@@ -366,11 +406,17 @@ export function GlobalSearch() {
                     <ul className='gs-list' role='listbox'>
                       {rows.map((r) => {
                         const key = getResultKey(r)
+                        const sourceId = getSourceId(r)
+                        const libKey =
+                          sourceId !== undefined
+                            ? `${r.primary_source}:${sourceId}`
+                            : null
+                        const inLibrary = libKey !== null && libraryKeys.has(libKey)
                         return (
                           <SearchResultRow
                             key={key}
                             result={r}
-                            inLibrary={false}
+                            inLibrary={inLibrary}
                             isFocused={focusedKey === key}
                             addingPending={pendingAdds.has(key)}
                             onAdd={() => handleAdd(r)}
