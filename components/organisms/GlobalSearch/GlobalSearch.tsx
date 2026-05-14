@@ -69,7 +69,12 @@ const SECTION_ORDER: ReadonlyArray<UnifiedSearchResult['type']> = [
 function getResultKey(result: UnifiedSearchResult): string {
   const sourceId =
     result.tmdb_id ?? result.anilist_id ?? result.igdb_id ?? result.steam_id
-  return `${result.primary_source}:${sourceId ?? 'unknown'}`
+  // Fallback to title + year keeps the key unique when every source ID is
+  // missing (malformed federation result). React duplicate-key warning ducked.
+  if (sourceId === undefined) {
+    return `${result.primary_source}:title:${result.title}:${result.release_year ?? 'na'}`
+  }
+  return `${result.primary_source}:${sourceId}`
 }
 
 function getSourceId(result: UnifiedSearchResult): number | undefined {
@@ -185,15 +190,19 @@ export function GlobalSearch() {
   const data = searchQuery.data
   const variant: Variant = useMemo(() => {
     if (query.length === 0) return 'idle'
-    if (searchQuery.isPending || searchQuery.isFetching) return 'loading'
-    if (searchQuery.isError) return 'zero'
-    if (!data) return 'loading'
+    // Keep prior data visible during background re-fetch — only show skeleton
+    // when there is genuinely nothing cached yet. Avoids the screen flashing
+    // skeleton on every filter change with cached results.
+    if (!data) {
+      if (searchQuery.isError) return 'zero'
+      return 'loading'
+    }
     if (data.partialFailure && data.results.length > 0)
       return 'partial-failure-with-results'
     if (data.partialFailure) return 'partial-failure-empty'
     if (data.results.length === 0) return 'zero'
     return 'results'
-  }, [query, data, searchQuery.isPending, searchQuery.isFetching, searchQuery.isError])
+  }, [query, data, searchQuery.isError])
 
   const flatOrder = useMemo<UnifiedSearchResult[]>(() => {
     if (!data?.results.length) return []
@@ -246,6 +255,15 @@ export function GlobalSearch() {
       event.preventDefault()
       setQuery('')
       inputRef.current?.focus()
+      return
+    }
+    // Arrow keys inside the search input should move the text caret, not row
+    // focus. Let the input handle them natively.
+    const target = event.target as HTMLElement | null
+    if (
+      target?.tagName === 'INPUT' &&
+      (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+    ) {
       return
     }
     if (flatOrder.length === 0) return

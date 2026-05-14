@@ -53,7 +53,9 @@ export function SearchResultRow({
   onOpenDetail,
 }: SearchResultRowProps) {
   const liRef = useRef<HTMLLIElement | null>(null)
-  const posterUrl = getImageUrl(result.poster_path ?? null, 'w185')
+  // TMDB schema allows `null` but tests can pass `''` — treat empty as null.
+  const posterPath = result.poster_path?.trim() ? result.poster_path : null
+  const posterUrl = getImageUrl(posterPath, 'w185')
   const chips = useMemo(() => collectSourceChips(result), [result])
 
   // When this row becomes focused via keyboard nav, scroll it into view + focus
@@ -67,13 +69,12 @@ export function SearchResultRow({
   }, [isFocused])
 
   function handleKeyDown(event: KeyboardEvent<HTMLLIElement>) {
-    if (event.key === 'Enter' && !(event.metaKey || event.ctrlKey)) {
-      event.preventDefault()
-      if (inLibrary) onOpenDetail()
-      else onOpenDetail()
-    } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault()
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    if (event.metaKey || event.ctrlKey) {
       if (!inLibrary && !addingPending) onAdd()
+    } else {
+      onOpenDetail()
     }
   }
 

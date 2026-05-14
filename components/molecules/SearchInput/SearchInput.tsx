@@ -49,6 +49,14 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
       setDraft(value)
     }, [value])
 
+    // Pin onChange in a ref so debounce timer is not re-scheduled when callers
+    // pass a non-stable function identity. Defends against parent re-render
+    // churn restarting the timer and effectively disabling the debounce.
+    const onChangeRef = useRef(onChange)
+    useEffect(() => {
+      onChangeRef.current = onChange
+    })
+
     // Debounced flush. Clears the debouncing flag when the timer fires or the
     // draft already matches the parent value (no work to do).
     useEffect(() => {
@@ -59,10 +67,10 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
       setDebouncing(true)
       const timer = setTimeout(() => {
         setDebouncing(false)
-        onChange(draft)
+        onChangeRef.current(draft)
       }, debounceMs)
       return () => clearTimeout(timer)
-    }, [draft, value, onChange, debounceMs])
+    }, [draft, value, debounceMs])
 
     function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
       if (event.key === 'Escape') {
