@@ -837,15 +837,18 @@ body {
 .gs {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 64px);
+  /* Fixed height so the inner `.gs-results` is the scroll container; otherwise
+   * the page-level scroll runs and MainNav (regular flow, not fixed) scrolls
+   * away, leaving a gap at the viewport top. 64px = MainNav height. */
+  height: calc(100vh - 64px);
   background: var(--ground-base);
 }
 
-/* Sticky search header */
+/* Search header sits in normal flow above `.gs-results`. It is NOT sticky
+ * because `.gs-results` owns the scrollable region — the header stays in
+ * view by virtue of being outside that region. */
 .gs-header {
-  position: sticky;
-  top: 64px;
-  z-index: 5;
+  flex: 0 0 auto;
   padding: 24px 64px 20px;
   background: var(--ground-base);
   border-bottom: 1px solid rgba(239, 230, 212, 0.08);
@@ -1293,8 +1296,7 @@ body {
 
 /* Footer keyboard hint */
 .gs-footer {
-  position: sticky;
-  bottom: 0;
+  flex: 0 0 auto;
   padding: 8px 64px;
   background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.5));
   display: flex;
