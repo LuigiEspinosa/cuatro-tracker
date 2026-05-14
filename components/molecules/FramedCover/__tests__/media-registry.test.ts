@@ -14,8 +14,8 @@ describe('media-registry shape', () => {
     expect(Object.keys(MEDIA).sort()).toEqual([...MEDIUMS].sort())
   })
 
-  it('enumerates 3 sizes', () => {
-    expect(SIZES).toEqual(['thumb', 'card', 'hero'])
+  it('enumerates 5 sizes (Story 5.3 added hero-cover + scroller for the dashboard rotator and horizontal scrollers)', () => {
+    expect(SIZES).toEqual(['thumb', 'card', 'hero-cover', 'scroller', 'hero'])
   })
 
   it('every medium carries name, chrome, aspect, sizes, and stroke metadata', () => {

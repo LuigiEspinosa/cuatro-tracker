@@ -22,6 +22,8 @@ export const MEDIA = {
     sizes: {
       thumb: { outerW: 72, outerH: 104, padL: 4, padR: 4, padT: 4, padB: 4, innerW: 64, innerH: 96, strokeW: 1 },
       card: { outerW: 212, outerH: 304, padL: 12, padR: 8, padT: 8, padB: 8, innerW: 192, innerH: 288, strokeW: 2 },
+      'hero-cover': { outerW: 130, outerH: 195, padL: 6, padR: 4, padT: 4, padB: 4, innerW: 120, innerH: 187, strokeW: 2 },
+      scroller: { outerW: 144, outerH: 216, padL: 8, padR: 6, padT: 6, padB: 6, innerW: 130, innerH: 204, strokeW: 2 },
       hero: { outerW: 520, outerH: 752, padL: 24, padR: 16, padT: 16, padB: 16, innerW: 480, innerH: 720, strokeW: 4 },
     },
     strokeHex: '#B5AC9D',
@@ -35,6 +37,8 @@ export const MEDIA = {
     sizes: {
       thumb: { outerW: 72, outerH: 104, padL: 4, padR: 4, padT: 4, padB: 4, innerW: 64, innerH: 96, strokeW: 1 },
       card: { outerW: 204, outerH: 300, padL: 6, padR: 6, padT: 6, padB: 6, innerW: 192, innerH: 288, strokeW: 3 },
+      'hero-cover': { outerW: 130, outerH: 195, padL: 4, padR: 4, padT: 4, padB: 4, innerW: 122, innerH: 187, strokeW: 2 },
+      scroller: { outerW: 144, outerH: 216, padL: 4, padR: 4, padT: 4, padB: 4, innerW: 136, innerH: 208, strokeW: 2 },
       hero: { outerW: 504, outerH: 744, padL: 12, padR: 12, padT: 12, padB: 12, innerW: 480, innerH: 720, strokeW: 5 },
     },
     strokeHex: '#7A7468',
@@ -48,6 +52,8 @@ export const MEDIA = {
     sizes: {
       thumb: { outerW: 76, outerH: 108, padL: 6, padR: 6, padT: 6, padB: 6, innerW: 64, innerH: 96, strokeW: 1 },
       card: { outerW: 216, outerH: 312, padL: 12, padR: 12, padT: 12, padB: 12, innerW: 192, innerH: 288, strokeW: 2 },
+      'hero-cover': { outerW: 130, outerH: 195, padL: 5, padR: 5, padT: 5, padB: 5, innerW: 120, innerH: 185, strokeW: 2 },
+      scroller: { outerW: 144, outerH: 216, padL: 8, padR: 8, padT: 8, padB: 8, innerW: 128, innerH: 200, strokeW: 2 },
       hero: { outerW: 528, outerH: 768, padL: 24, padR: 24, padT: 24, padB: 24, innerW: 480, innerH: 720, strokeW: 4 },
     },
     strokeHex: '#9D8C66',
@@ -61,6 +67,8 @@ export const MEDIA = {
     sizes: {
       thumb: { outerW: 72, outerH: 104, padL: 4, padR: 4, padT: 4, padB: 4, innerW: 64, innerH: 96, strokeW: 1 },
       card: { outerW: 208, outerH: 304, padL: 8, padR: 8, padT: 8, padB: 8, innerW: 192, innerH: 288, strokeW: 2 },
+      'hero-cover': { outerW: 130, outerH: 195, padL: 4, padR: 4, padT: 4, padB: 4, innerW: 122, innerH: 187, strokeW: 2 },
+      scroller: { outerW: 144, outerH: 216, padL: 6, padR: 6, padT: 6, padB: 6, innerW: 132, innerH: 204, strokeW: 2 },
       hero: { outerW: 512, outerH: 752, padL: 16, padR: 16, padT: 16, padB: 16, innerW: 480, innerH: 720, strokeW: 4 },
     },
     strokeHex: '#B5AC9D',
@@ -74,6 +82,8 @@ export const MEDIA = {
     sizes: {
       thumb: { outerW: 72, outerH: 97, padL: 4, padR: 4, padT: 8, padB: 4, innerW: 64, innerH: 85, strokeW: 1 },
       card: { outerW: 208, outerH: 288, padL: 8, padR: 8, padT: 24, padB: 8, innerW: 192, innerH: 256, strokeW: 2 },
+      'hero-cover': { outerW: 130, outerH: 195, padL: 4, padR: 4, padT: 16, padB: 4, innerW: 122, innerH: 175, strokeW: 2 },
+      scroller: { outerW: 144, outerH: 216, padL: 6, padR: 6, padT: 18, padB: 6, innerW: 132, innerH: 192, strokeW: 2 },
       hero: { outerW: 512, outerH: 712, padL: 16, padR: 16, padT: 56, padB: 16, innerW: 480, innerH: 640, strokeW: 4 },
     },
     strokeHex: '#5C4677',
@@ -83,12 +93,12 @@ export const MEDIA = {
 } as const
 
 export type Medium = keyof typeof MEDIA
-export type Size = 'thumb' | 'card' | 'hero'
+export type Size = 'thumb' | 'card' | 'hero-cover' | 'scroller' | 'hero'
 export type MediaDims = (typeof MEDIA)[Medium]['sizes'][Size]
 export type MediaConfig = (typeof MEDIA)[Medium]
 
 export const MEDIUMS: readonly Medium[] = ['movies', 'tv', 'anime', 'manga', 'games'] as const
-export const SIZES: readonly Size[] = ['thumb', 'card', 'hero'] as const
+export const SIZES: readonly Size[] = ['thumb', 'card', 'hero-cover', 'scroller', 'hero'] as const
 
 /* TV is the only medium whose inner cutout receives rounded corners
  * (per design-system §0.4, the inner CRT screen area is the lone
@@ -96,7 +106,7 @@ export const SIZES: readonly Size[] = ['thumb', 'card', 'hero'] as const
  */
 export function tvInnerRadius(size: Size): number {
   if (size === 'hero') return 10
-  if (size === 'card') return 4
+  if (size === 'card' || size === 'scroller' || size === 'hero-cover') return 4
   return 0
 }
 
