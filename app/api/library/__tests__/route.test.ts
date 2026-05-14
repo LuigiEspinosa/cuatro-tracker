@@ -196,6 +196,53 @@ describe('GET /api/library', () => {
     expect(body.items[0].progressPct).toBe(42)
   })
 
+  it('applies release_date gte + lte filter when released_within_days is set', async () => {
+    dbMock.userEntry.findMany.mockResolvedValue([])
+    const before = Date.now()
+    const { GET } = await import('@/app/api/library/route')
+    await GET(makeRequest('/api/library?released_within_days=30&limit=20'))
+    const after = Date.now()
+    const call = dbMock.userEntry.findMany.mock.calls[0][0]
+    const filter = call.where.media_item.release_date
+    expect(filter.gte).toBeInstanceOf(Date)
+    expect(filter.lte).toBeInstanceOf(Date)
+
+    const floor: Date = filter.gte
+    const expectedFloor = before - 30 * 24 * 60 * 60 * 1000
+    const expectedFloorMax = after - 30 * 24 * 60 * 60 * 1000
+    expect(floor.getTime()).toBeGreaterThanOrEqual(expectedFloor)
+    expect(floor.getTime()).toBeLessThanOrEqual(expectedFloorMax)
+
+    // Upper bound clamps future-dated releases out of the "Recently Released"
+    // band; the lte must land between `before` and `after`.
+    const ceiling: Date = filter.lte
+    expect(ceiling.getTime()).toBeGreaterThanOrEqual(before)
+    expect(ceiling.getTime()).toBeLessThanOrEqual(after)
+  })
+
+  it('forces order release_date_desc when released_within_days is set, regardless of order param', async () => {
+    dbMock.userEntry.findMany.mockResolvedValue([])
+    const { GET } = await import('@/app/api/library/route')
+    await GET(makeRequest('/api/library?released_within_days=30&order=created_at_desc'))
+    expect(dbMock.userEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: { media_item: { release_date: 'desc' } },
+      }),
+    )
+  })
+
+  it('rejects released_within_days beyond 3650 (10 years)', async () => {
+    const { GET } = await import('@/app/api/library/route')
+    const res = await GET(makeRequest('/api/library?released_within_days=4000'))
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects negative released_within_days', async () => {
+    const { GET } = await import('@/app/api/library/route')
+    const res = await GET(makeRequest('/api/library?released_within_days=-10'))
+    expect(res.status).toBe(400)
+  })
+
   it('flattens 1970 sentinel release_date to year=null + releaseDate=null', async () => {
     dbMock.userEntry.findMany.mockResolvedValue([
       fixtureEntry({
