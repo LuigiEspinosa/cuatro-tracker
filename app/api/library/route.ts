@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { type MediaItem, MediaType, type Prisma, type UserEntry, WatchStatus } from '@prisma/client'
-import { db } from '@/lib/db'
+import { type MediaItem, MediaType, WatchStatus } from '@prisma/client'
+import { findLibraryItems, type LibrarySortKey, type UserEntryWithMedia } from '@/lib/db/library'
 import { logger } from '@/lib/logger'
 import { withRequest } from '@/lib/request-context'
 import type { LibraryItem, LibraryListResponse } from '@/lib/types/library'
@@ -19,17 +19,41 @@ export const dynamic = 'force-dynamic'
  * unscoped (one user; no userId column on UserEntry).
  */
 
+// Schema accepts the public param names callers pass on the wire.
+// `order` is the legacy 5.3/5.4 param (kept for backward compat with dashboard
+// callers); `sort` is the 6.3 param using the LibrarySortKey union. When both
+// are absent the default is `recently_added`. When both are present, `sort`
+// wins so 6.3+ callers do not need to know about the legacy enum.
 const LibraryQuerySchema = z.object({
+  type: z.nativeEnum(MediaType).optional(),
   status: z.nativeEnum(WatchStatus).optional(),
+  search: z.string().min(1).max(100).optional(),
   order: z
     .enum(['updated_at_desc', 'created_at_desc', 'release_date_desc'])
-    .optional()
-    .default('updated_at_desc'),
-  limit: z.coerce.number().int().positive().max(100).optional().default(20),
+    .optional(),
+  sort: z
+    .enum([
+      'recently_added',
+      'recently_created',
+      'release_date_desc',
+      'title_asc',
+      'status_asc',
+      'rating_desc',
+    ])
+    .optional(),
+  limit: z.coerce.number().int().positive().max(200).optional().default(20),
   released_within_days: z.coerce.number().int().positive().max(3650).optional(),
 })
 
-type UserEntryWithMedia = UserEntry & { media_item: MediaItem }
+function resolveSort(
+  sort: LibrarySortKey | undefined,
+  order: 'updated_at_desc' | 'created_at_desc' | 'release_date_desc' | undefined,
+): LibrarySortKey {
+  if (sort) return sort
+  if (order === 'created_at_desc') return 'recently_created'
+  if (order === 'release_date_desc') return 'release_date_desc'
+  return 'recently_added'
+}
 
 function deriveYear(mediaItem: MediaItem): number | null {
   // 1970 is the normaliser's sentinel for "release date unknown" per
@@ -119,39 +143,15 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     )
   }
 
-  const { status, order, limit, released_within_days } = parsed.data
+  const { type, status, search, order, sort, limit, released_within_days } = parsed.data
 
-  // `released_within_days` filters by joined MediaItem.release_date and forces
-  // ordering by release_date DESC regardless of the `order` param. This matches
-  // the dashboard's "Recently Released" band semantics (Story 5.4 AC-5).
-  const effectiveOrder = released_within_days !== undefined ? 'release_date_desc' : order
-
-  const where: Prisma.UserEntryWhereInput = {}
-  if (status) where.status = status
-  if (released_within_days !== undefined) {
-    // AC-5 reads "released in the last 30 days" — past-tense. The lower bound
-    // (gte: floor) drops anything older than the window; the upper bound
-    // (lte: now) drops future-dated releases (TMDB returns unreleased movies
-    // with future release_date, and they should NOT surface as "recently
-    // released"). 1970 sentinel rows for "unknown release date" are naturally
-    // excluded by the floor (UNIX epoch < NOW - any positive N days).
-    const now = new Date()
-    const floor = new Date(now.getTime() - released_within_days * 24 * 60 * 60 * 1000)
-    where.media_item = { release_date: { gte: floor, lte: now } }
-  }
-
-  const orderBy =
-    effectiveOrder === 'release_date_desc'
-      ? { media_item: { release_date: 'desc' as const } }
-      : effectiveOrder === 'created_at_desc'
-        ? { created_at: 'desc' as const }
-        : { updated_at: 'desc' as const }
-
-  const entries = await db.userEntry.findMany({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    include: { media_item: true },
-    orderBy,
-    take: limit,
+  const entries = await findLibraryItems({
+    mediaType: type,
+    status,
+    search,
+    sort: resolveSort(sort, order),
+    limit,
+    releasedWithinDays: released_within_days,
   })
 
   const items = entries.map(serializeLibraryItem)
