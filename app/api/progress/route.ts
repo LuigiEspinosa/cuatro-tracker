@@ -78,15 +78,6 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     completed_at,
   } = parsed.data
 
-  const entry = await findUserEntryByMediaItemId(mediaItemId)
-  if (!entry) {
-    logger.warn(
-      { event: 'progress.update.not_found', mediaItemId },
-      'no UserEntry for mediaItemId',
-    )
-    return jsonResponse({ error: 'not_in_library' }, 404)
-  }
-
   const data: Prisma.UserEntryUpdateInput = {}
   const fieldsApplied: string[] = []
   if (user_rating !== undefined) {
@@ -112,6 +103,15 @@ async function handler(req: NextRequest): Promise<NextResponse> {
 
   if (fieldsApplied.length === 0) {
     return jsonResponse({ error: 'empty_update' }, 400)
+  }
+
+  const entry = await findUserEntryByMediaItemId(mediaItemId)
+  if (!entry) {
+    logger.warn(
+      { event: 'progress.update.not_found', mediaItemId },
+      'no UserEntry for mediaItemId',
+    )
+    return jsonResponse({ error: 'not_in_library' }, 404)
   }
 
   const updated = await db.userEntry.update({

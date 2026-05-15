@@ -41,8 +41,9 @@ export function UserRating({ mediaItemId, initialValue }: UserRatingProps) {
       router.refresh()
     },
     onError: () => {
-      // revert to last persisted value
-      setValue(initialValue)
+      // Per-call onError in `commit()` handles the rollback to the previous
+      // persisted value; an extra rollback here would clobber it on
+      // back-to-back successful-then-failed mutations.
       toast.error('COULD NOT SAVE RATING')
     },
   })

@@ -19,10 +19,11 @@ type MutationBody = {
 }
 
 function nextStatus(current: WatchStatus): WatchStatus | null {
+  // AC-4 state machine: PLAN_TO_WATCH → WATCHING → COMPLETED.
+  // ON_HOLD / DROPPED users go through WatchStatusControl, not this button —
+  // hiding here keeps the "MARK WATCHED" label honest.
   if (current === WatchStatus.PLAN_TO_WATCH) return WatchStatus.WATCHING
   if (current === WatchStatus.WATCHING) return WatchStatus.COMPLETED
-  if (current === WatchStatus.ON_HOLD) return WatchStatus.WATCHING
-  if (current === WatchStatus.DROPPED) return WatchStatus.WATCHING
   return null
 }
 

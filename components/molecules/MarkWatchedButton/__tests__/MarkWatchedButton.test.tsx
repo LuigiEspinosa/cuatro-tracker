@@ -43,6 +43,30 @@ describe('MarkWatchedButton', () => {
     expect(container.querySelector('button')).toBeNull()
   })
 
+  it('returns null when currentStatus is ON_HOLD (not in MARK WATCHED state machine)', () => {
+    const { container } = render(
+      wrap(
+        <MarkWatchedButton
+          mediaItemId='m1'
+          currentStatus={WatchStatus.ON_HOLD}
+        />,
+      ),
+    )
+    expect(container.querySelector('button')).toBeNull()
+  })
+
+  it('returns null when currentStatus is DROPPED', () => {
+    const { container } = render(
+      wrap(
+        <MarkWatchedButton
+          mediaItemId='m1'
+          currentStatus={WatchStatus.DROPPED}
+        />,
+      ),
+    )
+    expect(container.querySelector('button')).toBeNull()
+  })
+
   it('renders > MARK WATCHED for PLAN_TO_WATCH', () => {
     render(
       wrap(

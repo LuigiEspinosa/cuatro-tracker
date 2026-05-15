@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { findUserEntryByMediaItemId } from '@/lib/db/library'
 import { getMovie, getWatchProviders, getImageUrl } from '@/lib/api/tmdb'
 import { env } from '@/lib/env'
+import { logger } from '@/lib/logger'
 import { BackToLibraryLink } from '@/components/molecules/BackToLibraryLink'
 import { DetailHero } from '@/components/organisms/DetailHero'
 import { CastList } from '@/components/organisms/CastList'
@@ -51,7 +52,16 @@ export default async function MovieDetailPage({
 
   const entry = await findUserEntryByMediaItemId(id)
   if (!entry) notFound()
-  if (entry.media_item.tmdb_id === null) notFound()
+  if (entry.media_item.tmdb_id === null) {
+    logger.warn(
+      {
+        event: 'movie_detail.missing_tmdb_id',
+        mediaItemId: entry.media_item_id,
+      },
+      'MOVIE row has no tmdb_id; rendering 404',
+    )
+    notFound()
+  }
 
   const tmdbId = entry.media_item.tmdb_id
   const [movieDetail, providers] = await Promise.all([
@@ -83,10 +93,12 @@ export default async function MovieDetailPage({
   }
   if (director) metadata.push({ value: director.toUpperCase() })
   if (year !== null) metadata.push({ value: String(year) })
-  metadata.push({
-    value: movieDetail.status.toUpperCase(),
-    dim: true,
-  })
+  if (movieDetail.status && movieDetail.status.trim().length > 0) {
+    metadata.push({
+      value: movieDetail.status.toUpperCase(),
+      dim: true,
+    })
+  }
   if (movieDetail.genres.length > 0) {
     metadata.push({
       value: movieDetail.genres
