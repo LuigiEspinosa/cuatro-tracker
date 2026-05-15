@@ -34,48 +34,38 @@ test.beforeAll(async () => {
 })
 
 test.describe('/movies/[id] detail page (Story 6.5)', () => {
-  test('AC-8: mark watched advances PLAN_TO_WATCH → WATCHING → COMPLETED with toast and completed_at', async ({
+  test('AC-8: WatchStatusControl flips status PLAN_TO_WATCH → COMPLETED and persists completed_at', async ({
     page,
   }) => {
-    // Auth — login via the form so the session cookie lands in this context.
     await page.goto('/login')
     await page.getByLabel('PASSWORD').fill(ADMIN_PASS!)
     await page.getByRole('button', { name: '> LOG IN' }).click()
     await page.waitForURL('/', { timeout: 10_000 })
 
-    // Use the page's authed context for API calls so the session cookie carries.
     const api = page.request
-
     const mediaItemId = await getFirstMovieId(api)
     await resetEntry(api, mediaItemId)
 
     await page.goto(`/movies/${mediaItemId}`)
 
-    // First click: PLAN_TO_WATCH → WATCHING
-    const markWatched = page.getByRole('button', { name: /MARK WATCHED/i })
-    await expect(markWatched).toBeVisible()
-    await markWatched.click()
-    // Sonner toast renders the new status
-    await expect(page.getByText(/STATUS · WATCHING/i)).toBeVisible({
-      timeout: 5_000,
-    })
-
-    // Second click: WATCHING → COMPLETED
-    await page.getByRole('button', { name: /MARK WATCHED/i }).click()
+    // Open the WatchStatusControl dropdown and select COMPLETED.
+    await page
+      .getByRole('button', { name: /PLAN TO WATCH/i, expanded: false })
+      .click()
+    await page.getByRole('option', { name: /COMPLETED/i }).click()
     await expect(page.getByText(/STATUS · COMPLETED/i)).toBeVisible({
       timeout: 5_000,
     })
 
-    // Verify completed_at is non-null via the library list.
+    // Verify status persisted via the library list.
     const libRes = await api.get(`/api/library?type=MOVIE&limit=200`)
     const lib = (await libRes.json()) as {
       items: Array<{ mediaItemId: string; status: string }>
     }
     const updated = lib.items.find((i) => i.mediaItemId === mediaItemId)
     expect(updated?.status).toBe('COMPLETED')
-    // The library list doesn't expose completed_at directly; assert via the
-    // /api/progress endpoint by re-fetching: a successful empty PUT returns the
-    // current entry shape including completedAt.
+
+    // Verify completed_at is non-null by re-PUTting and reading the response.
     const progressRes = await api.fetch('/api/progress', {
       method: 'PUT',
       data: { mediaItemId, status: 'COMPLETED' },
@@ -98,6 +88,8 @@ test.describe('/movies/[id] detail page (Story 6.5)', () => {
 
     await page.goto('/movies/this-id-does-not-exist')
     await expect(page.getByText(/MOVIE NOT IN LIBRARY/i)).toBeVisible()
-    await expect(page.getByRole('link', { name: /BACK TO LIBRARY/i })).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: /BACK TO LIBRARY/i }),
+    ).toBeVisible()
   })
 })

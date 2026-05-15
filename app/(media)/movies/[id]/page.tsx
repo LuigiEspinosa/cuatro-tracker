@@ -8,7 +8,6 @@ import { DetailHero } from '@/components/organisms/DetailHero'
 import { CastList } from '@/components/organisms/CastList'
 import { StreamingBadges } from '@/components/organisms/StreamingBadges'
 import { SectionBand } from '@/components/organisms/SectionBand/SectionBand'
-import { NotesField } from '@/components/molecules/NotesField'
 import type { MetadataItem } from '@/components/molecules/MetadataRow'
 
 export const dynamic = 'force-dynamic'
@@ -127,7 +126,7 @@ export default async function MovieDetailPage({
         posterUrl={posterUrl}
         metadata={metadata}
         currentStatus={entry.status}
-        userRating={entry.user_rating}
+        imdbId={movieDetail.external_ids.imdb_id ?? null}
         showQbtButton
       />
       <div className='movie-detail-rule' aria-hidden='true' />
@@ -138,10 +137,6 @@ export default async function MovieDetailPage({
           ))}
         </article>
       ) : null}
-      <NotesField
-        mediaItemId={entry.media_item_id}
-        initialNotes={entry.notes ?? ''}
-      />
       <div className='movie-detail-rule movie-detail-rule-thick' aria-hidden='true' />
       <SectionBand title='Cast' count={cast.length}>
         <CastList people={cast} />

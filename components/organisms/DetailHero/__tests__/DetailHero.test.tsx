@@ -36,7 +36,7 @@ describe('DetailHero', () => {
     posterUrl: '/poster.jpg',
     metadata: [{ value: '139 MIN' }, { value: 'DAVID FINCHER' }],
     currentStatus: WatchStatus.WATCHING,
-    userRating: 7,
+    imdbId: 'tt0137523',
     showQbtButton: true,
   }
 
@@ -75,5 +75,17 @@ describe('DetailHero', () => {
     expect(
       screen.queryByRole('button', { name: /SEND TO qBT/i }),
     ).toBeNull()
+  })
+
+  it('renders WATCH link to playimdb when imdbId is provided', () => {
+    render(wrap(<DetailHero {...baseProps} imdbId='tt0137523' />))
+    expect(
+      screen.getByRole('link', { name: /WATCH/i }),
+    ).toHaveAttribute('href', 'https://www.playimdb.com/es/title/tt0137523/')
+  })
+
+  it('omits WATCH link when imdbId is null', () => {
+    render(wrap(<DetailHero {...baseProps} imdbId={null} />))
+    expect(screen.queryByRole('link', { name: /WATCH/i })).toBeNull()
   })
 })

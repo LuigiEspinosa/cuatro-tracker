@@ -113,6 +113,14 @@ export const TmdbCreditsSchema = z.object({
 })
 export type TmdbCredits = z.infer<typeof TmdbCreditsSchema>
 
+export const TmdbExternalIdsSchema = z.object({
+  imdb_id: z.string().nullable().optional(),
+  facebook_id: z.string().nullable().optional(),
+  instagram_id: z.string().nullable().optional(),
+  twitter_id: z.string().nullable().optional(),
+})
+export type TmdbExternalIds = z.infer<typeof TmdbExternalIdsSchema>
+
 const TmdbSearchMovieResultSchema = z.object({
   media_type: z.literal('movie'),
   id: z.number(),
@@ -303,16 +311,22 @@ export function getMovie(id: number): Promise<TmdbMovie>
 export function getMovie(
   id: number,
   options: { withCredits: true },
-): Promise<TmdbMovie & { credits: TmdbCredits }>
+): Promise<TmdbMovie & { credits: TmdbCredits; external_ids: TmdbExternalIds }>
 export function getMovie(
   id: number,
   options?: { withCredits?: boolean },
-): Promise<TmdbMovie | (TmdbMovie & { credits: TmdbCredits })> {
+): Promise<
+  | TmdbMovie
+  | (TmdbMovie & { credits: TmdbCredits; external_ids: TmdbExternalIds })
+> {
   if (options?.withCredits) {
-    const schema = TmdbMovieSchema.extend({ credits: TmdbCreditsSchema })
+    const schema = TmdbMovieSchema.extend({
+      credits: TmdbCreditsSchema,
+      external_ids: TmdbExternalIdsSchema,
+    })
     return tmdbFetch(
       `/movie/${id}`,
-      { append_to_response: 'credits' },
+      { append_to_response: 'credits,external_ids' },
       schema,
     )
   }

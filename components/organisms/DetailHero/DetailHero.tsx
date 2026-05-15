@@ -6,9 +6,8 @@ import {
   type MetadataItem,
 } from '@/components/molecules/MetadataRow'
 import { WatchStatusControl } from '@/components/molecules/WatchStatusControl'
-import { UserRating } from '@/components/molecules/UserRating'
-import { MarkWatchedButton } from '@/components/molecules/MarkWatchedButton'
 import { SendToQbtButton } from '@/components/molecules/SendToQbtButton'
+import { WatchOnImdbButton } from '@/components/molecules/WatchOnImdbButton'
 
 export type DetailHeroProps = {
   mediaItemId: string
@@ -19,7 +18,7 @@ export type DetailHeroProps = {
   posterUrl: string | null
   metadata: MetadataItem[]
   currentStatus: WatchStatus
-  userRating: number | null
+  imdbId: string | null
   showQbtButton: boolean
 }
 
@@ -32,7 +31,7 @@ export function DetailHero({
   posterUrl,
   metadata,
   currentStatus,
-  userRating,
+  imdbId,
   showQbtButton,
 }: DetailHeroProps) {
   return (
@@ -59,12 +58,8 @@ export function DetailHero({
             mediaItemId={mediaItemId}
             currentStatus={currentStatus}
           />
-          <UserRating mediaItemId={mediaItemId} initialValue={userRating} />
-          <MarkWatchedButton
-            mediaItemId={mediaItemId}
-            currentStatus={currentStatus}
-          />
           {showQbtButton ? <SendToQbtButton /> : null}
+          <WatchOnImdbButton imdbId={imdbId} />
         </div>
       </div>
     </section>

@@ -103,14 +103,6 @@ describe('PUT /api/progress', () => {
     expect(body.error).toBe('invalid_body')
   })
 
-  it('returns 400 when user_rating is out of range (11)', async () => {
-    const { PUT } = await import('@/app/api/progress/route')
-    const res = await PUT(
-      putRequest({ mediaItemId: 'media-1', user_rating: 11 }),
-    )
-    expect(res.status).toBe(400)
-  })
-
   it('returns 400 when status is not a valid WatchStatus', async () => {
     const { PUT } = await import('@/app/api/progress/route')
     const res = await PUT(
@@ -119,21 +111,21 @@ describe('PUT /api/progress', () => {
     expect(res.status).toBe(400)
   })
 
-  it('returns 400 when notes exceeds 2000 chars', async () => {
+  it('returns 400 when progress is negative', async () => {
     const { PUT } = await import('@/app/api/progress/route')
     const res = await PUT(
-      putRequest({ mediaItemId: 'media-1', notes: 'x'.repeat(2001) }),
+      putRequest({ mediaItemId: 'media-1', progress: -1 }),
     )
     expect(res.status).toBe(400)
   })
 
   it('returns 400 when no updatable fields are provided', async () => {
-    dbMock.userEntry.findUnique.mockResolvedValue(fixtureEntry())
     const { PUT } = await import('@/app/api/progress/route')
     const res = await PUT(putRequest({ mediaItemId: 'media-1' }))
     expect(res.status).toBe(400)
     const body = await res.json()
     expect(body.error).toBe('empty_update')
+    expect(dbMock.userEntry.findUnique).not.toHaveBeenCalled()
   })
 
   it('returns 404 when UserEntry does not exist', async () => {
@@ -168,53 +160,22 @@ describe('PUT /api/progress', () => {
     const body = await res.json()
     expect(body.status).toBe(WatchStatus.WATCHING)
     expect(body.mediaItemId).toBe('media-1')
+    // Rating + notes were removed from the wire response in scope reduction.
+    expect(body.userRating).toBeUndefined()
+    expect(body.notes).toBeUndefined()
   })
 
-  it('updates user_rating (fractional allowed)', async () => {
+  it('updates progress', async () => {
     dbMock.userEntry.findUnique.mockResolvedValue(fixtureEntry())
-    dbMock.userEntry.update.mockResolvedValue(
-      fixtureEntry({ user_rating: 7.5 }),
-    )
+    dbMock.userEntry.update.mockResolvedValue(fixtureEntry({ progress: 12 }))
     const { PUT } = await import('@/app/api/progress/route')
     const res = await PUT(
-      putRequest({ mediaItemId: 'media-1', user_rating: 7.5 }),
+      putRequest({ mediaItemId: 'media-1', progress: 12 }),
     )
     expect(res.status).toBe(200)
     expect(dbMock.userEntry.update).toHaveBeenCalledWith({
       where: { id: 'entry-1' },
-      data: { user_rating: 7.5 },
-    })
-    const body = await res.json()
-    expect(body.userRating).toBe(7.5)
-  })
-
-  it('clears user_rating when null is sent', async () => {
-    dbMock.userEntry.findUnique.mockResolvedValue(fixtureEntry({ user_rating: 8 }))
-    dbMock.userEntry.update.mockResolvedValue(fixtureEntry({ user_rating: null }))
-    const { PUT } = await import('@/app/api/progress/route')
-    const res = await PUT(
-      putRequest({ mediaItemId: 'media-1', user_rating: null }),
-    )
-    expect(res.status).toBe(200)
-    expect(dbMock.userEntry.update).toHaveBeenCalledWith({
-      where: { id: 'entry-1' },
-      data: { user_rating: null },
-    })
-  })
-
-  it('updates notes', async () => {
-    dbMock.userEntry.findUnique.mockResolvedValue(fixtureEntry())
-    dbMock.userEntry.update.mockResolvedValue(
-      fixtureEntry({ notes: 'Worth a rewatch.' }),
-    )
-    const { PUT } = await import('@/app/api/progress/route')
-    const res = await PUT(
-      putRequest({ mediaItemId: 'media-1', notes: 'Worth a rewatch.' }),
-    )
-    expect(res.status).toBe(200)
-    expect(dbMock.userEntry.update).toHaveBeenCalledWith({
-      where: { id: 'entry-1' },
-      data: { notes: 'Worth a rewatch.' },
+      data: { progress: 12 },
     })
   })
 
@@ -241,6 +202,24 @@ describe('PUT /api/progress', () => {
     expect((call.data.completed_at as Date).toISOString()).toBe(completedAt)
   })
 
+  it('rejects user_rating in body (dropped from schema)', async () => {
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'media-1', user_rating: 7 }),
+    )
+    // No updatable fields → 400 empty_update (user_rating is ignored by Zod
+    // strip-mode; the body has nothing the schema accepts beyond mediaItemId).
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects notes in body (dropped from schema)', async () => {
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'media-1', notes: 'rejected' }),
+    )
+    expect(res.status).toBe(400)
+  })
+
   it('does not include unset fields in the update data', async () => {
     dbMock.userEntry.findUnique.mockResolvedValue(fixtureEntry())
     dbMock.userEntry.update.mockResolvedValue(
@@ -255,9 +234,6 @@ describe('PUT /api/progress', () => {
   })
 
   it('returns 405 on non-PUT requests via the wrapped handler shape', async () => {
-    // The withRequest wrapper exports only `PUT`; calling that with a GET-shaped
-    // NextRequest still routes through the handler. This guards against
-    // accidental routing changes.
     const { PUT } = await import('@/app/api/progress/route')
     const req = new NextRequest(new URL('http://localhost/api/progress'), {
       method: 'GET',
