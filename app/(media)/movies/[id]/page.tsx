@@ -126,7 +126,7 @@ export default async function MovieDetailPage({
         posterUrl={posterUrl}
         metadata={metadata}
         currentStatus={entry.status}
-        imdbId={movieDetail.external_ids.imdb_id ?? null}
+        imdbId={movieDetail.external_ids?.imdb_id ?? null}
         showQbtButton
       />
       <div className='movie-detail-rule' aria-hidden='true' />

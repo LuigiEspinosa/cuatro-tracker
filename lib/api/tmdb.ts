@@ -311,18 +311,22 @@ export function getMovie(id: number): Promise<TmdbMovie>
 export function getMovie(
   id: number,
   options: { withCredits: true },
-): Promise<TmdbMovie & { credits: TmdbCredits; external_ids: TmdbExternalIds }>
+): Promise<
+  TmdbMovie & { credits: TmdbCredits; external_ids?: TmdbExternalIds }
+>
 export function getMovie(
   id: number,
   options?: { withCredits?: boolean },
 ): Promise<
   | TmdbMovie
-  | (TmdbMovie & { credits: TmdbCredits; external_ids: TmdbExternalIds })
+  | (TmdbMovie & { credits: TmdbCredits; external_ids?: TmdbExternalIds })
 > {
   if (options?.withCredits) {
+    // external_ids is `.optional()` so a TMDB response missing the field
+    // degrades gracefully (no WATCH button) instead of failing the detail page.
     const schema = TmdbMovieSchema.extend({
       credits: TmdbCreditsSchema,
-      external_ids: TmdbExternalIdsSchema,
+      external_ids: TmdbExternalIdsSchema.optional(),
     })
     return tmdbFetch(
       `/movie/${id}`,
