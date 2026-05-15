@@ -56,6 +56,7 @@ export const TmdbMovieSchema = z.object({
   popularity: z.number(),
   genres: z.array(TmdbGenreSchema),
   status: z.string(),
+  runtime: z.number().nullable().optional(),
 })
 export type TmdbMovie = z.infer<typeof TmdbMovieSchema>
 

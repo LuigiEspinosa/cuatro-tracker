@@ -49,6 +49,7 @@ services:
       - "ADMIN_PASS=${ADMIN_PASS:?ADMIN_PASS is required; see .env.example}"
       - "TMDB_API_KEY=${TMDB_API_KEY:?TMDB_API_KEY is required; see
         .env.example}"
+      - TMDB_WATCH_PROVIDER_COUNTRY=${TMDB_WATCH_PROVIDER_COUNTRY:-CO}
       - "IGDB_CLIENT_ID=${IGDB_CLIENT_ID:?IGDB_CLIENT_ID is required; see
         .env.example}"
       - "IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:?IGDB_CLIENT_SECRET is
@@ -98,6 +99,7 @@ services:
       - "ADMIN_PASS=${ADMIN_PASS:?ADMIN_PASS is required; see .env.example}"
       - "TMDB_API_KEY=${TMDB_API_KEY:?TMDB_API_KEY is required; see
         .env.example}"
+      - TMDB_WATCH_PROVIDER_COUNTRY=${TMDB_WATCH_PROVIDER_COUNTRY:-CO}
       - "IGDB_CLIENT_ID=${IGDB_CLIENT_ID:?IGDB_CLIENT_ID is required; see
         .env.example}"
       - "IGDB_CLIENT_SECRET=${IGDB_CLIENT_SECRET:?IGDB_CLIENT_SECRET is

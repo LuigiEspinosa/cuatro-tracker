@@ -38,6 +38,28 @@ describe('lib/env', () => {
     expect(mod.env.CLOUDFLARE_API_TOKEN).toBeUndefined()
   })
 
+  it('defaults TMDB_WATCH_PROVIDER_COUNTRY to CO when unset', async () => {
+    const mod = await import('@/lib/env')
+    expect(mod.env.TMDB_WATCH_PROVIDER_COUNTRY).toBe('CO')
+  })
+
+  it('accepts a 2-letter override for TMDB_WATCH_PROVIDER_COUNTRY', async () => {
+    vi.stubEnv('TMDB_WATCH_PROVIDER_COUNTRY', 'US')
+    const mod = await import('@/lib/env')
+    expect(mod.env.TMDB_WATCH_PROVIDER_COUNTRY).toBe('US')
+  })
+
+  it('rejects TMDB_WATCH_PROVIDER_COUNTRY when not 2 chars', async () => {
+    vi.stubEnv('TMDB_WATCH_PROVIDER_COUNTRY', 'USA')
+    let caught: unknown
+    try {
+      await import('@/lib/env')
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(ZodError)
+  })
+
   it('throws ZodError when a required var is missing', async () => {
     vi.stubEnv('NEXTAUTH_SECRET', '')
 

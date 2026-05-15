@@ -11,11 +11,13 @@ const redactPaths = [
   'Cookie',
   'token',
   'apiKey',
+  'notes',
   'headers.authorization',
   'headers.cookie',
   '*.password',
   '*.token',
   '*.apiKey',
+  '*.notes',
 ]
 
 function baseOptions(): LoggerOptions {

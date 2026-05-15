@@ -18,6 +18,10 @@ const EnvSchema = z.object({
 
   // external APIs
   TMDB_API_KEY: z.string().min(1),
+  // ISO 3166-1 alpha-2 country code for TMDB watch-provider lookups.
+  // Defaults to CO (Colombia); future Settings page (Phase 11+) will let
+  // Cuatro override at runtime.
+  TMDB_WATCH_PROVIDER_COUNTRY: z.string().length(2).default('CO'),
   IGDB_CLIENT_ID: z.string().min(1),
   IGDB_CLIENT_SECRET: z.string().min(1),
   STEAM_API_KEY: z.string().min(1),
