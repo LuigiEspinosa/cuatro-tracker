@@ -98,12 +98,38 @@ const validTv = {
   original_name: 'Game of Thrones',
   overview: 'Seven noble families...',
   first_air_date: '2011-04-17',
+  last_air_date: '2019-05-19',
   poster_path: '/got-poster.jpg',
   backdrop_path: '/got-backdrop.jpg',
   vote_average: 8.4,
   popularity: 120.5,
   genres: [{ id: 18, name: 'Drama' }],
   status: 'Ended',
+  tagline: 'Winter Is Coming',
+  in_production: false,
+  number_of_seasons: 8,
+  number_of_episodes: 73,
+  episode_run_time: [60],
+  seasons: [
+    { id: 3624, season_number: 0, name: 'Specials', episode_count: 5 },
+    {
+      id: 3625,
+      season_number: 1,
+      name: 'Season 1',
+      air_date: '2011-04-17',
+      episode_count: 10,
+    },
+  ],
+  last_episode_to_air: {
+    id: 1551830,
+    name: 'The Iron Throne',
+    air_date: '2019-05-19',
+    episode_number: 6,
+    season_number: 8,
+    runtime: 80,
+  },
+  next_episode_to_air: null,
+  credits: { cast: [], crew: [] },
 }
 
 const validEpisode = {
@@ -157,6 +183,30 @@ const validMovieCredits = {
       job: 'Screenplay',
       department: 'Writing',
       profile_path: null,
+    },
+  ],
+}
+
+const validSeason = {
+  _id: '5256c89f19c2956ff60853a0',
+  id: 3625,
+  season_number: 1,
+  name: 'Season 1',
+  overview: 'In the mythical continent of Westeros...',
+  poster_path: '/s1.jpg',
+  air_date: '2011-04-17',
+  vote_average: 8.2,
+  episodes: [
+    {
+      id: 63056,
+      name: 'Winter Is Coming',
+      overview: 'Lord Ned Stark...',
+      air_date: '2011-04-17',
+      episode_number: 1,
+      season_number: 1,
+      still_path: '/still.jpg',
+      vote_average: 8.0,
+      runtime: 62,
     },
   ],
 }
@@ -399,8 +449,23 @@ describe('lib/api/tmdb', () => {
   })
 
   describe('getTv', () => {
-    it('parses a valid /tv/:id response', async () => {
-      mockFetchOk(validTv)
+    it('parses a valid augmented /tv/:id response with credits + external_ids + watch/providers', async () => {
+      mockFetchOk({
+        ...validTv,
+        credits: validMovieCredits,
+        external_ids: { imdb_id: 'tt0944947', facebook_id: 'GameOfThrones' },
+        'watch/providers': {
+          id: 1399,
+          results: {
+            US: {
+              link: 'https://www.themoviedb.org/tv/1399/watch?locale=US',
+              flatrate: [
+                { provider_id: 384, provider_name: 'HBO Max', logo_path: '/h.jpg' },
+              ],
+            },
+          },
+        },
+      })
       const { getTv } = await import('@/lib/api/tmdb')
 
       const result = await getTv(1399)
@@ -409,11 +474,116 @@ describe('lib/api/tmdb', () => {
         id: 1399,
         name: 'Game of Thrones',
         first_air_date: '2011-04-17',
+        number_of_seasons: 8,
+        number_of_episodes: 73,
+        tagline: 'Winter Is Coming',
+      })
+      expect(result.credits.cast).toHaveLength(3)
+      expect(result.external_ids?.imdb_id).toBe('tt0944947')
+      expect(result['watch/providers']?.results.US?.flatrate).toHaveLength(1)
+    })
+
+    it('always appends credits,external_ids,watch/providers to the request URL', async () => {
+      mockFetchOk({ ...validTv, credits: validMovieCredits })
+      const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+      const { getTv } = await import('@/lib/api/tmdb')
+
+      await getTv(1399)
+
+      const calledUrl = fetchMock.mock.calls[0]?.[0] as string
+      const parsed = new URL(calledUrl)
+      expect(parsed.pathname).toBe('/3/tv/1399')
+      expect(parsed.searchParams.get('append_to_response')).toBe(
+        'credits,external_ids,watch/providers',
+      )
+    })
+
+    it('parses next_episode_to_air as null (not undefined) when no upcoming episode', async () => {
+      mockFetchOk({
+        ...validTv,
+        credits: { cast: [], crew: [] },
+        next_episode_to_air: null,
+      })
+      const { getTv } = await import('@/lib/api/tmdb')
+
+      const result = await getTv(1399)
+
+      expect(result.next_episode_to_air).toBeNull()
+    })
+
+    it('parses last_episode_to_air as null for shows that have not aired yet', async () => {
+      mockFetchOk({
+        ...validTv,
+        last_episode_to_air: null,
+        credits: { cast: [], crew: [] },
+      })
+      const { getTv } = await import('@/lib/api/tmdb')
+
+      const result = await getTv(1399)
+
+      expect(result.last_episode_to_air).toBeNull()
+    })
+
+    it('degrades external_ids to undefined when TMDB sends a malformed appended block', async () => {
+      mockFetchOk({
+        ...validTv,
+        credits: { cast: [], crew: [] },
+        external_ids: { imdb_id: 12345 },
+      })
+      const { getTv } = await import('@/lib/api/tmdb')
+
+      const result = await getTv(1399)
+
+      expect(result.external_ids).toBeUndefined()
+    })
+
+    it('degrades watch/providers to undefined when TMDB sends a malformed appended block', async () => {
+      mockFetchOk({
+        ...validTv,
+        credits: { cast: [], crew: [] },
+        'watch/providers': { id: 1399, results: { US: { link: 'not-a-url' } } },
+      })
+      const { getTv } = await import('@/lib/api/tmdb')
+
+      const result = await getTv(1399)
+
+      expect(result['watch/providers']).toBeUndefined()
+    })
+
+    it('parses last_air_date as null for shows still in production', async () => {
+      mockFetchOk({
+        ...validTv,
+        last_air_date: null,
+        in_production: true,
+        credits: { cast: [], crew: [] },
+      })
+      const { getTv } = await import('@/lib/api/tmdb')
+
+      const result = await getTv(1399)
+
+      expect(result.last_air_date).toBeNull()
+      expect(result.in_production).toBe(true)
+    })
+
+    it('parses the seasons array including a Specials (season_number: 0) entry', async () => {
+      mockFetchOk({ ...validTv, credits: { cast: [], crew: [] } })
+      const { getTv } = await import('@/lib/api/tmdb')
+
+      const result = await getTv(1399)
+
+      expect(result.seasons).toHaveLength(2)
+      expect(result.seasons?.[0]).toMatchObject({
+        season_number: 0,
+        name: 'Specials',
       })
     })
 
-    it('throws TmdbApiError when first_air_date is the wrong type', async () => {
-      mockFetchOk({ ...validTv, first_air_date: 1234 })
+    it('throws TmdbApiError with fieldPath when first_air_date is the wrong type', async () => {
+      mockFetchOk({
+        ...validTv,
+        first_air_date: 1234,
+        credits: { cast: [], crew: [] },
+      })
       const { getTv, TmdbApiError } = await import('@/lib/api/tmdb')
 
       const promise = getTv(1399)
@@ -422,14 +592,75 @@ describe('lib/api/tmdb', () => {
         fieldPath: 'first_air_date',
       })
     })
+
+    it('throws TmdbApiError with fieldPath rooted under seasons when a season entry is tampered', async () => {
+      mockFetchOk({
+        ...validTv,
+        seasons: [{ id: 'not-a-number', season_number: 1, name: 'S1' }],
+        credits: { cast: [], crew: [] },
+      })
+      const { getTv, TmdbApiError } = await import('@/lib/api/tmdb')
+
+      const promise = getTv(1399)
+      await expect(promise).rejects.toBeInstanceOf(TmdbApiError)
+      await expect(promise).rejects.toMatchObject({
+        fieldPath: expect.stringMatching(/^seasons\.0\.id/),
+      })
+    })
   })
 
-  describe('getEpisode', () => {
-    it('parses a valid episode response', async () => {
-      mockFetchOk(validEpisode)
-      const { getEpisode } = await import('@/lib/api/tmdb')
+  describe('getTvSeason', () => {
+    it('parses a valid /tv/:showId/season/:season response with embedded episodes', async () => {
+      mockFetchOk(validSeason)
+      const { getTvSeason } = await import('@/lib/api/tmdb')
 
-      const result = await getEpisode(1399, 1, 1)
+      const result = await getTvSeason(1399, 1)
+
+      expect(result).toMatchObject({
+        id: 3625,
+        season_number: 1,
+        name: 'Season 1',
+        air_date: '2011-04-17',
+      })
+      expect(result.episodes).toHaveLength(1)
+      expect(result.episodes[0]).toMatchObject({
+        id: 63056,
+        episode_number: 1,
+      })
+    })
+
+    it('builds /tv/:showId/season/:season without append_to_response', async () => {
+      mockFetchOk(validSeason)
+      const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+      const { getTvSeason } = await import('@/lib/api/tmdb')
+
+      await getTvSeason(1399, 1)
+
+      const calledUrl = fetchMock.mock.calls[0]?.[0] as string
+      const parsed = new URL(calledUrl)
+      expect(parsed.pathname).toBe('/3/tv/1399/season/1')
+      expect(parsed.searchParams.get('append_to_response')).toBeNull()
+    })
+
+    it('throws TmdbApiError with fieldPath when episodes is missing', async () => {
+      const { episodes: _omit, ...broken } = validSeason
+      mockFetchOk(broken)
+      const { getTvSeason, TmdbApiError } = await import('@/lib/api/tmdb')
+
+      const promise = getTvSeason(1399, 1)
+      await expect(promise).rejects.toBeInstanceOf(TmdbApiError)
+      await expect(promise).rejects.toMatchObject({
+        fieldPath: 'episodes',
+      })
+    })
+  })
+
+  describe('getTvEpisode', () => {
+    it('parses a valid /tv/:showId/season/:n/episode/:e response', async () => {
+      mockFetchOk(validEpisode)
+      const { getTvEpisode } = await import('@/lib/api/tmdb')
+
+      const result = await getTvEpisode(1399, 1, 1)
 
       expect(result).toMatchObject({
         id: 63056,
@@ -438,23 +669,58 @@ describe('lib/api/tmdb', () => {
       })
     })
 
-    it('builds the expected /tv/:showId/season/:season/episode/:episode path', async () => {
+    it('parses guest_stars when present (append_to_response=credits)', async () => {
+      mockFetchOk({
+        ...validEpisode,
+        guest_stars: [
+          {
+            id: 1233100,
+            name: 'Sean Bean',
+            character: 'Eddard Stark',
+            order: 0,
+            profile_path: '/sb.jpg',
+          },
+        ],
+      })
+      const { getTvEpisode } = await import('@/lib/api/tmdb')
+
+      const result = await getTvEpisode(1399, 1, 1)
+
+      expect(result.guest_stars).toHaveLength(1)
+      expect(result.guest_stars?.[0]).toMatchObject({
+        name: 'Sean Bean',
+        character: 'Eddard Stark',
+      })
+    })
+
+    it('parses an unaired episode with air_date: null without throwing', async () => {
+      mockFetchOk({ ...validEpisode, air_date: null })
+      const { getTvEpisode } = await import('@/lib/api/tmdb')
+
+      const result = await getTvEpisode(1399, 1, 1)
+
+      expect(result.air_date).toBeNull()
+    })
+
+    it('builds the expected /tv/:showId/season/:n/episode/:e path with append_to_response=credits', async () => {
       mockFetchOk(validEpisode)
       const fetchMock = global.fetch as ReturnType<typeof vi.fn>
-      const { getEpisode } = await import('@/lib/api/tmdb')
+      const { getTvEpisode } = await import('@/lib/api/tmdb')
 
-      await getEpisode(1399, 1, 1)
+      await getTvEpisode(1399, 1, 1)
 
       const calledUrl = fetchMock.mock.calls[0]?.[0] as string
-      expect(calledUrl).toContain('/tv/1399/season/1/episode/1')
+      const parsed = new URL(calledUrl)
+      expect(parsed.pathname).toBe('/3/tv/1399/season/1/episode/1')
+      expect(parsed.searchParams.get('append_to_response')).toBe('credits')
     })
 
     it('throws TmdbApiError when episode_number is missing', async () => {
       const { episode_number: _omit, ...broken } = validEpisode
       mockFetchOk(broken)
-      const { getEpisode, TmdbApiError } = await import('@/lib/api/tmdb')
+      const { getTvEpisode, TmdbApiError } = await import('@/lib/api/tmdb')
 
-      const promise = getEpisode(1399, 1, 1)
+      const promise = getTvEpisode(1399, 1, 1)
       await expect(promise).rejects.toBeInstanceOf(TmdbApiError)
       await expect(promise).rejects.toMatchObject({
         fieldPath: 'episode_number',

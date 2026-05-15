@@ -44,6 +44,21 @@ function movie(
   }
 }
 
+function tvShow(
+  title: string,
+  year: number,
+  tmdbId: number,
+): UnifiedSearchResult {
+  return {
+    type: 'tv',
+    title,
+    release_year: year,
+    primary_source: 'tmdb',
+    tmdb_id: tmdbId,
+    confidence: 1.0,
+  }
+}
+
 describe('lib/search/federation: normaliseTitle', () => {
   it('lowercases and strips non-alphanumeric characters', async () => {
     const { normaliseTitle } = await import('@/lib/search/federation')
@@ -202,5 +217,21 @@ describe('lib/search/federation: dedupResults', () => {
     const { dedupResults } = await import('@/lib/search/federation')
 
     expect(dedupResults([])).toEqual([])
+  })
+
+  it('keeps a movie and a TV show with same title + year as separate entries (AC-3)', async () => {
+    const { dedupResults } = await import('@/lib/search/federation')
+    const officeMovie = movie('The Office', 2001, 9999)
+    const officeTv = tvShow('The Office', 2001, 2606)
+
+    const result = dedupResults([officeMovie, officeTv])
+
+    expect(result).toHaveLength(2)
+    const movieRow = result.find((r) => r.type === 'movie')
+    const tvRow = result.find((r) => r.type === 'tv')
+    expect(movieRow?.tmdb_id).toBe(9999)
+    expect(tvRow?.tmdb_id).toBe(2606)
+    expect(movieRow?.confidence).toBe(1.0)
+    expect(tvRow?.confidence).toBe(1.0)
   })
 })

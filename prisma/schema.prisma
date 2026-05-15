@@ -97,11 +97,13 @@ model MediaItem {
   end_date       DateTime? // series/manga: last air date or completion date
   poster_path    String? // path only e.g. /abc.jpg - construct full URL at render time
   backdrop_path  String? // path only
+  still_path     String? // path only — episode-level art (TMDB still_path); null on non-episode rows
   overview       String?
   genres         String[]
   rating         Float? // source rating (TMDB vote_average, AniList meanScore, etc.)
   popularity     Float?
-  status         String? // "Ended", "Continuing", "Finished Airing", etc.
+  status         String? // raw upstream status, e.g. "Ended", "Returning Series", "Finished Airing"
+  lifecycle_status String? // derived enum: 'ended' | 'continuing' | 'in_production' (Story 7.2 mapping; TV grid filter)
 
   // Source API foreign keys - null for manually added items
   tmdb_id    Int? @unique
@@ -117,6 +119,12 @@ model MediaItem {
   // Franchise grouping for chronological sorting across a series
   franchise_id String?
 
+  // Episode-specific fields (null on show / movie / game rows)
+  season_number  Int?
+  episode_number Int?
+  runtime        Int? // minutes; episode runtime or movie runtime (future-proofing)
+  unaired        Boolean @default(false) // true when source air_date is null/empty at insert time
+
   user_entry    UserEntry?
   achievements  Achievement[]     @relation("AchievementGame")
   merge_sources MergeSuggestion[] @relation("MergeSource")
@@ -124,6 +132,9 @@ model MediaItem {
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+
+  @@index([season_number, episode_number]) // timeline chronological sort within a show (Epic 10)
+  @@index([lifecycle_status]) // TV grid 'Continuing' filter chip (Story 7.4)
 }
 
 model UserEntry {

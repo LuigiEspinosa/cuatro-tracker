@@ -8,6 +8,7 @@ import { TmdbApiError } from '@/lib/api/tmdb'
 import {
   getDispatcher,
   type AddMediaSource,
+  type NormalisedShowWithEpisodes,
 } from '@/lib/search/media-dispatcher'
 import { normaliseTitle } from '@/lib/search/federation'
 
@@ -218,7 +219,9 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     throw err
   }
 
-  let normalised: Prisma.MediaItemCreateInput
+  let normalised:
+    | Prisma.MediaItemCreateInput
+    | NormalisedShowWithEpisodes
   try {
     normalised = dispatcher.normalise(raw)
   } catch (err) {
@@ -240,6 +243,19 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     throw err
   }
 
+  if ('episodes' in normalised) {
+    return persistShowWithEpisodes(normalised, source, sourceId, type)
+  }
+
+  return persistSingleMediaItem(normalised, source, sourceId, type)
+}
+
+async function persistSingleMediaItem(
+  normalised: Prisma.MediaItemCreateInput,
+  source: AddMediaSource,
+  sourceId: number,
+  type: MediaType,
+): Promise<NextResponse> {
   try {
     const releaseYear = normalised.release_date instanceof Date
       ? normalised.release_date.getUTCFullYear()
@@ -284,25 +300,132 @@ async function handler(req: NextRequest): Promise<NextResponse> {
           )
         }
       }
-      logger.warn(
-        {
-          event: 'media.constraint_violation',
-          source,
-          sourceId,
-          type,
-          code: err.code,
-          err,
-        },
-        'database constraint violation',
-      )
-      // Omit err.message in the response to avoid leaking schema column names.
-      return jsonResponse(
-        { error: 'constraint_violation', code: err.code },
-        400,
-      )
+      return logAndReturnConstraintViolation(err, source, sourceId, type)
     }
     throw err
   }
+}
+
+async function persistShowWithEpisodes(
+  normalised: NormalisedShowWithEpisodes,
+  source: AddMediaSource,
+  sourceId: number,
+  type: MediaType,
+): Promise<NextResponse> {
+  try {
+    const releaseYear = normalised.show.release_date instanceof Date
+      ? normalised.show.release_date.getUTCFullYear()
+      : new Date(normalised.show.release_date as string).getUTCFullYear()
+    const normalisedKey = normaliseTitle(normalised.show.title)
+    // Skip cross-merge when the normaliser fell back to the 1970 sentinel —
+    // every undated item shares that year bucket and would falsely collide.
+    const candidates =
+      releaseYear === 1970
+        ? []
+        : await findCrossSourceCandidates(source, releaseYear)
+    // Filter to TV_SHOW only: a 1984 movie and a 1984 TV show with the same
+    // normalised title (e.g. "Dune") must not collapse.
+    const crossMatch = candidates.find(
+      (c) =>
+        c.type === MediaType.TV_SHOW &&
+        normaliseTitle(c.title) === normalisedKey,
+    )
+
+    if (crossMatch) {
+      // Patch the source ID onto the existing show row; the inbound episodes
+      // are DISCARDED — the cross-source sibling's episodes from the original
+      // adapter remain authoritative (per OI #6 in the impl-artifact).
+      const patched = await patchSourceId(crossMatch.id, source, sourceId)
+      const ensured = await ensureUserEntry(patched)
+      return jsonResponse(
+        { mediaItem: ensured.mediaItem, merged: true },
+        ensured.created ? 201 : 200,
+      )
+    }
+
+    const created: MediaItemWithUserEntry = await db.$transaction(
+      async (tx) => {
+        const showRow = await tx.mediaItem.create({
+          data: {
+            ...normalised.show,
+            user_entry: { create: NEW_USER_ENTRY },
+          },
+          include: { user_entry: true },
+        })
+        if (normalised.episodes.length > 0) {
+          await tx.mediaItem.createMany({
+            data: normalised.episodes.map((e) => ({
+              ...(e as Prisma.MediaItemCreateManyInput),
+              parent_id: showRow.id,
+            })),
+          })
+        }
+        return showRow
+      },
+      { timeout: 30_000 },
+    )
+    return jsonResponse({ mediaItem: created, merged: false }, 201)
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      if (err.code === 'P2002') {
+        // Show-level race: a concurrent POST inserted the same `sourceId`
+        // between the fast-path check and the transaction's show create.
+        const racedExisting = await findExistingBySourceId(source, sourceId)
+        if (racedExisting) {
+          const ensured = await ensureUserEntry(racedExisting)
+          return jsonResponse(
+            { mediaItem: ensured.mediaItem, merged: false },
+            200,
+          )
+        }
+        // Episode tmdb_id collided with a foreign MediaItem row. Atomic
+        // transactions can't leave orphan episodes, so the "same-parent
+        // re-import" case is unreachable here — this is a real cross-context
+        // collision worth surfacing for operator investigation. The schema
+        // fix is the @@unique([type, tmdb_id]) follow-up migration (ECH-4).
+        logger.error(
+          {
+            event: 'media.tmdb_id_collision',
+            source,
+            sourceId,
+            type,
+            err,
+          },
+          'episode tmdb_id collided with existing MediaItem of a different context',
+        )
+        return jsonResponse(
+          { error: 'cross_type_tmdb_id_collision', code: 'P2002' },
+          500,
+        )
+      }
+      return logAndReturnConstraintViolation(err, source, sourceId, type)
+    }
+    throw err
+  }
+}
+
+function logAndReturnConstraintViolation(
+  err: Prisma.PrismaClientKnownRequestError,
+  source: AddMediaSource,
+  sourceId: number,
+  type: MediaType,
+): NextResponse {
+  logger.warn(
+    {
+      event: 'media.constraint_violation',
+      source,
+      sourceId,
+      type,
+      code: err.code,
+      err,
+    },
+    'database constraint violation',
+  )
+  // Omit err.message in the response to avoid leaking schema column names.
+  return jsonResponse(
+    { error: 'constraint_violation', code: err.code },
+    400,
+  )
 }
 
 export const POST = withRequest<NextRequest, NextResponse>(handler)

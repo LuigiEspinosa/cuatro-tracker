@@ -1,12 +1,20 @@
 import { MediaType, type Prisma } from '@prisma/client'
-import { getMovie } from '@/lib/api/tmdb'
+import { getMovie, getTv, getTvSeason } from '@/lib/api/tmdb'
 import { normaliseTmdbMovie } from '@/lib/normalise/movie'
+import { normaliseTmdbTv } from '@/lib/normalise/tv'
 
 export type AddMediaSource = 'tmdb' | 'anilist' | 'igdb' | 'steam'
 
+export type NormalisedShowWithEpisodes = {
+  show: Prisma.MediaItemCreateInput
+  episodes: Prisma.MediaItemCreateInput[]
+}
+
 export type AddMediaDispatcher = {
   fetch: (sourceId: number) => Promise<unknown>
-  normalise: (raw: unknown) => Prisma.MediaItemCreateInput
+  normalise: (
+    raw: unknown,
+  ) => Prisma.MediaItemCreateInput | NormalisedShowWithEpisodes
   sourceIdKey: 'tmdb_id' | 'anilist_id' | 'igdb_id' | 'steam_id'
 }
 
@@ -18,6 +26,28 @@ export function getDispatcher(
     return {
       fetch: (id) => getMovie(id),
       normalise: (raw) => normaliseTmdbMovie(raw),
+      sourceIdKey: 'tmdb_id',
+    }
+  }
+  if (source === 'tmdb' && type === MediaType.TV_SHOW) {
+    return {
+      fetch: async (id) => {
+        const show = await getTv(id)
+        // `seasons` is `.optional()` on TmdbTvSchema; default to [] so a
+        // malformed response yields zero parallel calls (transaction still
+        // runs with episodes: [], inserting the show alone).
+        const seasonNumbers = (show.seasons ?? [])
+          .filter((s) => (s.episode_count ?? 0) > 0)
+          .map((s) => s.season_number)
+        const seasons = await Promise.all(
+          seasonNumbers.map((n) => getTvSeason(id, n)),
+        )
+        return { show, seasons }
+      },
+      normalise: (raw) => {
+        const { show, seasons } = raw as { show: unknown; seasons: unknown[] }
+        return normaliseTmdbTv(show, seasons)
+      },
       sourceIdKey: 'tmdb_id',
     }
   }

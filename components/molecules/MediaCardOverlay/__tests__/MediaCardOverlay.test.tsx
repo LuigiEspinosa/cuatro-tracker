@@ -52,6 +52,54 @@ describe('MediaCardOverlay', () => {
     }
   })
 
+  it('renders inline PhosphorBar + progress label when progressLabel + progressPct are both set (Story 7.4)', () => {
+    render(
+      <MediaCardOverlay
+        title='Breaking Bad'
+        year={2008}
+        mediaType={MediaType.TV_SHOW}
+        status={WatchStatus.WATCHING}
+        progressLabel='S2E4 / 10'
+        progressPct={30}
+      />,
+    )
+    expect(screen.getByText('S2E4 / 10')).toBeInTheDocument()
+    // The overlay is aria-hidden (decorative); accessible name query needs
+    // the hidden flag to reach the progressbar inside.
+    const bar = screen.getByRole('progressbar', { hidden: true })
+    expect(bar.getAttribute('aria-valuenow')).toBe('30')
+    expect(bar.getAttribute('aria-valuemax')).toBe('100')
+  })
+
+  it('does NOT render the progress block when progressLabel is null', () => {
+    const { container } = render(
+      <MediaCardOverlay
+        title='Breaking Bad'
+        year={2008}
+        mediaType={MediaType.TV_SHOW}
+        status={WatchStatus.PLAN_TO_WATCH}
+        progressLabel={null}
+        progressPct={null}
+      />,
+    )
+    expect(container.querySelector('.media-card-overlay-progress')).toBeNull()
+    expect(screen.queryByRole('progressbar', { hidden: true })).toBeNull()
+  })
+
+  it('does NOT render progress when progressPct is non-finite (defensive)', () => {
+    const { container } = render(
+      <MediaCardOverlay
+        title='Sample'
+        year={2024}
+        mediaType={MediaType.TV_SHOW}
+        status={WatchStatus.WATCHING}
+        progressLabel='S1E1 / 10'
+        progressPct={Number.NaN}
+      />,
+    )
+    expect(container.querySelector('.media-card-overlay-progress')).toBeNull()
+  })
+
   it('exposes the status as a data-status attribute for CSS color targeting', () => {
     const cases: Array<[WatchStatus, string, string]> = [
       [WatchStatus.PLAN_TO_WATCH, 'plan_to_watch', 'PLAN TO WATCH'],
