@@ -18,6 +18,7 @@ vi.mock('@/lib/logger', () => ({
 
 const dbMock = vi.hoisted(() => ({
   userEntry: { findMany: vi.fn() },
+  mediaItem: { groupBy: vi.fn() },
 }))
 
 vi.mock('@/lib/db', () => ({ db: dbMock }))
@@ -263,5 +264,123 @@ describe('GET /api/library', () => {
     const body = await res.json()
     expect(body.items[0].year).toBeNull()
     expect(body.items[0].releaseDate).toBeNull()
+  })
+
+  describe('TV branch (Story 7.4)', () => {
+    const tvEntry = (
+      overrides: Record<string, unknown> = {},
+      mediaOverrides: Record<string, unknown> = {},
+    ) => ({
+      id: 'tv-entry-1',
+      media_item_id: 'tv-show-1',
+      status: WatchStatus.WATCHING,
+      user_rating: null,
+      progress: 0,
+      notes: null,
+      started_at: null,
+      completed_at: null,
+      created_at: new Date('2026-05-10T12:00:00Z'),
+      updated_at: new Date('2026-05-12T12:00:00Z'),
+      media_item: {
+        id: 'tv-show-1',
+        type: MediaType.TV_SHOW,
+        title: 'Breaking Bad',
+        original_title: null,
+        release_date: new Date('2008-01-20T00:00:00Z'),
+        end_date: new Date('2013-09-29T00:00:00Z'),
+        poster_path: '/poster.jpg',
+        backdrop_path: null,
+        overview: null,
+        genres: [],
+        rating: null,
+        popularity: null,
+        status: 'Ended',
+        lifecycle_status: 'ended',
+        tmdb_id: 1396,
+        anilist_id: null,
+        igdb_id: null,
+        steam_id: null,
+        parent_id: null,
+        franchise_id: null,
+        season_number: null,
+        episode_number: null,
+        runtime: null,
+        still_path: null,
+        unaired: false,
+        created_at: new Date('2026-05-10T12:00:00Z'),
+        updated_at: new Date('2026-05-12T12:00:00Z'),
+        ...mediaOverrides,
+      },
+      ...overrides,
+    })
+
+    it('formats progressLabel as "S{n}E{m} / {total}" when watched episodes exist', async () => {
+      const entry = tvEntry()
+      dbMock.userEntry.findMany.mockImplementation((args: { where?: { media_item?: { parent_id?: unknown } } }) => {
+        if (args?.where?.media_item?.parent_id) {
+          // Second call: watched episodes lookup.
+          return Promise.resolve([
+            {
+              media_item: { parent_id: 'tv-show-1', season_number: 2, episode_number: 4 },
+            },
+            {
+              media_item: { parent_id: 'tv-show-1', season_number: 2, episode_number: 3 },
+            },
+            {
+              media_item: { parent_id: 'tv-show-1', season_number: 1, episode_number: 1 },
+            },
+          ])
+        }
+        return Promise.resolve([entry])
+      })
+      dbMock.mediaItem.groupBy.mockResolvedValue([
+        { parent_id: 'tv-show-1', _count: { id: 10 } },
+      ])
+      const { GET } = await import('@/app/api/library/route')
+      const res = await GET(makeRequest('/api/library?type=TV_SHOW'))
+      const body = await res.json()
+      expect(body.items).toHaveLength(1)
+      expect(body.items[0].progressLabel).toBe('S2E4 / 10')
+      expect(body.items[0].progressPct).toBe(30)
+    })
+
+    it('returns null progressLabel for PLAN_TO_WATCH TV show with no aired episodes', async () => {
+      const entry = tvEntry({ status: WatchStatus.PLAN_TO_WATCH })
+      dbMock.userEntry.findMany.mockImplementation((args: { where?: { media_item?: { parent_id?: unknown } } }) => {
+        if (args?.where?.media_item?.parent_id) return Promise.resolve([])
+        return Promise.resolve([entry])
+      })
+      dbMock.mediaItem.groupBy.mockResolvedValue([])
+      const { GET } = await import('@/app/api/library/route')
+      const res = await GET(makeRequest('/api/library?type=TV_SHOW'))
+      const body = await res.json()
+      expect(body.items[0].progressLabel).toBeNull()
+      expect(body.items[0].progressPct).toBeNull()
+    })
+
+    it('applies lifecycle=continuing filter to media_item.lifecycle_status', async () => {
+      dbMock.userEntry.findMany.mockResolvedValue([])
+      dbMock.mediaItem.groupBy.mockResolvedValue([])
+      const { GET } = await import('@/app/api/library/route')
+      await GET(makeRequest('/api/library?type=TV_SHOW&lifecycle=continuing'))
+      const call = dbMock.userEntry.findMany.mock.calls[0][0]
+      expect(call.where.media_item.lifecycle_status).toBe('continuing')
+    })
+
+    it('applies lifecycle=in_progress composite (WATCHING + lifecycle_status=continuing)', async () => {
+      dbMock.userEntry.findMany.mockResolvedValue([])
+      dbMock.mediaItem.groupBy.mockResolvedValue([])
+      const { GET } = await import('@/app/api/library/route')
+      await GET(makeRequest('/api/library?type=TV_SHOW&lifecycle=in_progress'))
+      const call = dbMock.userEntry.findMany.mock.calls[0][0]
+      expect(call.where.status).toBe(WatchStatus.WATCHING)
+      expect(call.where.media_item.lifecycle_status).toBe('continuing')
+    })
+
+    it('rejects invalid lifecycle values with 400', async () => {
+      const { GET } = await import('@/app/api/library/route')
+      const res = await GET(makeRequest('/api/library?lifecycle=cancelled'))
+      expect(res.status).toBe(400)
+    })
   })
 })

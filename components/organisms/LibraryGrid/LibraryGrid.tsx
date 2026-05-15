@@ -11,7 +11,11 @@ import {
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { MediaType, WatchStatus } from '@prisma/client'
-import { FilterSortBar, type SortOption } from '@/components/molecules/FilterSortBar'
+import {
+  FilterSortBar,
+  type LifecycleFilter,
+  type SortOption,
+} from '@/components/molecules/FilterSortBar'
 import { EmptyLibraryState } from '@/components/molecules/EmptyLibraryState'
 import { MediaCardOverlay } from '@/components/molecules/MediaCardOverlay'
 import { FramedCover } from '@/components/molecules/FramedCover'
@@ -50,12 +54,18 @@ export type LibraryGridProps = {
   initialStatus: WatchStatus | null
   initialSearch: string
   sortOptions?: SortOption[]
+  initialLifecycle?: LifecycleFilter | null
 }
 
 type FetchKey = readonly [
   'library',
   'movies' | 'tv' | 'anime' | 'manga' | 'games',
-  { sort: string; status: WatchStatus | null; search: string },
+  {
+    sort: string
+    status: WatchStatus | null
+    search: string
+    lifecycle: LifecycleFilter | null
+  },
 ]
 
 async function fetchLibrary(
@@ -63,6 +73,7 @@ async function fetchLibrary(
   sort: string,
   status: WatchStatus | null,
   search: string,
+  lifecycle: LifecycleFilter | null,
   signal: AbortSignal,
 ): Promise<LibraryItem[]> {
   const params = new URLSearchParams()
@@ -70,6 +81,7 @@ async function fetchLibrary(
   params.set('sort', sort)
   if (status) params.set('status', status)
   if (search.trim().length > 0) params.set('search', search.trim())
+  if (lifecycle) params.set('lifecycle', lifecycle)
   params.set('limit', '200')
   const res = await fetch(`/api/library?${params.toString()}`, {
     signal,
@@ -87,18 +99,22 @@ export function LibraryGrid({
   initialStatus,
   initialSearch,
   sortOptions = MOVIE_SORT_OPTIONS,
+  initialLifecycle = null,
 }: LibraryGridProps) {
   const [sort, setSortState] = useState(initialSort)
   const [status, setStatusState] = useState<WatchStatus | null>(initialStatus)
   const [search, setSearchState] = useState(initialSearch)
+  const [lifecycle, setLifecycleState] = useState<LifecycleFilter | null>(
+    initialLifecycle,
+  )
   const [hasScrolled, setHasScrolled] = useState(false)
   const [focusedIdx, setFocusedIdx] = useState<number | null>(null)
   const gridRef = useRef<HTMLUListElement | null>(null)
   const searchHandleRef = useRef<{ focus: () => void } | null>(null)
 
   const queryKey = useMemo<FetchKey>(
-    () => ['library', mediaType, { sort, status, search }] as const,
-    [mediaType, sort, status, search],
+    () => ['library', mediaType, { sort, status, search, lifecycle }] as const,
+    [mediaType, sort, status, search, lifecycle],
   )
 
   // initialData ONLY seeds the FIRST queryKey (the one the SSR rendered with).
@@ -111,7 +127,8 @@ export function LibraryGrid({
 
   const { data: items = initialItems, isLoading, isError } = useQuery({
     queryKey,
-    queryFn: ({ signal }) => fetchLibrary(mediaType, sort, status, search, signal),
+    queryFn: ({ signal }) =>
+      fetchLibrary(mediaType, sort, status, search, lifecycle, signal),
     initialData: initialDataForQuery,
     initialDataUpdatedAt: 0,
     staleTime: 0,
@@ -123,13 +140,19 @@ export function LibraryGrid({
   // racing with the client's TanStack Query state and producing the stale-
   // data display Cuatro reported at smoke.
   const writeUrl = useCallback(
-    (nextSort: string, nextStatus: WatchStatus | null, nextSearch: string) => {
+    (
+      nextSort: string,
+      nextStatus: WatchStatus | null,
+      nextSearch: string,
+      nextLifecycle: LifecycleFilter | null,
+    ) => {
       if (typeof window === 'undefined') return
       const params = new URLSearchParams()
       params.set('sort', nextSort)
       if (nextStatus) params.set('status', nextStatus)
       const trimmed = nextSearch.trim()
       if (trimmed.length > 0) params.set('search', trimmed)
+      if (nextLifecycle) params.set('lifecycle', nextLifecycle)
       const target = `${window.location.pathname}?${params.toString()}`
       window.history.replaceState(null, '', target)
     },
@@ -145,31 +168,40 @@ export function LibraryGrid({
   const setSort = useCallback(
     (next: string) => {
       setSortState(next)
-      writeUrl(next, status, search)
+      writeUrl(next, status, search, lifecycle)
     },
-    [status, search, writeUrl],
+    [status, search, lifecycle, writeUrl],
   )
 
   const setStatus = useCallback(
     (next: WatchStatus | null) => {
       setStatusState(next)
-      writeUrl(sort, next, search)
+      writeUrl(sort, next, search, lifecycle)
     },
-    [sort, search, writeUrl],
+    [sort, search, lifecycle, writeUrl],
   )
 
   const setSearch = useCallback(
     (next: string) => {
       setSearchState(next)
-      writeUrl(sort, status, next)
+      writeUrl(sort, status, next, lifecycle)
     },
-    [sort, status, writeUrl],
+    [sort, status, lifecycle, writeUrl],
+  )
+
+  const setLifecycle = useCallback(
+    (next: LifecycleFilter | null) => {
+      setLifecycleState(next)
+      writeUrl(sort, status, search, next)
+    },
+    [sort, status, search, writeUrl],
   )
 
   const clearFilters = useCallback(() => {
     setStatusState(null)
     setSearchState('')
-    writeUrl(sort, null, '')
+    setLifecycleState(null)
+    writeUrl(sort, null, '', null)
   }, [sort, writeUrl])
 
   // Scroll affordance: rainbow rule under the toolbar once scrolled past 80px.
@@ -196,14 +228,17 @@ export function LibraryGrid({
         searchHandleRef.current?.focus()
         return
       }
-      if (e.key === 'Escape' && (status !== null || search !== '')) {
+      if (
+        e.key === 'Escape' &&
+        (status !== null || search !== '' || lifecycle !== null)
+      ) {
         e.preventDefault()
         clearFilters()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [status, search, clearFilters])
+  }, [status, search, lifecycle, clearFilters])
 
   // Grid-level arrow navigation. Right at end-of-row jumps to first card of
   // next row; Up at top-row is a no-op (no wrap to last row).
@@ -232,7 +267,8 @@ export function LibraryGrid({
   )
 
   // Loading + error + filtered-zero + empty-state branching.
-  const hasActiveQuery = status !== null || search.trim().length > 0
+  const hasActiveQuery =
+    status !== null || search.trim().length > 0 || lifecycle !== null
 
   return (
     <div className='library-grid'>
@@ -247,6 +283,8 @@ export function LibraryGrid({
         onSortChange={setSort}
         hasScrolled={hasScrolled}
         searchRef={searchHandleRef}
+        activeLifecycle={lifecycle}
+        onLifecycleChange={mediaType === 'tv' ? setLifecycle : undefined}
       />
       <div className='library-grid-region'>
         {isError ? (
@@ -321,6 +359,8 @@ export function LibraryGrid({
                         year={item.year}
                         mediaType={item.mediaType}
                         status={item.status}
+                        progressLabel={item.progressLabel}
+                        progressPct={item.progressPct}
                       />
                     </div>
                   </Link>

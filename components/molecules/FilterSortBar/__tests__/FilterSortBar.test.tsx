@@ -111,4 +111,43 @@ describe('FilterSortBar', () => {
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('listbox')).toBeNull()
   })
+
+  describe('lifecycle chips (TV-only, Story 7.4)', () => {
+    it('does NOT render lifecycle chips for non-TV mediums', () => {
+      setup({ medium: 'movies', onLifecycleChange: vi.fn() })
+      expect(screen.queryByText('IN PROGRESS')).toBeNull()
+      expect(screen.queryByText('CONTINUING')).toBeNull()
+      expect(screen.queryByText('ENDED')).toBeNull()
+    })
+
+    it('renders 3 lifecycle chips when medium=tv and onLifecycleChange is wired', () => {
+      setup({ medium: 'tv', onLifecycleChange: vi.fn() })
+      expect(screen.getByText('IN PROGRESS')).toBeInTheDocument()
+      expect(screen.getByText('CONTINUING')).toBeInTheDocument()
+      expect(screen.getByText('ENDED')).toBeInTheDocument()
+    })
+
+    it('hides lifecycle chips when medium=tv but onLifecycleChange is undefined', () => {
+      setup({ medium: 'tv' })
+      expect(screen.queryByText('IN PROGRESS')).toBeNull()
+    })
+
+    it('fires onLifecycleChange("continuing") when the continuing chip is clicked', () => {
+      const onLifecycleChange = vi.fn()
+      setup({ medium: 'tv', onLifecycleChange })
+      fireEvent.click(screen.getByText('CONTINUING'))
+      expect(onLifecycleChange).toHaveBeenCalledWith('continuing')
+    })
+
+    it('toggles off the lifecycle filter when clicking the currently-active chip', () => {
+      const onLifecycleChange = vi.fn()
+      setup({
+        medium: 'tv',
+        onLifecycleChange,
+        activeLifecycle: 'continuing',
+      })
+      fireEvent.click(screen.getByText('CONTINUING'))
+      expect(onLifecycleChange).toHaveBeenCalledWith(null)
+    })
+  })
 })

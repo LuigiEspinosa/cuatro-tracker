@@ -14,6 +14,8 @@ import { FilterChip } from '@/components/molecules/FilterChip'
 
 export type LibraryMedium = 'movies' | 'tv' | 'anime' | 'manga' | 'games'
 
+export type LifecycleFilter = 'in_progress' | 'continuing' | 'ended'
+
 export type FilterSearchHandle = {
   focus: () => void
 }
@@ -35,6 +37,9 @@ export type FilterSortBarProps = {
   hasScrolled?: boolean
   searchRef?: Ref<FilterSearchHandle>
   debounceMs?: number
+  // TV-only lifecycle filter chip group. Ignored for non-TV mediums.
+  activeLifecycle?: LifecycleFilter | null
+  onLifecycleChange?: (next: LifecycleFilter | null) => void
 }
 
 const STATUS_CHIPS: ReadonlyArray<{ status: WatchStatus; label: string }> = [
@@ -43,6 +48,12 @@ const STATUS_CHIPS: ReadonlyArray<{ status: WatchStatus; label: string }> = [
   { status: WatchStatus.COMPLETED, label: 'COMPLETED' },
   { status: WatchStatus.ON_HOLD, label: 'ON HOLD' },
   { status: WatchStatus.DROPPED, label: 'DROPPED' },
+]
+
+const LIFECYCLE_CHIPS: ReadonlyArray<{ key: LifecycleFilter; label: string }> = [
+  { key: 'in_progress', label: 'IN PROGRESS' },
+  { key: 'continuing', label: 'CONTINUING' },
+  { key: 'ended', label: 'ENDED' },
 ]
 
 const PLACEHOLDER_BY_MEDIUM: Record<LibraryMedium, string> = {
@@ -65,6 +76,8 @@ export function FilterSortBar({
   hasScrolled = false,
   searchRef,
   debounceMs = 150,
+  activeLifecycle = null,
+  onLifecycleChange,
 }: FilterSortBarProps) {
   const [sortOpen, setSortOpen] = useState(false)
   const [draft, setDraft] = useState(search)
@@ -163,6 +176,26 @@ export function FilterSortBar({
           />
         ))}
       </div>
+      {medium === 'tv' && onLifecycleChange ? (
+        <div
+          className='filter-sort-bar-chips filter-sort-bar-chips-lifecycle'
+          role='group'
+          aria-label='Filter by lifecycle'
+        >
+          {LIFECYCLE_CHIPS.map((chip) => (
+            <FilterChip
+              key={chip.key}
+              active={activeLifecycle === chip.key}
+              label={chip.label}
+              onToggle={() =>
+                onLifecycleChange(
+                  activeLifecycle === chip.key ? null : chip.key,
+                )
+              }
+            />
+          ))}
+        </div>
+      ) : null}
       <div className='filter-sort-bar-sort' ref={sortRef}>
         <button
           type='button'

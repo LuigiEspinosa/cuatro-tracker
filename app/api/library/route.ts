@@ -1,7 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { type MediaItem, MediaType, WatchStatus } from '@prisma/client'
-import { findLibraryItems, type LibrarySortKey, type UserEntryWithMedia } from '@/lib/db/library'
+import {
+  findLibraryItems,
+  formatTvProgressLabel,
+  formatTvProgressPct,
+  type LibrarySortKey,
+  type LifecycleStatus,
+  type UserEntryWithMedia,
+} from '@/lib/db/library'
 import { logger } from '@/lib/logger'
 import { withRequest } from '@/lib/request-context'
 import type { LibraryItem, LibraryListResponse } from '@/lib/types/library'
@@ -24,26 +31,39 @@ export const dynamic = 'force-dynamic'
 // callers); `sort` is the 6.3 param using the LibrarySortKey union. When both
 // are absent the default is `recently_added`. When both are present, `sort`
 // wins so 6.3+ callers do not need to know about the legacy enum.
-const LibraryQuerySchema = z.object({
-  type: z.nativeEnum(MediaType).optional(),
-  status: z.nativeEnum(WatchStatus).optional(),
-  search: z.string().min(1).max(100).optional(),
-  order: z
-    .enum(['updated_at_desc', 'created_at_desc', 'release_date_desc'])
-    .optional(),
-  sort: z
-    .enum([
-      'recently_added',
-      'recently_created',
-      'release_date_desc',
-      'title_asc',
-      'status_asc',
-      'rating_desc',
-    ])
-    .optional(),
-  limit: z.coerce.number().int().positive().max(200).optional().default(20),
-  released_within_days: z.coerce.number().int().positive().max(3650).optional(),
-})
+const LibraryQuerySchema = z
+  .object({
+    type: z.nativeEnum(MediaType).optional(),
+    status: z.nativeEnum(WatchStatus).optional(),
+    search: z.string().min(1).max(100).optional(),
+    order: z
+      .enum(['updated_at_desc', 'created_at_desc', 'release_date_desc'])
+      .optional(),
+    sort: z
+      .enum([
+        'recently_added',
+        'recently_created',
+        'release_date_desc',
+        'title_asc',
+        'status_asc',
+        'rating_desc',
+      ])
+      .optional(),
+    limit: z.coerce.number().int().positive().max(200).optional().default(20),
+    released_within_days: z.coerce.number().int().positive().max(3650).optional(),
+    lifecycle: z.enum(['in_progress', 'continuing', 'ended']).optional(),
+  })
+  // The `in_progress` lifecycle filter is a single-click composite for
+  // WATCHING + lifecycle_status='continuing'. Allowing an explicit `status`
+  // alongside it would silently override the composite, which is surprising.
+  // Reject the combination so the API surface honours the override.
+  .refine(
+    (v) => !(v.status !== undefined && v.lifecycle === 'in_progress'),
+    {
+      message: '`status` cannot be combined with `lifecycle=in_progress` (the composite already pins status to WATCHING)',
+      path: ['lifecycle'],
+    },
+  )
 
 function resolveSort(
   sort: LibrarySortKey | undefined,
@@ -68,32 +88,36 @@ function deriveReleaseDate(mediaItem: MediaItem): string | null {
 }
 
 function formatProgressLabel(
-  mediaType: MediaType,
-  status: WatchStatus,
-  progress: number,
+  entry: UserEntryWithMedia,
 ): string | null {
-  if (mediaType === MediaType.MOVIE) {
+  const { type } = entry.media_item
+  const { status, progress } = entry
+  if (type === MediaType.MOVIE) {
     if (status === WatchStatus.COMPLETED) return 'WATCHED'
     if (status === WatchStatus.WATCHING && progress > 0 && progress < 100) {
       return `${progress}% WATCHED`
     }
     return status.replaceAll('_', ' ')
   }
-  // TV / anime / manga / games progress formatting lands in Stories 7-9 when
-  // those media types become addable. For now return null and let the client
-  // hide the line.
+  if (type === MediaType.TV_SHOW) {
+    return formatTvProgressLabel(status, entry.episodeStats)
+  }
+  // anime / manga / games progress formatting lands in Stories 8-9.
   return null
 }
 
 function formatProgressPct(
-  mediaType: MediaType,
-  status: WatchStatus,
-  progress: number,
+  entry: UserEntryWithMedia,
 ): number | null {
-  if (mediaType === MediaType.MOVIE) {
+  const { type } = entry.media_item
+  const { status, progress } = entry
+  if (type === MediaType.MOVIE) {
     if (status === WatchStatus.COMPLETED) return 100
     if (status === WatchStatus.WATCHING) return Math.min(100, Math.max(0, progress))
     return null
+  }
+  if (type === MediaType.TV_SHOW) {
+    return formatTvProgressPct(entry.episodeStats)
   }
   return null
 }
@@ -117,8 +141,8 @@ function serializeLibraryItem(entry: UserEntryWithMedia): LibraryItem {
     posterPath: mediaItem.poster_path,
     year: deriveYear(mediaItem),
     releaseDate: deriveReleaseDate(mediaItem),
-    progressLabel: formatProgressLabel(mediaItem.type, entry.status, entry.progress),
-    progressPct: formatProgressPct(mediaItem.type, entry.status, entry.progress),
+    progressLabel: formatProgressLabel(entry),
+    progressPct: formatProgressPct(entry),
     sourceLabel: deriveSourceLabel(mediaItem),
     tmdbId: mediaItem.tmdb_id,
     anilistId: mediaItem.anilist_id,
@@ -143,7 +167,11 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     )
   }
 
-  const { type, status, search, order, sort, limit, released_within_days } = parsed.data
+  const { type, status, search, order, sort, limit, released_within_days, lifecycle } = parsed.data
+
+  const lifecycleStatus: LifecycleStatus | undefined =
+    lifecycle === 'continuing' || lifecycle === 'ended' ? lifecycle : undefined
+  const lifecycleInProgress = lifecycle === 'in_progress'
 
   const entries = await findLibraryItems({
     mediaType: type,
@@ -152,6 +180,8 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     sort: resolveSort(sort, order),
     limit,
     releasedWithinDays: released_within_days,
+    lifecycleStatus,
+    lifecycleInProgress,
   })
 
   const items = entries.map(serializeLibraryItem)
