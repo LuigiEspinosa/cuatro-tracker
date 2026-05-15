@@ -806,6 +806,7 @@ body {
     background 100ms linear,
     color 100ms linear,
     border-width 100ms linear,
+    padding 100ms linear,
     text-shadow 120ms linear;
   text-align: center;
 }
@@ -2473,10 +2474,16 @@ body {
 
 .detail-hero-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 16px;
-  align-items: center;
   margin-top: 16px;
+}
+.detail-hero-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
 }
 
 .watch-status-control { position: relative; display: inline-flex; gap: 8px; align-items: center; }

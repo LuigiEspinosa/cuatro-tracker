@@ -58,8 +58,10 @@ export function DetailHero({
             mediaItemId={mediaItemId}
             currentStatus={currentStatus}
           />
-          {showQbtButton ? <SendToQbtButton /> : null}
-          <WatchOnImdbButton imdbId={imdbId} />
+          <div className='detail-hero-action-buttons'>
+            {showQbtButton ? <SendToQbtButton /> : null}
+            <WatchOnImdbButton imdbId={imdbId} />
+          </div>
         </div>
       </div>
     </section>
