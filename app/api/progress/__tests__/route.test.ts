@@ -20,6 +20,11 @@ const dbMock = vi.hoisted(() => ({
   userEntry: {
     findUnique: vi.fn(),
     update: vi.fn(),
+    create: vi.fn(),
+    upsert: vi.fn(),
+  },
+  mediaItem: {
+    findUnique: vi.fn(),
   },
 }))
 
@@ -128,8 +133,12 @@ describe('PUT /api/progress', () => {
     expect(dbMock.userEntry.findUnique).not.toHaveBeenCalled()
   })
 
-  it('returns 404 when UserEntry does not exist', async () => {
+  it('returns 404 when UserEntry does not exist AND MediaItem is a MOVIE', async () => {
     dbMock.userEntry.findUnique.mockResolvedValue(null)
+    dbMock.mediaItem.findUnique.mockResolvedValue({
+      id: 'missing',
+      type: MediaType.MOVIE,
+    })
     const { PUT } = await import('@/app/api/progress/route')
     const res = await PUT(
       putRequest({ mediaItemId: 'missing', status: WatchStatus.WATCHING }),
@@ -138,6 +147,87 @@ describe('PUT /api/progress', () => {
     const body = await res.json()
     expect(body.error).toBe('not_in_library')
     expect(dbMock.userEntry.update).not.toHaveBeenCalled()
+    expect(dbMock.userEntry.upsert).not.toHaveBeenCalled()
+  })
+
+  it('returns 404 when UserEntry does not exist AND MediaItem is missing entirely', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(null)
+    dbMock.mediaItem.findUnique.mockResolvedValue(null)
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'missing', status: WatchStatus.WATCHING }),
+    )
+    expect(res.status).toBe(404)
+    const body = await res.json()
+    expect(body.error).toBe('not_in_library')
+  })
+
+  it('lazy-creates UserEntry via upsert when MediaItem is a TV_EPISODE (Story 7.5 AC-5)', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(null)
+    dbMock.mediaItem.findUnique.mockResolvedValue({
+      id: 'ep-1',
+      type: MediaType.TV_EPISODE,
+    })
+    dbMock.userEntry.upsert.mockResolvedValue({
+      id: 'new-entry-1',
+      media_item_id: 'ep-1',
+      status: WatchStatus.COMPLETED,
+      user_rating: null,
+      progress: 0,
+      notes: null,
+      started_at: null,
+      completed_at: null,
+      created_at: new Date('2026-05-15T12:00:00Z'),
+      updated_at: new Date('2026-05-15T12:00:00Z'),
+    })
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'ep-1', status: WatchStatus.COMPLETED }),
+    )
+    expect(res.status).toBe(201)
+    expect(dbMock.userEntry.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { media_item_id: 'ep-1' },
+        create: expect.objectContaining({
+          media_item_id: 'ep-1',
+          status: WatchStatus.COMPLETED,
+          progress: 0,
+        }),
+        update: expect.objectContaining({
+          status: WatchStatus.COMPLETED,
+          progress: 0,
+        }),
+      }),
+    )
+    expect(dbMock.userEntry.update).not.toHaveBeenCalled()
+    const body = await res.json()
+    expect(body.status).toBe(WatchStatus.COMPLETED)
+  })
+
+  it('lazy-create defaults to PLAN_TO_WATCH when no status is supplied (TV_EPISODE)', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(null)
+    dbMock.mediaItem.findUnique.mockResolvedValue({
+      id: 'ep-1',
+      type: MediaType.TV_EPISODE,
+    })
+    dbMock.userEntry.upsert.mockResolvedValue({
+      id: 'new-entry-1',
+      media_item_id: 'ep-1',
+      status: WatchStatus.PLAN_TO_WATCH,
+      user_rating: null,
+      progress: 5,
+      notes: null,
+      started_at: null,
+      completed_at: null,
+      created_at: new Date('2026-05-15T12:00:00Z'),
+      updated_at: new Date('2026-05-15T12:00:00Z'),
+    })
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(putRequest({ mediaItemId: 'ep-1', progress: 5 }))
+    expect(res.status).toBe(201)
+    const call = dbMock.userEntry.upsert.mock.calls[0][0]
+    expect(call.create.status).toBe(WatchStatus.PLAN_TO_WATCH)
+    expect(call.create.progress).toBe(5)
   })
 
   it('updates status and returns the serialized entry', async () => {

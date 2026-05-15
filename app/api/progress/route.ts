@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { Prisma, WatchStatus } from '@prisma/client'
+import { MediaType, Prisma, WatchStatus } from '@prisma/client'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { findUserEntryByMediaItemId } from '@/lib/db/library'
@@ -91,11 +91,59 @@ async function handler(req: NextRequest): Promise<NextResponse> {
 
   const entry = await findUserEntryByMediaItemId(mediaItemId)
   if (!entry) {
-    logger.warn(
-      { event: 'progress.update.not_found', mediaItemId },
-      'no UserEntry for mediaItemId',
+    // TV_EPISODE rows get lazy-created UserEntries on first toggle per
+    // Story 7.5 AC-5: episodes don't ship with UserEntries from the add
+    // flow (Story 7.2a's transaction creates UserEntry only for the show
+    // row). All other types preserve the existing not_in_library path.
+    //
+    // Lazy-create is implemented as `upsert` (not `create`) so concurrent
+    // PUTs for the same episode tmdb_id don't trip P2002 on the
+    // `media_item_id @unique` constraint — both racers converge to the same
+    // row idempotently. See ECH-T19 (Story 7.5 review).
+    const mediaItem = await db.mediaItem.findUnique({
+      where: { id: mediaItemId },
+      select: { id: true, type: true },
+    })
+    if (!mediaItem || mediaItem.type !== MediaType.TV_EPISODE) {
+      logger.warn(
+        { event: 'progress.update.not_found', mediaItemId },
+        'no UserEntry for mediaItemId',
+      )
+      return jsonResponse({ error: 'not_in_library' }, 404)
+    }
+    const lazyStatus =
+      (data.status as WatchStatus | undefined) ?? WatchStatus.PLAN_TO_WATCH
+    const lazyProgress = (data.progress as number | undefined) ?? 0
+    const lazyCompletedAt =
+      completed_at === undefined
+        ? undefined
+        : completed_at === null
+          ? null
+          : new Date(completed_at)
+    const created = await db.userEntry.upsert({
+      where: { media_item_id: mediaItemId },
+      create: {
+        media_item_id: mediaItemId,
+        status: lazyStatus,
+        progress: lazyProgress,
+        ...(lazyCompletedAt !== undefined
+          ? { completed_at: lazyCompletedAt }
+          : {}),
+      },
+      update: {
+        status: lazyStatus,
+        progress: lazyProgress,
+        ...(lazyCompletedAt !== undefined
+          ? { completed_at: lazyCompletedAt }
+          : {}),
+      },
+    })
+    logger.info(
+      { event: 'progress.update.lazy_created', mediaItemId, fieldsApplied },
+      'UserEntry lazy-created for TV episode',
     )
-    return jsonResponse({ error: 'not_in_library' }, 404)
+    const body: ProgressResponse = serializeProgressEntry(created)
+    return jsonResponse(body, 201)
   }
 
   const updated = await db.userEntry.update({
