@@ -18,6 +18,8 @@ vi.mock('@/lib/logger', () => ({
 
 const tmdbMock = vi.hoisted(() => ({
   getMovie: vi.fn(),
+  getTv: vi.fn(),
+  getTvSeason: vi.fn(),
 }))
 
 vi.mock('@/lib/api/tmdb', async () => {
@@ -26,8 +28,17 @@ vi.mock('@/lib/api/tmdb', async () => {
   return {
     ...actual,
     getMovie: tmdbMock.getMovie,
+    getTv: tmdbMock.getTv,
+    getTvSeason: tmdbMock.getTvSeason,
   }
 })
+
+const txMock = vi.hoisted(() => ({
+  mediaItem: {
+    create: vi.fn(),
+    createMany: vi.fn(),
+  },
+}))
 
 const dbMock = vi.hoisted(() => ({
   mediaItem: {
@@ -39,6 +50,7 @@ const dbMock = vi.hoisted(() => ({
   userEntry: {
     create: vi.fn(),
   },
+  $transaction: vi.fn(),
 }))
 
 vi.mock('@/lib/db', () => ({ db: dbMock }))
@@ -66,6 +78,12 @@ beforeEach(() => {
   vi.resetModules()
   vi.resetAllMocks()
   for (const [k, v] of Object.entries(validEnv)) vi.stubEnv(k, v)
+  // Default: $transaction runs its callback against the chain-mocked tx so
+  // each test only needs to wire `txMock.mediaItem.create` / `createMany`
+  // behaviour, not the transaction shell.
+  dbMock.$transaction.mockImplementation(
+    async (fn: (tx: typeof txMock) => unknown) => fn(txMock),
+  )
 })
 
 afterEach(() => {
@@ -221,14 +239,14 @@ describe('POST /api/media', () => {
       )
     })
 
-    it('returns 501 for unwired type (tmdb + TV_SHOW)', async () => {
+    it('returns 501 for unwired type (tmdb + ANIME)', async () => {
       const { POST } = await import('@/app/api/media/route')
 
       const res = await POST(
         postRequest({
           source: 'tmdb',
           sourceId: 1399,
-          type: MediaType.TV_SHOW,
+          type: MediaType.ANIME,
         }),
       )
 
@@ -537,6 +555,383 @@ describe('POST /api/media', () => {
         expect.objectContaining({
           event: 'media.constraint_violation',
           code: 'P2004',
+        }),
+        expect.any(String),
+      )
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// TV branch (Story 7.2a)
+// ---------------------------------------------------------------------------
+
+const validTmdbTv = {
+  id: 1396,
+  name: 'Breaking Bad',
+  original_name: 'Breaking Bad',
+  overview: 'A high school chemistry teacher diagnosed with...',
+  first_air_date: '2008-01-20',
+  last_air_date: '2013-09-29',
+  poster_path: '/poster.jpg',
+  backdrop_path: '/backdrop.jpg',
+  vote_average: 8.9,
+  popularity: 240.5,
+  genres: [{ id: 18, name: 'Drama' }],
+  status: 'Ended',
+  seasons: [
+    { id: 9001, season_number: 1, name: 'Season 1', episode_count: 2 },
+    { id: 9002, season_number: 2, name: 'Season 2', episode_count: 2 },
+  ],
+}
+
+function seasonPayload(seasonNumber: number, episodeCount: number) {
+  return {
+    id: 9000 + seasonNumber,
+    season_number: seasonNumber,
+    name: `Season ${seasonNumber}`,
+    episodes: Array.from({ length: episodeCount }, (_, idx) => ({
+      id: seasonNumber * 1000 + idx + 1,
+      name: `S${seasonNumber}E${idx + 1}`,
+      overview: 'episode overview',
+      air_date: '2008-01-20',
+      episode_number: idx + 1,
+      season_number: seasonNumber,
+      still_path: '/still.jpg',
+      vote_average: 8.0,
+      runtime: 47,
+    })),
+  }
+}
+
+function newShowRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'cm_show_1',
+    type: MediaType.TV_SHOW,
+    title: 'Breaking Bad',
+    original_title: 'Breaking Bad',
+    release_date: new Date('2008-01-20T00:00:00Z'),
+    end_date: new Date('2013-09-29T00:00:00Z'),
+    poster_path: '/poster.jpg',
+    backdrop_path: '/backdrop.jpg',
+    overview: 'A high school chemistry teacher diagnosed with...',
+    genres: ['Drama'],
+    rating: 8.9,
+    popularity: 240.5,
+    status: 'Ended',
+    lifecycle_status: 'ended',
+    tmdb_id: 1396,
+    anilist_id: null,
+    igdb_id: null,
+    steam_id: null,
+    parent_id: null,
+    franchise_id: null,
+    season_number: null,
+    episode_number: null,
+    runtime: null,
+    still_path: null,
+    unaired: false,
+    created_at: new Date('2026-05-15T00:00:00Z'),
+    updated_at: new Date('2026-05-15T00:00:00Z'),
+    user_entry: null,
+    ...overrides,
+  }
+}
+
+describe('POST /api/media (TV branch — Story 7.2a)', () => {
+  describe('happy path', () => {
+    it('returns 201 with show + UserEntry, runs transaction with createMany for episodes', async () => {
+      tmdbMock.getTv.mockResolvedValue(validTmdbTv)
+      tmdbMock.getTvSeason
+        .mockResolvedValueOnce(seasonPayload(1, 2))
+        .mockResolvedValueOnce(seasonPayload(2, 2))
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      dbMock.mediaItem.findMany.mockResolvedValue([])
+      txMock.mediaItem.create.mockResolvedValue(
+        newShowRow({ user_entry: newUserEntry({ media_item_id: 'cm_show_1' }) }),
+      )
+      txMock.mediaItem.createMany.mockResolvedValue({ count: 4 })
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 1396, type: MediaType.TV_SHOW }),
+      )
+
+      expect(res.status).toBe(201)
+      const body = await res.json()
+      expect(body.mediaItem.tmdb_id).toBe(1396)
+      expect(body.mediaItem.type).toBe(MediaType.TV_SHOW)
+      expect(body.mediaItem.user_entry.status).toBe(WatchStatus.PLAN_TO_WATCH)
+      expect(body.merged).toBe(false)
+      expect(tmdbMock.getTv).toHaveBeenCalledWith(1396)
+      expect(tmdbMock.getTvSeason).toHaveBeenCalledTimes(2)
+      expect(dbMock.$transaction).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ timeout: 30_000 }),
+      )
+      expect(txMock.mediaItem.createMany).toHaveBeenCalledTimes(1)
+      const createManyArg = txMock.mediaItem.createMany.mock.calls[0][0]
+      expect(createManyArg.data).toHaveLength(4)
+      expect(createManyArg.data[0]).toEqual(
+        expect.objectContaining({
+          type: MediaType.TV_EPISODE,
+          parent_id: 'cm_show_1',
+        }),
+      )
+    })
+
+    it('passes nested user_entry create on the show insert (single UserEntry per show)', async () => {
+      tmdbMock.getTv.mockResolvedValue(validTmdbTv)
+      tmdbMock.getTvSeason
+        .mockResolvedValueOnce(seasonPayload(1, 2))
+        .mockResolvedValueOnce(seasonPayload(2, 2))
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      dbMock.mediaItem.findMany.mockResolvedValue([])
+      txMock.mediaItem.create.mockResolvedValue(
+        newShowRow({ user_entry: newUserEntry({ media_item_id: 'cm_show_1' }) }),
+      )
+      txMock.mediaItem.createMany.mockResolvedValue({ count: 4 })
+      const { POST } = await import('@/app/api/media/route')
+
+      await POST(
+        postRequest({ source: 'tmdb', sourceId: 1396, type: MediaType.TV_SHOW }),
+      )
+
+      const showCreateArg = txMock.mediaItem.create.mock.calls[0][0]
+      expect(showCreateArg.data.user_entry).toEqual({
+        create: { status: WatchStatus.PLAN_TO_WATCH, progress: 0 },
+      })
+      // Episodes do NOT carry nested user_entry creates.
+      const createManyArg = txMock.mediaItem.createMany.mock.calls[0][0]
+      for (const episode of createManyArg.data) {
+        expect(episode).not.toHaveProperty('user_entry')
+      }
+    })
+  })
+
+  describe('idempotent fast-path', () => {
+    it('returns 200 + zero TMDB calls when the show already exists with UserEntry', async () => {
+      const existing = newShowRow({
+        user_entry: newUserEntry({ media_item_id: 'cm_show_1' }),
+      })
+      dbMock.mediaItem.findUnique.mockResolvedValue(existing)
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 1396, type: MediaType.TV_SHOW }),
+      )
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.merged).toBe(false)
+      expect(tmdbMock.getTv).not.toHaveBeenCalled()
+      expect(tmdbMock.getTvSeason).not.toHaveBeenCalled()
+      expect(dbMock.$transaction).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('cross-source merge (show-only, episodes discarded)', () => {
+    it('patches source ID on existing TV_SHOW row matching title + year, returns merged: true', async () => {
+      tmdbMock.getTv.mockResolvedValue(validTmdbTv)
+      tmdbMock.getTvSeason
+        .mockResolvedValueOnce(seasonPayload(1, 2))
+        .mockResolvedValueOnce(seasonPayload(2, 2))
+      // No existing by tmdb_id.
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      // But a cross-source TV row with matching title+year, tmdb_id null.
+      const anilistShow = newShowRow({
+        id: 'cm_anilist_show',
+        tmdb_id: null,
+        anilist_id: 5678,
+        user_entry: newUserEntry({ media_item_id: 'cm_anilist_show' }),
+      })
+      dbMock.mediaItem.findMany.mockResolvedValue([anilistShow])
+      dbMock.mediaItem.update.mockResolvedValue({
+        ...anilistShow,
+        tmdb_id: 1396,
+      })
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 1396, type: MediaType.TV_SHOW }),
+      )
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.merged).toBe(true)
+      expect(body.mediaItem.tmdb_id).toBe(1396)
+      expect(body.mediaItem.anilist_id).toBe(5678)
+      // Episodes from inbound TMDB payload are DISCARDED on cross-source merge.
+      expect(dbMock.$transaction).not.toHaveBeenCalled()
+      expect(txMock.mediaItem.createMany).not.toHaveBeenCalled()
+    })
+
+    it('does NOT cross-merge against a MOVIE row with the same title + year', async () => {
+      tmdbMock.getTv.mockResolvedValue(validTmdbTv)
+      tmdbMock.getTvSeason
+        .mockResolvedValueOnce(seasonPayload(1, 2))
+        .mockResolvedValueOnce(seasonPayload(2, 2))
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      // A MOVIE row with the same title + year — must NOT merge with an
+      // inbound TV_SHOW.
+      dbMock.mediaItem.findMany.mockResolvedValue([
+        newMediaItem({
+          id: 'cm_movie_collision',
+          type: MediaType.MOVIE,
+          title: 'Breaking Bad',
+          release_date: new Date('2008-01-20T00:00:00Z'),
+          tmdb_id: null,
+        }),
+      ])
+      txMock.mediaItem.create.mockResolvedValue(
+        newShowRow({ user_entry: newUserEntry({ media_item_id: 'cm_show_1' }) }),
+      )
+      txMock.mediaItem.createMany.mockResolvedValue({ count: 4 })
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 1396, type: MediaType.TV_SHOW }),
+      )
+
+      expect(res.status).toBe(201)
+      const body = await res.json()
+      expect(body.merged).toBe(false)
+      expect(dbMock.mediaItem.update).not.toHaveBeenCalled()
+      expect(dbMock.$transaction).toHaveBeenCalled()
+    })
+  })
+
+  describe('empty seasons', () => {
+    it('inserts the show with zero episodes when every season has episode_count === 0', async () => {
+      tmdbMock.getTv.mockResolvedValue({
+        ...validTmdbTv,
+        seasons: [
+          { id: 9001, season_number: 1, name: 'Season 1', episode_count: 0 },
+          { id: 9002, season_number: 2, name: 'Season 2', episode_count: 0 },
+        ],
+      })
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      dbMock.mediaItem.findMany.mockResolvedValue([])
+      txMock.mediaItem.create.mockResolvedValue(
+        newShowRow({ user_entry: newUserEntry({ media_item_id: 'cm_show_1' }) }),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 1396, type: MediaType.TV_SHOW }),
+      )
+
+      expect(res.status).toBe(201)
+      const body = await res.json()
+      expect(body.merged).toBe(false)
+      // No season fetches because every season filtered out.
+      expect(tmdbMock.getTvSeason).not.toHaveBeenCalled()
+      // Transaction ran but createMany was never called (episodes: []).
+      expect(dbMock.$transaction).toHaveBeenCalled()
+      expect(txMock.mediaItem.createMany).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('error paths', () => {
+    it('returns 422 when the TV normaliser throws ZodError (tampered TMDB payload)', async () => {
+      tmdbMock.getTv.mockResolvedValue({ ...validTmdbTv, id: 'not-a-number' })
+      // No season fetches because the normaliser fails before persistence.
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 1396, type: MediaType.TV_SHOW }),
+      )
+
+      expect(res.status).toBe(422)
+      const body = await res.json()
+      expect(body.error).toBe('normalise_failed')
+      expect(body.issues).toBeDefined()
+      expect(dbMock.$transaction).not.toHaveBeenCalled()
+    })
+
+    it('returns 502 when getTv throws TmdbApiError', async () => {
+      const { TmdbApiError } = await import('@/lib/api/tmdb')
+      tmdbMock.getTv.mockRejectedValue(
+        new TmdbApiError('TMDB HTTP 500: /tv/1396', {
+          endpoint: '/tv/1396',
+          httpStatus: 500,
+        }),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 1396, type: MediaType.TV_SHOW }),
+      )
+
+      expect(res.status).toBe(502)
+      const body = await res.json()
+      expect(body.error).toBe('upstream_failed')
+      expect(dbMock.$transaction).not.toHaveBeenCalled()
+    })
+
+    it('returns 200 idempotent when transaction P2002 + findExistingBySourceId finds the racing show', async () => {
+      tmdbMock.getTv.mockResolvedValue(validTmdbTv)
+      tmdbMock.getTvSeason
+        .mockResolvedValueOnce(seasonPayload(1, 2))
+        .mockResolvedValueOnce(seasonPayload(2, 2))
+      dbMock.mediaItem.findUnique
+        .mockResolvedValueOnce(null) // fast-path miss
+        .mockResolvedValueOnce(
+          newShowRow({ user_entry: newUserEntry({ media_item_id: 'cm_show_1' }) }),
+        ) // post-P2002 race recovery
+      dbMock.mediaItem.findMany.mockResolvedValue([])
+      dbMock.$transaction.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError(
+          'Unique constraint failed on the fields: (`tmdb_id`)',
+          { code: 'P2002', clientVersion: '6.0.0' },
+        ),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 1396, type: MediaType.TV_SHOW }),
+      )
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.merged).toBe(false)
+      expect(body.mediaItem.tmdb_id).toBe(1396)
+    })
+
+    it('returns 500 cross_type_tmdb_id_collision when transaction P2002 + no racing show found', async () => {
+      tmdbMock.getTv.mockResolvedValue(validTmdbTv)
+      tmdbMock.getTvSeason
+        .mockResolvedValueOnce(seasonPayload(1, 2))
+        .mockResolvedValueOnce(seasonPayload(2, 2))
+      // Fast-path miss AND post-P2002 lookup miss → no racing show, so the
+      // P2002 must have come from an episode tmdb_id colliding with a
+      // foreign MediaItem row.
+      dbMock.mediaItem.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+      dbMock.mediaItem.findMany.mockResolvedValue([])
+      dbMock.$transaction.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError(
+          'Unique constraint failed on the fields: (`tmdb_id`)',
+          { code: 'P2002', clientVersion: '6.0.0' },
+        ),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 1396, type: MediaType.TV_SHOW }),
+      )
+
+      expect(res.status).toBe(500)
+      const body = await res.json()
+      expect(body.error).toBe('cross_type_tmdb_id_collision')
+      expect(body.code).toBe('P2002')
+      expect(loggerMock.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'media.tmdb_id_collision',
+          source: 'tmdb',
+          sourceId: 1396,
+          type: MediaType.TV_SHOW,
         }),
         expect.any(String),
       )
