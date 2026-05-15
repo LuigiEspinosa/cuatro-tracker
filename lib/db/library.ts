@@ -23,6 +23,15 @@ export type UserEntryWithMedia = UserEntry & { media_item: MediaItem }
 const DEFAULT_LIMIT = 200
 const DEFAULT_SORT: LibrarySortKey = 'recently_added'
 
+export async function findUserEntryByMediaItemId(
+  mediaItemId: string,
+): Promise<UserEntryWithMedia | null> {
+  return db.userEntry.findUnique({
+    where: { media_item_id: mediaItemId },
+    include: { media_item: true },
+  })
+}
+
 export async function findLibraryItems(
   opts: LibraryQueryOptions = {},
 ): Promise<UserEntryWithMedia[]> {
