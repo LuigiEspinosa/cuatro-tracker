@@ -87,6 +87,31 @@ export const TmdbEpisodeSchema = z.object({
 })
 export type TmdbEpisode = z.infer<typeof TmdbEpisodeSchema>
 
+export const TmdbCastMemberSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  character: z.string().nullable().optional(),
+  order: z.number(),
+  profile_path: z.string().nullable(),
+})
+export type TmdbCastMember = z.infer<typeof TmdbCastMemberSchema>
+
+export const TmdbCrewMemberSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  job: z.string(),
+  department: z.string(),
+  profile_path: z.string().nullable(),
+})
+export type TmdbCrewMember = z.infer<typeof TmdbCrewMemberSchema>
+
+export const TmdbCreditsSchema = z.object({
+  id: z.number().optional(),
+  cast: z.array(TmdbCastMemberSchema),
+  crew: z.array(TmdbCrewMemberSchema),
+})
+export type TmdbCredits = z.infer<typeof TmdbCreditsSchema>
+
 const TmdbSearchMovieResultSchema = z.object({
   media_type: z.literal('movie'),
   id: z.number(),
@@ -148,17 +173,30 @@ const TmdbProviderSchema = z.object({
   display_priority: z.number().optional(),
 })
 
-export const TmdbCountryProvidersSchema = z.object({
+// Wire shape — what TMDB's /watch/providers endpoint actually sends per
+// country: link is a TMDB-hosted URL, each provider category is omitted when
+// empty. Used by `tmdbFetch` at the network boundary.
+const TmdbCountryProvidersWireSchema = z.object({
   link: z.url(),
   flatrate: z.array(TmdbProviderSchema).optional(),
   buy: z.array(TmdbProviderSchema).optional(),
   rent: z.array(TmdbProviderSchema).optional(),
 })
+
+// Consumer shape — what `getWatchProviders` returns. Arrays guaranteed
+// non-undefined; link is an empty string when the country has no providers
+// (allows the detail page to render without null-guards).
+export const TmdbCountryProvidersSchema = z.object({
+  link: z.string(),
+  flatrate: z.array(TmdbProviderSchema),
+  rent: z.array(TmdbProviderSchema),
+  buy: z.array(TmdbProviderSchema),
+})
 export type TmdbCountryProviders = z.infer<typeof TmdbCountryProvidersSchema>
 
 export const TmdbWatchProvidersResponseSchema = z.object({
   id: z.number(),
-  results: z.record(z.string(), TmdbCountryProvidersSchema),
+  results: z.record(z.string(), TmdbCountryProvidersWireSchema),
 })
 export type TmdbWatchProvidersResponse = z.infer<
   typeof TmdbWatchProvidersResponseSchema
@@ -260,8 +298,28 @@ export function searchMulti(query: string): Promise<TmdbSearchMultiResponse> {
   return tmdbFetch('/search/multi', { query }, TmdbSearchMultiResponseSchema)
 }
 
-export function getMovie(id: number): Promise<TmdbMovie> {
+export function getMovie(id: number): Promise<TmdbMovie>
+export function getMovie(
+  id: number,
+  options: { withCredits: true },
+): Promise<TmdbMovie & { credits: TmdbCredits }>
+export function getMovie(
+  id: number,
+  options?: { withCredits?: boolean },
+): Promise<TmdbMovie | (TmdbMovie & { credits: TmdbCredits })> {
+  if (options?.withCredits) {
+    const schema = TmdbMovieSchema.extend({ credits: TmdbCreditsSchema })
+    return tmdbFetch(
+      `/movie/${id}`,
+      { append_to_response: 'credits' },
+      schema,
+    )
+  }
   return tmdbFetch(`/movie/${id}`, {}, TmdbMovieSchema)
+}
+
+export function getMovieCredits(id: number): Promise<TmdbCredits> {
+  return tmdbFetch(`/movie/${id}/credits`, {}, TmdbCreditsSchema)
 }
 
 export function getTv(id: number): Promise<TmdbTv> {
@@ -284,11 +342,17 @@ export async function getWatchProviders(
   type: 'movie' | 'tv',
   id: number,
   country: string,
-): Promise<TmdbCountryProviders | null> {
+): Promise<TmdbCountryProviders> {
   const response = await tmdbFetch(
     `/${type}/${id}/watch/providers`,
     {},
     TmdbWatchProvidersResponseSchema,
   )
-  return response.results[country] ?? null
+  const slice = response.results[country]
+  return {
+    link: slice?.link ?? '',
+    flatrate: slice?.flatrate ?? [],
+    rent: slice?.rent ?? [],
+    buy: slice?.buy ?? [],
+  }
 }

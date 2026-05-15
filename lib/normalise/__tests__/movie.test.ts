@@ -269,4 +269,174 @@ describe('lib/normalise/movie', () => {
       },
     )
   })
+
+  describe('normaliseTmdbCredits', () => {
+    const validCredits = {
+      cast: [
+        {
+          id: 287,
+          name: 'Brad Pitt',
+          character: 'Tyler Durden',
+          order: 0,
+          profile_path: '/bp.jpg',
+        },
+        {
+          id: 819,
+          name: 'Edward Norton',
+          character: 'The Narrator',
+          order: 1,
+          profile_path: '/en.jpg',
+        },
+      ],
+      crew: [
+        {
+          id: 7467,
+          name: 'David Fincher',
+          job: 'Director',
+          department: 'Directing',
+          profile_path: '/df.jpg',
+        },
+        {
+          id: 7468,
+          name: 'Jim Uhls',
+          job: 'Screenplay',
+          department: 'Writing',
+          profile_path: null,
+        },
+      ],
+    }
+
+    it('maps cast members to the normalised domain shape with character → role', async () => {
+      const { normaliseTmdbCredits } = await import('@/lib/normalise/movie')
+
+      const result = normaliseTmdbCredits(validCredits)
+
+      expect(result.cast).toEqual([
+        {
+          id: 287,
+          name: 'Brad Pitt',
+          role: 'Tyler Durden',
+          order: 0,
+          profile_path: '/bp.jpg',
+        },
+        {
+          id: 819,
+          name: 'Edward Norton',
+          role: 'The Narrator',
+          order: 1,
+          profile_path: '/en.jpg',
+        },
+      ])
+    })
+
+    it('maps crew members to the normalised domain shape with job → role and array-index order', async () => {
+      const { normaliseTmdbCredits } = await import('@/lib/normalise/movie')
+
+      const result = normaliseTmdbCredits(validCredits)
+
+      expect(result.crew).toEqual([
+        {
+          id: 7467,
+          name: 'David Fincher',
+          role: 'Director',
+          order: 0,
+          profile_path: '/df.jpg',
+        },
+        {
+          id: 7468,
+          name: 'Jim Uhls',
+          role: 'Screenplay',
+          order: 1,
+          profile_path: null,
+        },
+      ])
+    })
+
+    it('falls back to empty string when a cast member has null character (uncredited)', async () => {
+      const { normaliseTmdbCredits } = await import('@/lib/normalise/movie')
+
+      const result = normaliseTmdbCredits({
+        cast: [
+          {
+            id: 1,
+            name: 'Archival Footage',
+            character: null,
+            order: 0,
+            profile_path: null,
+          },
+        ],
+        crew: [],
+      })
+
+      expect(result.cast[0].role).toBe('')
+    })
+
+    it('returns empty arrays when input has empty cast and crew', async () => {
+      const { normaliseTmdbCredits } = await import('@/lib/normalise/movie')
+
+      const result = normaliseTmdbCredits({ cast: [], crew: [] })
+
+      expect(result).toEqual({ cast: [], crew: [] })
+    })
+
+    it('preserves input order (no implicit sort by order field)', async () => {
+      const { normaliseTmdbCredits } = await import('@/lib/normalise/movie')
+
+      const result = normaliseTmdbCredits({
+        cast: [
+          {
+            id: 1,
+            name: 'A',
+            character: 'X',
+            order: 5,
+            profile_path: null,
+          },
+          {
+            id: 2,
+            name: 'B',
+            character: 'Y',
+            order: 1,
+            profile_path: null,
+          },
+          {
+            id: 3,
+            name: 'C',
+            character: 'Z',
+            order: 3,
+            profile_path: null,
+          },
+        ],
+        crew: [],
+      })
+
+      expect(result.cast.map((c) => c.id)).toEqual([1, 2, 3])
+      expect(result.cast.map((c) => c.order)).toEqual([5, 1, 3])
+    })
+
+    it('throws ZodError when a cast id is the wrong type', async () => {
+      const { normaliseTmdbCredits } = await import('@/lib/normalise/movie')
+
+      expect(() =>
+        normaliseTmdbCredits({
+          cast: [
+            {
+              id: 'not-a-number',
+              name: 'X',
+              character: 'Y',
+              order: 0,
+              profile_path: null,
+            },
+          ],
+          crew: [],
+        }),
+      ).toThrow(ZodError)
+    })
+
+    it('throws ZodError when input is null or undefined', async () => {
+      const { normaliseTmdbCredits } = await import('@/lib/normalise/movie')
+
+      expect(() => normaliseTmdbCredits(null)).toThrow(ZodError)
+      expect(() => normaliseTmdbCredits(undefined)).toThrow(ZodError)
+    })
+  })
 })

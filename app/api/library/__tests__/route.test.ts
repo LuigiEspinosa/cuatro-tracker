@@ -106,9 +106,11 @@ describe('GET /api/library', () => {
     expect(res.status).toBe(400)
   })
 
-  it('caps limit at 100 (rejects beyond)', async () => {
+  it('caps limit at 200 (rejects beyond)', async () => {
+    // Story 6.3 raised the cap from 100 → 200 so the movies grid can request
+    // a user's full library in one shot. 201 still rejects.
     const { GET } = await import('@/app/api/library/route')
-    const res = await GET(makeRequest('/api/library?limit=200'))
+    const res = await GET(makeRequest('/api/library?limit=201'))
     expect(res.status).toBe(400)
   })
 
