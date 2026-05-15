@@ -44,50 +44,6 @@ const TmdbGenreSchema = z.object({
   name: z.string(),
 })
 
-export const TmdbMovieSchema = z.object({
-  id: z.number(),
-  title: z.string(),
-  original_title: z.string().optional(),
-  overview: z.string().nullable().optional(),
-  release_date: z.string(),
-  poster_path: z.string().nullable(),
-  backdrop_path: z.string().nullable(),
-  vote_average: z.number(),
-  popularity: z.number(),
-  genres: z.array(TmdbGenreSchema),
-  status: z.string(),
-  runtime: z.number().nullable().optional(),
-})
-export type TmdbMovie = z.infer<typeof TmdbMovieSchema>
-
-export const TmdbTvSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  original_name: z.string().optional(),
-  overview: z.string().nullable().optional(),
-  first_air_date: z.string(),
-  poster_path: z.string().nullable(),
-  backdrop_path: z.string().nullable(),
-  vote_average: z.number(),
-  popularity: z.number(),
-  genres: z.array(TmdbGenreSchema),
-  status: z.string(),
-})
-export type TmdbTv = z.infer<typeof TmdbTvSchema>
-
-export const TmdbEpisodeSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  overview: z.string().nullable().optional(),
-  air_date: z.string().nullable().optional(),
-  episode_number: z.number(),
-  season_number: z.number(),
-  still_path: z.string().nullable().optional(),
-  vote_average: z.number(),
-  runtime: z.number().nullable().optional(),
-})
-export type TmdbEpisode = z.infer<typeof TmdbEpisodeSchema>
-
 export const TmdbCastMemberSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -120,6 +76,109 @@ export const TmdbExternalIdsSchema = z.object({
   twitter_id: z.string().nullable().optional(),
 })
 export type TmdbExternalIds = z.infer<typeof TmdbExternalIdsSchema>
+
+export const TmdbMovieSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  original_title: z.string().optional(),
+  overview: z.string().nullable().optional(),
+  release_date: z.string(),
+  poster_path: z.string().nullable(),
+  backdrop_path: z.string().nullable(),
+  vote_average: z.number(),
+  popularity: z.number(),
+  genres: z.array(TmdbGenreSchema),
+  status: z.string(),
+  runtime: z.number().nullable().optional(),
+})
+export type TmdbMovie = z.infer<typeof TmdbMovieSchema>
+
+export const TmdbEpisodeSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  overview: z.string().nullable().optional(),
+  air_date: z.string().nullable().optional(),
+  episode_number: z.number(),
+  season_number: z.number(),
+  still_path: z.string().nullable().optional(),
+  vote_average: z.number(),
+  runtime: z.number().nullable().optional(),
+  production_code: z.string().nullable().optional(),
+  episode_type: z.string().optional(),
+  crew: z.array(TmdbCrewMemberSchema).optional(),
+  guest_stars: z.array(TmdbCastMemberSchema).optional(),
+})
+export type TmdbEpisode = z.infer<typeof TmdbEpisodeSchema>
+
+// Lightweight shape TMDB embeds in the `seasons` array on the show payload.
+// The full-fat per-season fetch (with `episodes`) is `TmdbSeasonSchema` below.
+export const TmdbSeasonSummarySchema = z.object({
+  id: z.number(),
+  season_number: z.number(),
+  name: z.string(),
+  overview: z.string().nullable().optional(),
+  poster_path: z.string().nullable().optional(),
+  air_date: z.string().nullable().optional(),
+  episode_count: z.number().optional(),
+  vote_average: z.number().optional(),
+})
+export type TmdbSeasonSummary = z.infer<typeof TmdbSeasonSummarySchema>
+
+// Sparse shape TMDB returns for `last_episode_to_air` and `next_episode_to_air`
+// on the show payload. Kept separate from `TmdbEpisodeSchema` so the full-episode
+// invariants (e.g. `vote_average` semantics on aired-and-rated episodes) stay
+// tight without leaking into the forward-looking summary surface.
+export const TmdbEpisodeSummarySchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  overview: z.string().nullable().optional(),
+  air_date: z.string().nullable().optional(),
+  episode_number: z.number(),
+  season_number: z.number(),
+  runtime: z.number().nullable().optional(),
+  still_path: z.string().nullable().optional(),
+  vote_average: z.number().optional(),
+  production_code: z.string().nullable().optional(),
+  episode_type: z.string().optional(),
+})
+export type TmdbEpisodeSummary = z.infer<typeof TmdbEpisodeSummarySchema>
+
+export const TmdbTvSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  original_name: z.string().optional(),
+  overview: z.string().nullable().optional(),
+  first_air_date: z.string(),
+  last_air_date: z.string().nullable().optional(),
+  poster_path: z.string().nullable(),
+  backdrop_path: z.string().nullable(),
+  vote_average: z.number(),
+  popularity: z.number(),
+  genres: z.array(TmdbGenreSchema),
+  status: z.string(),
+  tagline: z.string().nullable().optional(),
+  in_production: z.boolean().optional(),
+  number_of_seasons: z.number().optional(),
+  number_of_episodes: z.number().optional(),
+  episode_run_time: z.array(z.number()).optional(),
+  seasons: z.array(TmdbSeasonSummarySchema).optional(),
+  last_episode_to_air: TmdbEpisodeSummarySchema.nullable().optional(),
+  next_episode_to_air: TmdbEpisodeSummarySchema.nullable().optional(),
+})
+export type TmdbTv = z.infer<typeof TmdbTvSchema>
+
+export const TmdbSeasonSchema = z.object({
+  _id: z.string().optional(),
+  id: z.number(),
+  season_number: z.number(),
+  name: z.string(),
+  overview: z.string().nullable().optional(),
+  poster_path: z.string().nullable().optional(),
+  air_date: z.string().nullable().optional(),
+  vote_average: z.number().optional(),
+  episodes: z.array(TmdbEpisodeSchema),
+})
+export type TmdbSeason = z.infer<typeof TmdbSeasonSchema>
 
 const TmdbSearchMovieResultSchema = z.object({
   media_type: z.literal('movie'),
@@ -341,18 +400,51 @@ export function getMovieCredits(id: number): Promise<TmdbCredits> {
   return tmdbFetch(`/movie/${id}/credits`, {}, TmdbCreditsSchema)
 }
 
-export function getTv(id: number): Promise<TmdbTv> {
-  return tmdbFetch(`/tv/${id}`, {}, TmdbTvSchema)
+export function getTv(id: number): Promise<
+  TmdbTv & {
+    credits: TmdbCredits
+    external_ids?: TmdbExternalIds
+    'watch/providers'?: TmdbWatchProvidersResponse
+  }
+> {
+  // Always augment with credits + external_ids + watch/providers so the
+  // /tv/[id] detail page (Story 7.5) gets the full hierarchy in one round-trip.
+  // external_ids and watch/providers use .optional().catch(undefined) so both an
+  // absent block AND a malformed appended block degrade gracefully (no IMDb
+  // button, no providers row) instead of failing the detail page.
+  const schema = TmdbTvSchema.extend({
+    credits: TmdbCreditsSchema,
+    external_ids: TmdbExternalIdsSchema.optional().catch(undefined),
+    'watch/providers': TmdbWatchProvidersResponseSchema.optional().catch(
+      undefined,
+    ),
+  })
+  return tmdbFetch(
+    `/tv/${id}`,
+    { append_to_response: 'credits,external_ids,watch/providers' },
+    schema,
+  )
 }
 
-export function getEpisode(
+export function getTvSeason(
   showId: number,
-  season: number,
-  episode: number,
+  seasonNumber: number,
+): Promise<TmdbSeason> {
+  return tmdbFetch(
+    `/tv/${showId}/season/${seasonNumber}`,
+    {},
+    TmdbSeasonSchema,
+  )
+}
+
+export function getTvEpisode(
+  showId: number,
+  seasonNumber: number,
+  episodeNumber: number,
 ): Promise<TmdbEpisode> {
   return tmdbFetch(
-    `/tv/${showId}/season/${season}/episode/${episode}`,
-    {},
+    `/tv/${showId}/season/${seasonNumber}/episode/${episodeNumber}`,
+    { append_to_response: 'credits' },
     TmdbEpisodeSchema,
   )
 }
