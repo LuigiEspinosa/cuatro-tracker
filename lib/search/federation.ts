@@ -101,7 +101,14 @@ export function dedupResults(
 ): UnifiedSearchResult[] {
   const byKey = new Map<string, UnifiedSearchResult>()
   for (const result of results) {
-    const key = `${normaliseTitle(result.title)}::${result.release_year ?? 0}`
+    // Include `type` in the dedup key so a movie + TV show with the same
+    // normalised title and release year (e.g. "The Office" 2001) stay as
+    // separate results: they're distinct items that route to different
+    // MediaType enum values on add. Trade-off worth flagging when Epic 8
+    // lands: a TMDB `tv` row + an AniList `anime` row for the same
+    // canonical work will NOT merge under this key. Revisit when the
+    // multi-source confidence ladder needs cross-type equivalence.
+    const key = `${normaliseTitle(result.title)}::${result.release_year ?? 0}::${result.type}`
     const existing = byKey.get(key)
     if (!existing) {
       byKey.set(key, { ...result })

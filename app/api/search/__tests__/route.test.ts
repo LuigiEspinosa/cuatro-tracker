@@ -173,6 +173,50 @@ describe('GET /api/search', () => {
       })
     })
 
+    it('returns movie + TV with same title and year as separate results (AC-3 + AC-4)', async () => {
+      tmdbMock.searchMulti.mockResolvedValue({
+        page: 1,
+        results: [
+          {
+            media_type: 'movie',
+            id: 9999,
+            title: 'The Office',
+            release_date: '2001-08-24',
+            poster_path: '/movie.jpg',
+            vote_average: 6.0,
+            popularity: 5.0,
+          },
+          {
+            media_type: 'tv',
+            id: 2606,
+            name: 'The Office',
+            first_air_date: '2001-08-24',
+            poster_path: '/tv.jpg',
+            vote_average: 8.5,
+          },
+        ],
+        total_pages: 1,
+        total_results: 2,
+      })
+      const { GET } = await import('@/app/api/search/route')
+
+      const res = await GET(makeRequest('/api/search?q=the%20office'))
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.results).toHaveLength(2)
+      const types = body.results.map((r: { type: string }) => r.type).sort()
+      expect(types).toEqual(['movie', 'tv'])
+      const movieRow = body.results.find(
+        (r: { type: string }) => r.type === 'movie',
+      )
+      const tvRow = body.results.find(
+        (r: { type: string }) => r.type === 'tv',
+      )
+      expect(movieRow.tmdb_id).toBe(9999)
+      expect(tvRow.tmdb_id).toBe(2606)
+    })
+
     it('sets Cache-Control: no-store on success', async () => {
       tmdbMock.searchMulti.mockResolvedValue({
         page: 1,
