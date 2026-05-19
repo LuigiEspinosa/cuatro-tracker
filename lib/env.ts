@@ -22,6 +22,9 @@ const EnvSchema = z.object({
   // Defaults to CO (Colombia); future Settings page (Phase 11+) will let
   // Cuatro override at runtime.
   TMDB_WATCH_PROVIDER_COUNTRY: z.string().length(2).default('CO'),
+  // AniList public GraphQL has no API key but asks callers to identify
+  // themselves. Override per-deploy if you need a contact-friendly UA.
+  ANILIST_USER_AGENT: z.string().default('cuatro-tracker/1.0'),
   IGDB_CLIENT_ID: z.string().min(1),
   IGDB_CLIENT_SECRET: z.string().min(1),
   STEAM_API_KEY: z.string().min(1),
