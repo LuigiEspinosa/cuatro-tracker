@@ -86,6 +86,26 @@ export const AnilistStudiosSchema = z.object({
   nodes: z.array(AnilistStudioSchema),
 })
 
+export const AnilistStaffNameSchema = z.object({
+  full: z.string(),
+  native: z.string().nullable().optional(),
+})
+
+export const AnilistStaffNodeSchema = z.object({
+  id: z.number(),
+  name: AnilistStaffNameSchema,
+})
+
+export const AnilistStaffEdgeSchema = z.object({
+  role: z.string(),
+  node: AnilistStaffNodeSchema,
+})
+export type AnilistStaffEdge = z.infer<typeof AnilistStaffEdgeSchema>
+
+export const AnilistStaffSchema = z.object({
+  edges: z.array(AnilistStaffEdgeSchema),
+})
+
 export const AnilistRelationTypeSchema = z.enum([
   'ADAPTATION',
   'PREQUEL',
@@ -144,6 +164,7 @@ export const AnilistMediaSchema = z.object({
   coverImage: AnilistCoverImageSchema.optional(),
   bannerImage: z.string().nullable().optional(),
   studios: AnilistStudiosSchema.optional(),
+  staff: AnilistStaffSchema.optional(),
   source: z.string().nullable().optional(),
   isAdult: z.boolean().optional(),
   relations: AnilistRelationsSchema.optional(),
@@ -368,6 +389,7 @@ const MEDIA_FIELDS = `
   coverImage { extraLarge large medium color }
   bannerImage
   studios { nodes { id name isAnimationStudio } }
+  staff(perPage: 8) { edges { role node { id name { full native } } } }
   source
   isAdult
 `
