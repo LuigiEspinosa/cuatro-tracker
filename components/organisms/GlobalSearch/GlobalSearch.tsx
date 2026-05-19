@@ -138,6 +138,24 @@ function buildLibraryKeySet(items: readonly LibraryItem[]): Set<string> {
   return set
 }
 
+/* Map "<source>:<sourceId>" → MediaItem.id for the same library snapshot.
+ * Detail-page routes are keyed by MediaItem.id (the Prisma row), NOT the
+ * external source id. handleOpenDetail uses this to navigate correctly for
+ * in-library results; absence from the map means "not in library, no detail
+ * page to open". */
+function buildLibraryMediaItemMap(
+  items: readonly LibraryItem[],
+): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const it of items) {
+    if (it.tmdbId !== null) map.set(`tmdb:${it.tmdbId}`, it.mediaItemId)
+    if (it.anilistId !== null) map.set(`anilist:${it.anilistId}`, it.mediaItemId)
+    if (it.igdbId !== null) map.set(`igdb:${it.igdbId}`, it.mediaItemId)
+    if (it.steamId !== null) map.set(`steam:${it.steamId}`, it.mediaItemId)
+  }
+  return map
+}
+
 async function addToLibrary(body: AddBody): Promise<unknown> {
   const res = await fetch('/api/media', {
     method: 'POST',
@@ -182,6 +200,11 @@ export function GlobalSearch() {
 
   const libraryKeys = useMemo(
     () => buildLibraryKeySet(libraryQuery.data?.items ?? []),
+    [libraryQuery.data?.items],
+  )
+
+  const libraryMediaItemMap = useMemo(
+    () => buildLibraryMediaItemMap(libraryQuery.data?.items ?? []),
     [libraryQuery.data?.items],
   )
 
@@ -287,10 +310,18 @@ export function GlobalSearch() {
     (result: UnifiedSearchResult) => {
       const sourceId = getSourceId(result)
       if (sourceId === undefined) return
-      const path = `/${COVER_PATH_PREFIX[result.type]}/${sourceId}`
+      // Detail pages route by MediaItem.id (Prisma row), not by the external
+      // source id. Resolve via the in-memory library map; for results that
+      // aren't in the library yet there's no detail page to open, so the
+      // action is a no-op (the row's CRTPixelButton handles the explicit ADD).
+      const mediaItemId = libraryMediaItemMap.get(
+        `${result.primary_source}:${sourceId}`,
+      )
+      if (mediaItemId === undefined) return
+      const path = `/${COVER_PATH_PREFIX[result.type]}/${mediaItemId}`
       router.push(path)
     },
-    [router],
+    [router, libraryMediaItemMap],
   )
 
   const handleRetry = useCallback(() => {
