@@ -310,16 +310,28 @@ export function GlobalSearch() {
     (result: UnifiedSearchResult) => {
       const sourceId = getSourceId(result)
       if (sourceId === undefined) return
-      // Detail pages route by MediaItem.id (Prisma row), not by the external
-      // source id. Resolve via the in-memory library map; for results that
-      // aren't in the library yet there's no detail page to open, so the
-      // action is a no-op (the row's CRTPixelButton handles the explicit ADD).
+      // In-library: navigate to the canonical detail page (routes by
+      // MediaItem.id). Not-in-library: navigate to a preview page that
+      // fetches the source data on-the-fly + offers an ADD button. The
+      // preview accepts only TMDB + AniList for now (IGDB / Steam adapters
+      // exist but lack a getById fetch path; those become no-ops).
       const mediaItemId = libraryMediaItemMap.get(
         `${result.primary_source}:${sourceId}`,
       )
-      if (mediaItemId === undefined) return
-      const path = `/${COVER_PATH_PREFIX[result.type]}/${mediaItemId}`
-      router.push(path)
+      if (mediaItemId !== undefined) {
+        router.push(`/${COVER_PATH_PREFIX[result.type]}/${mediaItemId}`)
+        return
+      }
+      if (
+        (result.primary_source === 'tmdb' &&
+          (result.type === 'movie' || result.type === 'tv')) ||
+        (result.primary_source === 'anilist' &&
+          (result.type === 'anime' || result.type === 'manga'))
+      ) {
+        router.push(
+          `/preview/${result.primary_source}/${result.type}/${sourceId}`,
+        )
+      }
     },
     [router, libraryMediaItemMap],
   )

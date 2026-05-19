@@ -3090,3 +3090,163 @@ body {
   outline: 2px solid var(--phosphor-green, var(--rb-green));
   outline-offset: -2px;
 }
+
+/* =========================================================================
+ * /preview/[source]/[type]/[id] — Story 8.5 follow-up
+ *
+ * Source-driven preview page for search results that aren't in the user's
+ * library yet. Fetches from TMDB / AniList on-the-fly and renders a minimal
+ * detail-shaped layout with an ADD TO LIBRARY button that promotes the
+ * record into the canonical /<medium>/<MediaItem.id> detail page on success.
+ * ========================================================================= */
+.preview-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 24px 96px;
+}
+
+.preview-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--phosphor-cream-dim);
+  text-decoration: none;
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  align-self: flex-start;
+}
+.preview-back-link:hover,
+.preview-back-link:focus-visible {
+  color: var(--phosphor-cream);
+  outline: none;
+}
+
+.preview-hero {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: 32px;
+  align-items: flex-start;
+}
+@media (max-width: 768px) {
+  .preview-hero { grid-template-columns: 1fr; gap: 24px; }
+}
+
+.preview-hero-cover {
+  width: 100%;
+  max-width: 320px;
+  justify-self: center;
+  border: 1px solid var(--phosphor-cream-ghost);
+  background: var(--ground-card, #221A30);
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preview-hero-poster {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.preview-hero-poster-fallback {
+  font-family: var(--font-display), serif;
+  font-size: 64px;
+  color: var(--phosphor-cream-dim);
+}
+
+.preview-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.preview-hero-medium {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+}
+.preview-hero-title {
+  font-family: var(--font-display), 'PP Editorial New', 'Cormorant Garamond', serif;
+  font-size: clamp(32px, 4vw, 56px);
+  line-height: 1.05;
+  color: var(--phosphor-cream);
+  margin: 0;
+  font-weight: 400;
+}
+.preview-hero-original-title {
+  font-family: var(--font-body), 'EB Garamond', serif;
+  font-style: italic;
+  font-size: 16px;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+}
+.preview-hero-meta {
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+}
+.preview-hero-source {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--phosphor-cream-ghost);
+  margin: 0;
+}
+
+.preview-add-button {
+  align-self: flex-start;
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  margin-top: 8px;
+  background: transparent;
+  border: 1px solid var(--phosphor-cream);
+  color: var(--phosphor-cream);
+  cursor: pointer;
+}
+.preview-add-button:hover:not(:disabled),
+.preview-add-button:focus-visible:not(:disabled) {
+  border-color: var(--phosphor-green, var(--rb-green));
+  color: var(--phosphor-green, var(--rb-green));
+  outline: none;
+}
+.preview-add-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.preview-synopsis {
+  font-family: var(--font-body), 'EB Garamond', serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--phosphor-cream);
+  column-count: 2;
+  column-gap: 48px;
+  column-rule: 1px solid var(--phosphor-cream-ghost);
+}
+@media (max-width: 1024px) {
+  .preview-synopsis { column-count: 1; }
+}
+.preview-synopsis p { margin: 0 0 16px; break-inside: avoid; }
+
+.preview-not-found {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  padding: 96px 24px;
+  text-align: center;
+}

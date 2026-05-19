@@ -480,9 +480,10 @@ describe('GlobalSearch', () => {
     expect(pushMock).toHaveBeenCalledWith('/movies/m-fightclub')
   })
 
-  it('Enter on a focused NOT-in-library row does not navigate (no detail page yet)', async () => {
-    // For results that aren't in the library, there's no MediaItem.id to route
-    // to. handleOpenDetail returns early; the add button is the explicit path.
+  it('Enter on a focused NOT-in-library row navigates to /preview/<source>/<type>/<sourceId>', async () => {
+    // For results that aren't in the library, the canonical detail page
+    // doesn't exist (it requires a MediaItem.id). The preview route fetches
+    // the source data on-the-fly and offers an ADD button.
     vi.stubGlobal(
       'fetch',
       routedFetchMock({
@@ -505,6 +506,7 @@ describe('GlobalSearch', () => {
     fireEvent.keyDown(root, { key: 'ArrowDown' })
     fireEvent.keyDown(root, { key: 'Enter' })
 
-    expect(pushMock).not.toHaveBeenCalled()
+    // fightResults() puts Fight Club first: source=tmdb, type=movie, tmdb_id=550.
+    expect(pushMock).toHaveBeenCalledWith('/preview/tmdb/movie/550')
   })
 })
