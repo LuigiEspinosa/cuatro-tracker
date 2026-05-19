@@ -125,10 +125,18 @@ describe('LoginPage submit flow', () => {
     const email = screen.getByLabelText('EMAIL') as HTMLInputElement
     fireEvent.submit(email.closest('form')!)
 
+    // Focus management lives in LoginCRT's `useEffect` that runs when
+    // `error` is set AND `phase === 'idle'`. The path to `'idle'` after a
+    // failed submit goes through `'error-truncating'` -> BootSequence
+    // truncation -> `onBootTruncate` -> setError + setPhase('idle') ->
+    // effect fires -> passwordRef.current.focus(). Multiple state
+    // transitions, so both assertions must live inside waitFor; otherwise
+    // a slower CI runner can hit the focus assertion before the effect
+    // runs (caught by CI run 26116188775 on 2026-05-19).
     await waitFor(() => {
       expect(screen.getByText('> ACCESS DENIED')).toBeInTheDocument()
+      expect(document.activeElement).toBe(screen.getByLabelText('PASSWORD'))
     })
-    expect(document.activeElement).toBe(screen.getByLabelText('PASSWORD'))
   })
 
   it('on error: form values are retained (email defaultValue + typed password)', async () => {
