@@ -1,6 +1,11 @@
 import { searchMulti, type TmdbSearchMultiResult } from '@/lib/api/tmdb'
+import {
+  searchAnime,
+  searchManga,
+  type AnilistMedia,
+} from '@/lib/api/anilist'
 
-export type SearchType = 'movie' | 'tv' | 'anime' | 'game'
+export type SearchType = 'movie' | 'tv' | 'anime' | 'manga' | 'game'
 
 export type SearchSource = 'tmdb' | 'anilist' | 'igdb' | 'steam'
 
@@ -83,7 +88,63 @@ const tmdbAdapter: AdapterCapability = {
   },
 }
 
-export const ADAPTERS: readonly AdapterCapability[] = [tmdbAdapter]
+// AniList covers serve as full https URLs from s4.anilist.co; the unified
+// poster_path field stores them verbatim. Story 8.4's render helper will
+// branch on startsWith('http') to skip TMDB-style URL construction.
+function preferredAnilistTitle(t: AnilistMedia['title']): string {
+  return t.userPreferred ?? t.romaji ?? t.english ?? t.native ?? ''
+}
+
+function pickAnilistCover(c: AnilistMedia['coverImage']): string | null {
+  return c?.extraLarge ?? c?.large ?? c?.medium ?? null
+}
+
+function adaptAnilistResult(
+  raw: AnilistMedia,
+  type: 'anime' | 'manga',
+): UnifiedSearchResult {
+  return {
+    type,
+    title: preferredAnilistTitle(raw.title),
+    release_year: raw.startDate.year ?? undefined,
+    poster_path: pickAnilistCover(raw.coverImage),
+    overview: raw.description ?? null,
+    primary_source: 'anilist',
+    anilist_id: raw.id,
+    confidence: 1.0,
+  }
+}
+
+const anilistAdapter: AdapterCapability = {
+  source: 'anilist',
+  supportedTypes: ['anime', 'manga'] as const,
+  async search(query, type) {
+    // type === undefined hits both anime + manga (federated search with no
+    // filter); explicit anime / manga hits one. The adapter-level limiter in
+    // lib/api/anilist enforces the 90 req/min ceiling across both calls.
+    if (type === 'anime') {
+      const anime = await searchAnime(query)
+      return anime.map((m) => adaptAnilistResult(m, 'anime'))
+    }
+    if (type === 'manga') {
+      const manga = await searchManga(query)
+      return manga.map((m) => adaptAnilistResult(m, 'manga'))
+    }
+    const [anime, manga] = await Promise.all([
+      searchAnime(query),
+      searchManga(query),
+    ])
+    return [
+      ...anime.map((m) => adaptAnilistResult(m, 'anime')),
+      ...manga.map((m) => adaptAnilistResult(m, 'manga')),
+    ]
+  },
+}
+
+export const ADAPTERS: readonly AdapterCapability[] = [
+  tmdbAdapter,
+  anilistAdapter,
+]
 
 const CONFIDENCE_LADDER: Record<number, number> = {
   1: 1.0,

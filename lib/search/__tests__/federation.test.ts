@@ -1,6 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import type { UnifiedSearchResult } from '@/lib/search/federation'
 
+const anilistMock = vi.hoisted(() => ({
+  searchAnime: vi.fn(),
+  searchManga: vi.fn(),
+}))
+
+vi.mock('@/lib/api/anilist', () => ({
+  searchAnime: anilistMock.searchAnime,
+  searchManga: anilistMock.searchManga,
+}))
+
+const tmdbMock = vi.hoisted(() => ({
+  searchMulti: vi.fn(),
+}))
+
+vi.mock('@/lib/api/tmdb', () => ({
+  searchMulti: tmdbMock.searchMulti,
+}))
+
 const validEnv: Record<string, string> = {
   NEXTAUTH_SECRET: 'a'.repeat(32),
   NEXTAUTH_URL: 'http://localhost:3000',
@@ -22,7 +40,12 @@ const validEnv: Record<string, string> = {
 
 beforeEach(() => {
   vi.resetModules()
+  vi.resetAllMocks()
   for (const [k, v] of Object.entries(validEnv)) vi.stubEnv(k, v)
+  // Default both adapter calls to empty so dedup/title-normalisation tests
+  // that don't care about adapter wiring keep working untouched.
+  anilistMock.searchAnime.mockResolvedValue([])
+  anilistMock.searchManga.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -233,5 +256,104 @@ describe('lib/search/federation: dedupResults', () => {
     expect(tvRow?.tmdb_id).toBe(2606)
     expect(movieRow?.confidence).toBe(1.0)
     expect(tvRow?.confidence).toBe(1.0)
+  })
+})
+
+
+describe('lib/search/federation: anilistAdapter (Story 8.3)', () => {
+  function anilistMedia(
+    id: number,
+    type: 'ANIME' | 'MANGA',
+    overrides: Partial<{ title: string; year: number | null }> = {},
+  ) {
+    return {
+      id,
+      type,
+      title: {
+        romaji: overrides.title ?? `Title ${id}`,
+        english: null,
+        native: null,
+        userPreferred: overrides.title ?? `Title ${id}`,
+      },
+      startDate: {
+        year: overrides.year === undefined ? 2020 : overrides.year,
+        month: null,
+        day: null,
+      },
+      description: null,
+      coverImage: { large: `https://cdn.example/${id}.jpg` },
+    }
+  }
+
+  it('is registered with source: anilist and supports anime + manga', async () => {
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const anilist = ADAPTERS.find((a) => a.source === 'anilist')
+    expect(anilist).toBeDefined()
+    expect(anilist?.supportedTypes).toEqual(['anime', 'manga'])
+  })
+
+  it('type=anime calls searchAnime only, returns unified results with anilist_id and type=anime', async () => {
+    anilistMock.searchAnime.mockResolvedValue([
+      anilistMedia(170942, 'ANIME', { title: 'Sousou no Frieren', year: 2023 }),
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const anilist = ADAPTERS.find((a) => a.source === 'anilist')!
+
+    const results = await anilist.search('frieren', 'anime')
+
+    expect(anilistMock.searchAnime).toHaveBeenCalledWith('frieren')
+    expect(anilistMock.searchManga).not.toHaveBeenCalled()
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({
+      type: 'anime',
+      title: 'Sousou no Frieren',
+      anilist_id: 170942,
+      primary_source: 'anilist',
+      release_year: 2023,
+      confidence: 1.0,
+    })
+  })
+
+  it('type=manga calls searchManga only, returns type=manga results', async () => {
+    anilistMock.searchManga.mockResolvedValue([
+      anilistMedia(30002, 'MANGA', { title: 'Berserk', year: 1989 }),
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const anilist = ADAPTERS.find((a) => a.source === 'anilist')!
+
+    const results = await anilist.search('berserk', 'manga')
+
+    expect(anilistMock.searchManga).toHaveBeenCalledWith('berserk')
+    expect(anilistMock.searchAnime).not.toHaveBeenCalled()
+    expect(results[0]).toMatchObject({
+      type: 'manga',
+      title: 'Berserk',
+      anilist_id: 30002,
+    })
+  })
+
+  it('type=undefined calls BOTH searchAnime + searchManga in parallel', async () => {
+    anilistMock.searchAnime.mockResolvedValue([anilistMedia(1, 'ANIME')])
+    anilistMock.searchManga.mockResolvedValue([anilistMedia(2, 'MANGA')])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const anilist = ADAPTERS.find((a) => a.source === 'anilist')!
+
+    const results = await anilist.search('whatever', undefined)
+
+    expect(anilistMock.searchAnime).toHaveBeenCalledTimes(1)
+    expect(anilistMock.searchManga).toHaveBeenCalledTimes(1)
+    expect(results.map((r) => r.type).sort()).toEqual(['anime', 'manga'])
+  })
+
+  it('release_year is undefined when AniList reports startDate.year null', async () => {
+    anilistMock.searchAnime.mockResolvedValue([
+      anilistMedia(999, 'ANIME', { year: null }),
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const anilist = ADAPTERS.find((a) => a.source === 'anilist')!
+
+    const results = await anilist.search('unscheduled', 'anime')
+
+    expect(results[0]?.release_year).toBeUndefined()
   })
 })
