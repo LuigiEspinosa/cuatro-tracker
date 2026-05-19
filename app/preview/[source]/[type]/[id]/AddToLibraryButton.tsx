@@ -49,7 +49,10 @@ export function AddToLibraryButton({
     mutationFn: addToLibrary,
     onSuccess: (data) => {
       toast.success('ADDED TO LIBRARY')
-      router.push(`/${medium}/${data.mediaItem.id}`)
+      const hasDetailPage = medium !== 'manga'
+      router.push(
+        hasDetailPage ? `/${medium}/${data.mediaItem.id}` : `/${medium}`,
+      )
     },
     onError: (err) => {
       const reason =

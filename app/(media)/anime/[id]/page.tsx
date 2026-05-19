@@ -21,6 +21,7 @@ import { SectionBand } from '@/components/organisms/SectionBand/SectionBand'
 import { PhosphorBar } from '@/components/atoms/PhosphorBar'
 import { RelationsList } from '@/components/organisms/RelationsList'
 import { VoiceCastList } from '@/components/organisms/VoiceCastList'
+import { stripAnilistHtml } from '@/lib/normalise/anilist-html'
 import type { MetadataItem } from '@/components/molecules/MetadataRow'
 import { AnimeDetailControls } from './AnimeDetailControls'
 
@@ -39,11 +40,7 @@ function deriveYear(d: Date): number | null {
 // strip remaining tags so the synopsis renders as plain text. Applies at
 // render time so legacy MediaItem rows that were normalised before this fix
 // still display cleanly without a backfill.
-function stripAnilistHtml(text: string): string {
-  return text
-    .replace(/<br\s*\/?\s*>/gi, '\n\n')
-    .replace(/<[^>]*>/g, '')
-}
+
 
 export async function generateMetadata({
   params,

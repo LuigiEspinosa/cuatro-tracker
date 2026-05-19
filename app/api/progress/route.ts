@@ -155,9 +155,9 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     progress !== undefined
   ) {
     const existingProgress = entry.progress
-    // Client signals direction via the sent value: progress >= existing is
-    // increment (with max() guarding against stale races); progress < existing
-    // is a decrement and we trust the client. AC-5.1.
+    // Client signals direction via the sent value: progress >= existing is an
+    // increment (max() coalesces to the larger value); progress < existing is a
+    // decrement and we trust the client. AC-5.1.
     const effectiveProgress =
       progress >= existingProgress
         ? Math.max(existingProgress, progress)

@@ -7,28 +7,8 @@ import { EmptyStateCard } from '@/components/molecules/EmptyStateCard'
 import { FramedCover } from '@/components/molecules/FramedCover'
 import type { Medium } from '@/components/molecules/FramedCover/media-registry'
 import { getImageUrl } from '@/lib/api/tmdb-images'
+import { detailRouteFor } from '@/lib/detail-route'
 import type { LibraryItem } from '@/lib/types/library'
-
-function detailRouteFor(item: LibraryItem): string | null {
-  // TV episodes have no per-episode detail page; they're traversed via the
-  // parent show's /tv/[id] page. The dashboard rarely shows episode rows,
-  // but when it does we render the cell without a navigation target.
-  switch (item.mediaType) {
-    case MediaType.MOVIE:
-      return `/movies/${item.mediaItemId}`
-    case MediaType.TV_SHOW:
-      return `/tv/${item.mediaItemId}`
-    case MediaType.ANIME:
-      return `/anime/${item.mediaItemId}`
-    case MediaType.MANGA:
-      return `/manga/${item.mediaItemId}`
-    case MediaType.GAME:
-      return `/games/${item.mediaItemId}`
-    case MediaType.TV_EPISODE:
-    default:
-      return null
-  }
-}
 
 export type HorizontalCoverScrollerProps = {
   items: LibraryItem[]

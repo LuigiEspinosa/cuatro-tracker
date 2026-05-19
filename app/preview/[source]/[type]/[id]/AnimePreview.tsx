@@ -16,13 +16,8 @@ import { SectionBand } from '@/components/organisms/SectionBand/SectionBand'
 import { RelationsList } from '@/components/organisms/RelationsList'
 import { VoiceCastList } from '@/components/organisms/VoiceCastList'
 import type { MetadataItem } from '@/components/molecules/MetadataRow'
+import { stripAnilistHtml } from '@/lib/normalise/anilist-html'
 import { AddToLibraryButton } from './AddToLibraryButton'
-
-function stripAnilistHtml(text: string): string {
-  return text
-    .replace(/<br\s*\/?\s*>/gi, '\n\n')
-    .replace(/<[^>]*>/g, '')
-}
 
 function preferredTitle(t: AnilistMedia['title']): string {
   return (

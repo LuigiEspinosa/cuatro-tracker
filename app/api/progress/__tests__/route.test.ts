@@ -430,6 +430,21 @@ describe('PUT /api/progress (Story 8.5 anime auto-advance)', () => {
     expect(call.data.status).toBeUndefined()
   })
 
+  it('decrement to 0 preserves WATCHING status (no revert to PLAN_TO_WATCH)', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      animeEntry({ progress: 1, status: WatchStatus.WATCHING }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(
+      animeEntry({ progress: 0, status: WatchStatus.WATCHING }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(putRequest({ mediaItemId: 'anime-1', progress: 0 }))
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(0)
+    expect(call.data.status).toBeUndefined()
+  })
+
   it('no-op on same progress: writes progress but no status flip when already WATCHING mid-show', async () => {
     dbMock.userEntry.findUnique.mockResolvedValue(
       animeEntry({ progress: 5, status: WatchStatus.WATCHING }),

@@ -9,6 +9,7 @@ import { FramedCover } from '@/components/molecules/FramedCover'
 import type { Medium } from '@/components/molecules/FramedCover/media-registry'
 import { useChannelFlipNavigate } from '@/components/molecules/ChannelFlipTransition'
 import { getImageUrl } from '@/lib/api/tmdb-images'
+import { detailRouteFor } from '@/lib/detail-route'
 import type { LibraryItem } from '@/lib/types/library'
 
 export type CurrentlyActiveCarouselProps = {
@@ -36,23 +37,6 @@ const MEDIA_TYPE_LABEL: Record<MediaType, string> = {
   GAME: 'GAME',
 }
 
-function detailRouteFor(mediaType: MediaType, mediaItemId: string): string | null {
-  switch (mediaType) {
-    case MediaType.MOVIE:
-      return `/movies/${mediaItemId}`
-    case MediaType.TV_SHOW:
-      return `/tv/${mediaItemId}`
-    case MediaType.ANIME:
-      return `/anime/${mediaItemId}`
-    case MediaType.MANGA:
-      return `/manga/${mediaItemId}`
-    case MediaType.GAME:
-      return `/games/${mediaItemId}`
-    case MediaType.TV_EPISODE:
-    default:
-      return null
-  }
-}
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false)
@@ -130,7 +114,7 @@ export function CurrentlyActiveCarousel({
   const posterUrl =
     getImageUrl(active.posterPath, 'w342') ??
     'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
-  const detailRoute = detailRouteFor(active.mediaType, active.mediaItemId)
+  const detailRoute = detailRouteFor(active)
 
   return (
     <section className='dash-hero cac' aria-label='Currently active'>
