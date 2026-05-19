@@ -2998,8 +2998,7 @@ body {
   border: 1px solid var(--phosphor-cream-ghost);
   background: var(--ground-card, rgba(34, 26, 48, 0.55));
 }
-.relations-list-row-link,
-.relations-list-row-out-of-library {
+.relations-list-row-link {
   display: grid;
   grid-template-columns: 56px 1fr auto;
   align-items: center;
@@ -3027,27 +3026,6 @@ body {
   color: var(--phosphor-cream-dim);
   padding: 4px 8px;
   border: 1px solid var(--phosphor-cream-ghost);
-}
-.relations-list-row-out-of-library {
-  /* Out-of-library row has an extra trailing ADD-button column */
-  grid-template-columns: 56px 1fr auto auto;
-}
-.relations-list-row-add {
-  font-family: var(--font-mono), monospace;
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 6px 10px;
-  border: 1px solid var(--phosphor-cream);
-  color: var(--phosphor-cream);
-  text-decoration: none;
-  background: transparent;
-}
-.relations-list-row-add:hover,
-.relations-list-row-add:focus-visible {
-  border-color: var(--phosphor-green, var(--rb-green));
-  color: var(--phosphor-green, var(--rb-green));
-  outline: none;
 }
 
 .anime-not-found {

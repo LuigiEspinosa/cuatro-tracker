@@ -5,11 +5,7 @@ import type { NormalisedRelation, NormalisedRelationBuckets } from '@/lib/normal
 export type RelationsListProps = {
   buckets: NormalisedRelationBuckets
   // Presence in the map = in-library; value = MediaItem.id for the detail
-  // route. Absence = out-of-library; row renders a VIEW INFO button targeting
-  // /preview/anilist/<type>/<id> — the preview page fetches the AniList row
-  // on-the-fly and offers an ADD TO LIBRARY action. Replaces the original
-  // /search?prefill=anilist:<id> URL from AC-6 (which would have required a
-  // Story 8.5a follow-up to teach GlobalSearch to consume the prefill).
+  // route. Absence = out-of-library; row links to /preview/anilist/<type>/<id>.
   inLibraryByAnilistId: Map<number, string>
 }
 
@@ -90,32 +86,20 @@ export function RelationsList({
                   className='relations-list-row'
                   data-in-library={isInLibrary ? 'true' : 'false'}
                 >
-                  {isInLibrary ? (
-                    <Link
-                      href={detailRouteFor(row.type, mediaItemId)}
-                      className='relations-list-row-link'
-                    >
-                      <span className='relations-list-row-cover'>{cover}</span>
-                      <span className='relations-list-row-title'>
-                        {row.title}
-                      </span>
-                      <span className='relations-list-row-chip'>{chip}</span>
-                    </Link>
-                  ) : (
-                    <Link
-                      href={previewUrl(row.type, row.id)}
-                      className='relations-list-row-link'
-                    >
-                      <span className='relations-list-row-cover'>{cover}</span>
-                      <span className='relations-list-row-title'>
-                        {row.title}
-                      </span>
-                      <span className='relations-list-row-chip'>{chip}</span>
-                      <span className='relations-list-row-add cpb' aria-hidden='true'>
-                        &gt; VIEW INFO
-                      </span>
-                    </Link>
-                  )}
+                  <Link
+                    href={
+                      isInLibrary
+                        ? detailRouteFor(row.type, mediaItemId)
+                        : previewUrl(row.type, row.id)
+                    }
+                    className='relations-list-row-link'
+                  >
+                    <span className='relations-list-row-cover'>{cover}</span>
+                    <span className='relations-list-row-title'>
+                      {row.title}
+                    </span>
+                    <span className='relations-list-row-chip'>{chip}</span>
+                  </Link>
                 </li>
               )
             })}
