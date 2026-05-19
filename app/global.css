@@ -3250,3 +3250,171 @@ body {
   padding: 96px 24px;
   text-align: center;
 }
+
+/* =========================================================================
+ * SeasonAccordion (Story 7.5) — TV detail page episode tracker.
+ *
+ * Classes were referenced by the TV detail page but never styled. The
+ * accordion expands one season at a time, with a PhosphorBar in the header
+ * and a grid of episode rows in the panel.
+ * ========================================================================= */
+.season-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.season-accordion-section {
+  border: 1px solid var(--phosphor-cream-ghost);
+  background: var(--ground-card, rgba(34, 26, 48, 0.55));
+}
+.season-accordion-header {
+  display: grid;
+  grid-template-columns: 1fr 120px minmax(120px, 220px) 24px;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  color: var(--phosphor-cream);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.season-accordion-header:hover,
+.season-accordion-header:focus-visible {
+  background: rgba(123, 92, 255, 0.06);
+  outline: none;
+}
+.season-accordion-header-title {
+  font-family: var(--font-display), serif;
+  font-size: 18px;
+  line-height: 1.2;
+}
+.season-accordion-header-count {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  text-align: right;
+}
+.season-accordion-header-progress { min-width: 0; }
+.season-accordion-header-chev {
+  font-family: var(--font-mono), monospace;
+  font-size: 18px;
+  color: var(--phosphor-cream-dim);
+  transition: transform 200ms ease-out;
+  text-align: center;
+}
+.season-accordion-header-chev[data-rot='90'] { transform: rotate(90deg); }
+
+.season-accordion-panel {
+  border-top: 1px solid var(--phosphor-cream-ghost);
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.season-accordion-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.season-accordion-mark-watched {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--phosphor-cream);
+  color: var(--phosphor-cream);
+  cursor: pointer;
+}
+.season-accordion-mark-watched:hover:not(:disabled),
+.season-accordion-mark-watched:focus-visible:not(:disabled) {
+  border-color: var(--phosphor-green, var(--rb-green));
+  color: var(--phosphor-green, var(--rb-green));
+  outline: none;
+}
+.season-accordion-mark-watched:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.season-accordion-episodes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.season-accordion-episode {
+  display: grid;
+  grid-template-columns: 56px 1fr 96px 64px 24px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px;
+  border: 1px solid transparent;
+}
+.season-accordion-episode:hover { border-color: var(--phosphor-cream-ghost); }
+.season-accordion-episode[data-unaired='true'] { opacity: 0.55; }
+.season-accordion-episode-code {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--phosphor-cream);
+}
+.season-accordion-episode-title {
+  font-family: var(--font-display), serif;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--phosphor-cream);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.season-accordion-episode-air,
+.season-accordion-episode-runtime {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--phosphor-cream-dim);
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .season-accordion-header {
+    grid-template-columns: 1fr 80px 24px;
+  }
+  .season-accordion-header-progress { display: none; }
+  .season-accordion-episode {
+    grid-template-columns: 56px 1fr 24px;
+  }
+  .season-accordion-episode-air,
+  .season-accordion-episode-runtime { display: none; }
+}
+
+/* Shared CRT-pixel button (used by not-found pages + the relations ADD link). */
+.crt-pixel-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid var(--phosphor-cream);
+  color: var(--phosphor-cream);
+  text-decoration: none;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.crt-pixel-button:hover,
+.crt-pixel-button:focus-visible {
+  border-color: var(--phosphor-green, var(--rb-green));
+  color: var(--phosphor-green, var(--rb-green));
+  outline: none;
+}

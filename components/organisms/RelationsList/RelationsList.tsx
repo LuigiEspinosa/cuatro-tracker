@@ -5,10 +5,11 @@ import type { NormalisedRelation, NormalisedRelationBuckets } from '@/lib/normal
 export type RelationsListProps = {
   buckets: NormalisedRelationBuckets
   // Presence in the map = in-library; value = MediaItem.id for the detail
-  // route. Absence = out-of-library; row renders an ADD TO LIBRARY button
-  // targeting /search?type=anime|manga&prefill=anilist:<id>. The Story 8.5a
-  // follow-up will teach GlobalSearch to consume `prefill` (per OI #1); until
-  // then the link target is correct but the search-route prefill is a no-op.
+  // route. Absence = out-of-library; row renders a VIEW INFO button targeting
+  // /preview/anilist/<type>/<id> — the preview page fetches the AniList row
+  // on-the-fly and offers an ADD TO LIBRARY action. Replaces the original
+  // /search?prefill=anilist:<id> URL from AC-6 (which would have required a
+  // Story 8.5a follow-up to teach GlobalSearch to consume the prefill).
   inLibraryByAnilistId: Map<number, string>
 }
 
@@ -39,9 +40,9 @@ function detailRouteFor(type: 'ANIME' | 'MANGA', mediaItemId: string): string {
     : `/manga/${mediaItemId}`
 }
 
-function searchPrefillUrl(type: 'ANIME' | 'MANGA', anilistId: number): string {
+function previewUrl(type: 'ANIME' | 'MANGA', anilistId: number): string {
   const t = type === 'ANIME' ? 'anime' : 'manga'
-  return `/search?type=${t}&prefill=anilist:${anilistId}`
+  return `/preview/anilist/${t}/${anilistId}`
 }
 
 function coverMedium(type: 'ANIME' | 'MANGA'): 'anime' | 'manga' {
@@ -101,19 +102,19 @@ export function RelationsList({
                       <span className='relations-list-row-chip'>{chip}</span>
                     </Link>
                   ) : (
-                    <div className='relations-list-row-out-of-library'>
+                    <Link
+                      href={previewUrl(row.type, row.id)}
+                      className='relations-list-row-link'
+                    >
                       <span className='relations-list-row-cover'>{cover}</span>
                       <span className='relations-list-row-title'>
                         {row.title}
                       </span>
                       <span className='relations-list-row-chip'>{chip}</span>
-                      <Link
-                        href={searchPrefillUrl(row.type, row.id)}
-                        className='relations-list-row-add cpb'
-                      >
-                        &gt; ADD TO LIBRARY
-                      </Link>
-                    </div>
+                      <span className='relations-list-row-add cpb' aria-hidden='true'>
+                        &gt; VIEW INFO
+                      </span>
+                    </Link>
                   )}
                 </li>
               )

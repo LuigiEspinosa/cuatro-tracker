@@ -119,7 +119,7 @@ describe('RelationsList', () => {
     expect(link.getAttribute('href')).toBe('/manga/media-item-berserk')
   })
 
-  it('renders out-of-library ANIME rows with an ADD TO LIBRARY link targeting /search?type=anime&prefill=anilist:<id>', () => {
+  it('renders out-of-library ANIME rows as a Link to /preview/anilist/anime/<id>', () => {
     render(
       <RelationsList
         buckets={{
@@ -132,11 +132,11 @@ describe('RelationsList', () => {
         inLibraryByAnilistId={new Map()}
       />,
     )
-    const add = screen.getByRole('link', { name: /ADD TO LIBRARY/ })
-    expect(add.getAttribute('href')).toBe('/search?type=anime&prefill=anilist:777')
+    const link = screen.getByRole('link', { name: /Not in Library/ })
+    expect(link.getAttribute('href')).toBe('/preview/anilist/anime/777')
   })
 
-  it('renders out-of-library MANGA rows targeting /search?type=manga&prefill=anilist:<id>', () => {
+  it('renders out-of-library MANGA rows as a Link to /preview/anilist/manga/<id>', () => {
     render(
       <RelationsList
         buckets={{
@@ -156,8 +156,8 @@ describe('RelationsList', () => {
         inLibraryByAnilistId={new Map()}
       />,
     )
-    const add = screen.getByRole('link', { name: /ADD TO LIBRARY/ })
-    expect(add.getAttribute('href')).toBe('/search?type=manga&prefill=anilist:888')
+    const link = screen.getByRole('link', { name: /Out of Library Manga/ })
+    expect(link.getAttribute('href')).toBe('/preview/anilist/manga/888')
   })
 
   it('renders the relation-type chip with underscores replaced by spaces', () => {

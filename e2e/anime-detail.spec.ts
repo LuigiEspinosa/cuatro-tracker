@@ -137,11 +137,12 @@ test.describe('/anime/[id] detail page (Story 8.5)', () => {
 
     const href = await firstRelationRow.getAttribute('href')
     expect(href).not.toBeNull()
-    // The link target is either an in-library detail route (anime/manga) OR
-    // the search prefill URL. AC-6 only contracts the URL shape, not the
-    // GlobalSearch consumer (Story 8.5a follow-up).
+    // The link target is either an in-library detail route (/anime/<id> or
+    // /manga/<id>) OR the preview route (/preview/anilist/anime|manga/<id>).
+    // Replaces the original /search?prefill=anilist:<id> contract after the
+    // preview page landed.
     expect(href).toMatch(
-      /^(?:\/anime\/[^/]+|\/manga\/[^/]+|\/search\?type=(?:anime|manga)&prefill=anilist:\d+)$/,
+      /^(?:\/anime\/[^/]+|\/manga\/[^/]+|\/preview\/anilist\/(?:anime|manga)\/\d+)$/,
     )
   })
 
