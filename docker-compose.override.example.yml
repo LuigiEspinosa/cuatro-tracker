@@ -1,0 +1,21 @@
+# Copy to docker-compose.override.yml (gitignored) to namespace this stack
+# off the default ports so it does not collide with other docker projects on
+# this machine. Compose auto-loads docker-compose.override.yml alongside
+# docker-compose.yml; the dev workflow (pnpm infra) merges this on top of
+# docker-compose.dev.yml when invoked with the same -f flag chain.
+#
+# Simpler alternative: set POSTGRES_HOST_PORT / REDIS_HOST_PORT in .env. Use
+# this override file when you also want isolated container names or volumes.
+#
+# Remember to update DATABASE_URL / REDIS_URL in .env to match the remapped
+# host ports below.
+
+name: cuatro-tracker
+
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:15432:5432"
+  redis:
+    ports: !override
+      - "127.0.0.1:16379:6379"
