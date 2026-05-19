@@ -125,6 +125,20 @@ model MediaItem {
   runtime        Int? // minutes; episode runtime or movie runtime (future-proofing)
   unaired        Boolean @default(false) // true when source air_date is null/empty at insert time
 
+  // Anime + manga metadata (Story 8.2 — AniList normalisers).
+  // All nullable so existing MOVIE / TV_SHOW / TV_EPISODE / GAME rows remain valid.
+  // Anime is modelled as a single MediaItem (not per-episode rows like TV); progress
+  // on UserEntry tracks watched-count, and episode_count holds the aired total.
+  episode_count   Int? // anime: total aired / planned episodes per AniList
+  chapter_count   Int? // manga: total chapters
+  volume_count    Int? // manga: total volumes
+  format          String? // raw AniList format (TV, MOVIE, OVA, ONA, MANGA, NOVEL, ONE_SHOT, ...) - kept as string to avoid coupling to upstream enum churn
+  studio_name     String? // anime: first animation studio (AniList studios.nodes where isAnimationStudio = true)
+  author_name     String? // manga: first staff with role 'Story'
+  season          String? // AniList season enum string: WINTER / SPRING / SUMMER / FALL
+  season_year     Int? // AniList seasonYear (anime release / airing year)
+  source_material String? // AniList source: MANGA / LIGHT_NOVEL / ORIGINAL / VISUAL_NOVEL / etc.
+
   user_entry    UserEntry?
   achievements  Achievement[]     @relation("AchievementGame")
   merge_sources MergeSuggestion[] @relation("MergeSource")
