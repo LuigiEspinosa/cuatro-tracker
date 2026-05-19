@@ -332,3 +332,199 @@ describe('PUT /api/progress', () => {
     expect(res.status).toBe(405)
   })
 })
+
+// Story 8.5 AC-5 + AC-9: PUT /api/progress anime auto-advance branch.
+describe('PUT /api/progress (Story 8.5 anime auto-advance)', () => {
+  const animeEntry = (overrides: Record<string, unknown> = {}) => ({
+    id: 'entry-anime-1',
+    media_item_id: 'anime-1',
+    status: WatchStatus.PLAN_TO_WATCH,
+    user_rating: null,
+    progress: 0,
+    notes: null,
+    started_at: null,
+    completed_at: null,
+    created_at: new Date('2026-05-10T12:00:00Z'),
+    updated_at: new Date('2026-05-12T12:00:00Z'),
+    media_item: {
+      id: 'anime-1',
+      type: MediaType.ANIME,
+      title: 'Sousou no Frieren',
+      anilist_id: 170942,
+      episode_count: 28,
+    },
+    ...overrides,
+  })
+
+  it('advances PLAN_TO_WATCH to WATCHING on first non-zero progress', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(animeEntry())
+    dbMock.userEntry.update.mockResolvedValue(
+      animeEntry({ progress: 1, status: WatchStatus.WATCHING }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(putRequest({ mediaItemId: 'anime-1', progress: 1 }))
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(1)
+    expect(call.data.status).toBe(WatchStatus.WATCHING)
+    expect(call.data.completed_at).toBeUndefined()
+  })
+
+  it('auto-completes when progress reaches episode_count and sets completed_at', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      animeEntry({ progress: 27, status: WatchStatus.WATCHING }),
+    )
+    const fakeNow = new Date('2026-05-19T16:00:00.000Z')
+    vi.setSystemTime(fakeNow)
+    dbMock.userEntry.update.mockResolvedValue(
+      animeEntry({
+        progress: 28,
+        status: WatchStatus.COMPLETED,
+        completed_at: fakeNow,
+      }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(putRequest({ mediaItemId: 'anime-1', progress: 28 }))
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(28)
+    expect(call.data.status).toBe(WatchStatus.COMPLETED)
+    expect(call.data.completed_at).toBeInstanceOf(Date)
+    expect((call.data.completed_at as Date).toISOString()).toBe(
+      fakeNow.toISOString(),
+    )
+    vi.useRealTimers()
+  })
+
+  it('does NOT overwrite an existing completed_at when progress stays at episode_count (idempotent)', async () => {
+    const previousCompletedAt = new Date('2026-05-17T10:00:00.000Z')
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      animeEntry({
+        progress: 28,
+        status: WatchStatus.COMPLETED,
+        completed_at: previousCompletedAt,
+      }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(animeEntry({ progress: 28 }))
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(putRequest({ mediaItemId: 'anime-1', progress: 28 }))
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(28)
+    expect(call.data.status).toBe(WatchStatus.COMPLETED)
+    // completed_at is NOT written when an existing one is present.
+    expect(call.data.completed_at).toBeUndefined()
+  })
+
+  it('retreats on a smaller-progress decrement and preserves status when not at boundary', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      animeEntry({ progress: 5, status: WatchStatus.WATCHING }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(animeEntry({ progress: 3 }))
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(putRequest({ mediaItemId: 'anime-1', progress: 3 }))
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(3)
+    // No status flip: not PLAN_TO_WATCH and not >= episode_count.
+    expect(call.data.status).toBeUndefined()
+  })
+
+  it('no-op on same progress: writes progress but no status flip when already WATCHING mid-show', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      animeEntry({ progress: 5, status: WatchStatus.WATCHING }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(animeEntry({ progress: 5 }))
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(putRequest({ mediaItemId: 'anime-1', progress: 5 }))
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(5)
+    expect(call.data.status).toBeUndefined()
+  })
+
+  it('does NOT auto-complete when episode_count is null (anime with unknown total)', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      animeEntry({
+        progress: 99,
+        status: WatchStatus.WATCHING,
+        media_item: {
+          id: 'anime-1',
+          type: MediaType.ANIME,
+          title: 'Long Running',
+          anilist_id: 1234,
+          episode_count: null,
+        },
+      }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(animeEntry({ progress: 100 }))
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(putRequest({ mediaItemId: 'anime-1', progress: 100 }))
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(100)
+    expect(call.data.status).toBeUndefined()
+    expect(call.data.completed_at).toBeUndefined()
+  })
+
+  it('does NOT auto-advance for MOVIE entries (gate preserves non-anime behaviour)', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(fixtureEntry())
+    dbMock.userEntry.update.mockResolvedValue(fixtureEntry({ progress: 1 }))
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(putRequest({ mediaItemId: 'media-1', progress: 1 }))
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(1)
+    // Movie path must NOT flip status from PLAN_TO_WATCH on progress write.
+    expect(call.data.status).toBeUndefined()
+  })
+
+  it('does NOT auto-advance for TV_SHOW entries (gate preserves TV behaviour)', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      fixtureEntry({
+        media_item: {
+          id: 'show-1',
+          type: MediaType.TV_SHOW,
+          title: 'Some Show',
+          tmdb_id: 999,
+          episode_count: 24,
+        },
+      }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(fixtureEntry({ progress: 24 }))
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(putRequest({ mediaItemId: 'show-1', progress: 24 }))
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(24)
+    // TV_SHOW must NOT auto-advance to COMPLETED via the anime branch.
+    expect(call.data.status).toBeUndefined()
+  })
+
+  it('respects an explicit body.status alongside auto-advance computation', async () => {
+    // The auto-advance branch can override status (last writer wins on `data`).
+    // If body.status is provided AND progress triggers auto-complete, the
+    // anime branch's COMPLETED takes precedence — matches AC-5's "computed
+    // status in a single update".
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      animeEntry({ progress: 27, status: WatchStatus.WATCHING }),
+    )
+    const fakeNow = new Date('2026-05-19T17:00:00.000Z')
+    vi.setSystemTime(fakeNow)
+    dbMock.userEntry.update.mockResolvedValue(
+      animeEntry({ progress: 28, status: WatchStatus.COMPLETED }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({
+        mediaItemId: 'anime-1',
+        progress: 28,
+        status: WatchStatus.WATCHING, // client tries to keep WATCHING; server overrides.
+      }),
+    )
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.status).toBe(WatchStatus.COMPLETED)
+    vi.useRealTimers()
+  })
+})
