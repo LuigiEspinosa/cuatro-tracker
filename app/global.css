@@ -2754,3 +2754,307 @@ body {
   .watch-status-control-button[data-pulsing='true'] .led { animation: none; }
   .detail-hero-title { text-shadow: none; }
 }
+
+/* =========================================================================
+ * Story 8.5 — /anime/[id] detail page
+ *
+ * Mirrors the .movie-detail-page shape for the new media types. The anime
+ * detail page (and the still-WIP manga detail in Story 8.6) reuse the same
+ * outer layout / rule / synopsis primitives. Episode checklist, voice cast,
+ * and relations are new surfaces unique to AniList.
+ * ========================================================================= */
+
+.anime-detail-page,
+.tv-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 24px 96px;
+}
+
+.anime-detail-rule,
+.tv-detail-rule {
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--rb-green) 0%, var(--rb-green) 16.66%,
+    var(--rb-yellow) 16.66%, var(--rb-yellow) 33.33%,
+    var(--rb-orange) 33.33%, var(--rb-orange) 50%,
+    var(--rb-pink) 50%, var(--rb-pink) 66.66%,
+    var(--rb-purple) 66.66%, var(--rb-purple) 83.33%,
+    var(--rb-blue) 83.33%, var(--rb-blue) 100%
+  );
+  width: 100%;
+}
+.anime-detail-rule-thick,
+.tv-detail-rule-thick { height: 6px; }
+
+.anime-detail-synopsis,
+.tv-detail-synopsis {
+  font-family: var(--font-body), 'EB Garamond', serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--phosphor-cream);
+  column-count: 2;
+  column-gap: 48px;
+  column-rule: 1px solid var(--phosphor-cream-ghost);
+}
+@media (max-width: 1024px) {
+  .anime-detail-synopsis,
+  .tv-detail-synopsis { column-count: 1; }
+}
+.anime-detail-synopsis p,
+.tv-detail-synopsis p { margin: 0 0 16px; break-inside: avoid; }
+
+.anime-detail-progress,
+.tv-detail-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.anime-detail-progress-label,
+.tv-detail-progress-label {
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+}
+
+.anime-detail-studio-chip {
+  display: inline-block;
+  padding: 6px 12px;
+  border: 1px solid var(--phosphor-cream-ghost);
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream);
+}
+
+/* EpisodeChecklist molecule (Story 8.5 AC-3) — flat 1..N list of episode
+ * rows with the EpisodeWatchToggle as the trailing affordance. */
+.episode-checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.episode-checklist-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 32px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--phosphor-cream-ghost);
+  background: var(--ground-card, rgba(34, 26, 48, 0.55));
+}
+.episode-checklist-row[data-checked='true'] {
+  border-color: var(--phosphor-green, var(--rb-green));
+  background: rgba(40, 80, 40, 0.18);
+}
+.episode-checklist-row-code {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream);
+}
+.episode-checklist-row-meta {
+  font-family: var(--font-body), serif;
+  font-size: 13px;
+  color: var(--phosphor-cream-dim);
+}
+
+/* Minimal styling for the EpisodeWatchToggle button so it's visible as a
+ * checkbox-like affordance. Pre-existing across the design system (used by
+ * SeasonAccordion as well) — these rules are additive and don't override
+ * any existing token-driven styling that may land later. */
+.episode-watch-toggle,
+.crt-pixel-checkbox {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--phosphor-cream);
+  color: var(--phosphor-cream);
+  font-family: var(--font-mono), monospace;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.episode-watch-toggle:hover,
+.episode-watch-toggle:focus-visible {
+  border-color: var(--phosphor-green, var(--rb-green));
+  outline: none;
+}
+.episode-watch-toggle[data-checked='true'] {
+  background: var(--phosphor-green, var(--rb-green));
+  color: var(--ground-base, #1a1126);
+  border-color: var(--phosphor-green, var(--rb-green));
+}
+.episode-watch-toggle[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.episode-watch-toggle-mark { display: inline-block; line-height: 1; }
+
+/* VoiceCastList organism (Story 8.5 AC-8) — horizontal scroller mirroring
+ * CastList. Composition is character (top) + voice actor (bottom). */
+.voice-cast-list {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  list-style: none;
+  padding: 0 0 8px;
+  margin: 0;
+}
+.voice-cast-list-item {
+  flex: 0 0 auto;
+  width: 112px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+}
+.voice-cast-list-portrait {
+  width: 96px;
+  height: 96px;
+  background: var(--ground-card, #221A30);
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--phosphor-cream-ghost);
+}
+.voice-cast-list-portrait-img { width: 100%; height: 100%; object-fit: cover; }
+.voice-cast-list-portrait-initials {
+  font-family: var(--font-display), serif;
+  font-size: 28px;
+  color: var(--phosphor-cream);
+}
+.voice-cast-list-role {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+}
+.voice-cast-list-name {
+  font-family: var(--font-display), serif;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--phosphor-cream);
+}
+.voice-cast-list-voiced-by {
+  font-family: var(--font-body), serif;
+  font-style: italic;
+  font-size: 12px;
+  color: var(--phosphor-cream-dim);
+}
+
+/* RelationsList organism (Story 8.5 AC-6) — 5 buckets, fixed order, with
+ * in-library Link vs out-of-library ADD-button affordance per row. */
+.relations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.relations-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.relations-list-section-header {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+  font-weight: 400;
+}
+.relations-list-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.relations-list-row {
+  border: 1px solid var(--phosphor-cream-ghost);
+  background: var(--ground-card, rgba(34, 26, 48, 0.55));
+}
+.relations-list-row-link,
+.relations-list-row-out-of-library {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.relations-list-row-link:hover,
+.relations-list-row-link:focus-visible {
+  border-color: var(--phosphor-green, var(--rb-green));
+  outline: none;
+}
+.relations-list-row-cover { width: 56px; }
+.relations-list-row-title {
+  font-family: var(--font-display), serif;
+  font-size: 15px;
+  color: var(--phosphor-cream);
+}
+.relations-list-row-chip {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  padding: 4px 8px;
+  border: 1px solid var(--phosphor-cream-ghost);
+}
+.relations-list-row-out-of-library {
+  /* Out-of-library row has an extra trailing ADD-button column */
+  grid-template-columns: 56px 1fr auto auto;
+}
+.relations-list-row-add {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border: 1px solid var(--phosphor-cream);
+  color: var(--phosphor-cream);
+  text-decoration: none;
+  background: transparent;
+}
+.relations-list-row-add:hover,
+.relations-list-row-add:focus-visible {
+  border-color: var(--phosphor-green, var(--rb-green));
+  color: var(--phosphor-green, var(--rb-green));
+  outline: none;
+}
+
+.anime-not-found {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  padding: 96px 24px;
+  text-align: center;
+}

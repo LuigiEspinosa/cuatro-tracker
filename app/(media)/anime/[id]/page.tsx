@@ -33,6 +33,18 @@ function deriveYear(d: Date): number | null {
   return y === 1970 ? null : y
 }
 
+// AniList descriptions ship raw HTML (`<br>`, `<i>`, `<a>`, ...) even when the
+// query asks for `asHtml: false` — the field's "no HTML" flag normalises line
+// breaks but leaves tags. Convert `<br>` variants to paragraph breaks then
+// strip remaining tags so the synopsis renders as plain text. Applies at
+// render time so legacy MediaItem rows that were normalised before this fix
+// still display cleanly without a backfill.
+function stripAnilistHtml(text: string): string {
+  return text
+    .replace(/<br\s*\/?\s*>/gi, '\n\n')
+    .replace(/<[^>]*>/g, '')
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -161,7 +173,7 @@ export default async function AnimeDetailPage({
     })
   }
 
-  const synopsisParagraphs = (entry.media_item.overview ?? '')
+  const synopsisParagraphs = stripAnilistHtml(entry.media_item.overview ?? '')
     .split(/\n+/)
     .map((p) => p.trim())
     .filter((p) => p.length > 0)
