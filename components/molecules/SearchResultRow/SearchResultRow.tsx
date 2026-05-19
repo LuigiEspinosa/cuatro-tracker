@@ -19,10 +19,14 @@ export type SearchResultRowProps = {
   onOpenDetail: () => void
 }
 
-const COVER_MEDIUM: Record<UnifiedSearchResult['type'], 'movies' | 'tv' | 'anime' | 'games'> = {
+const COVER_MEDIUM: Record<
+  UnifiedSearchResult['type'],
+  'movies' | 'tv' | 'anime' | 'manga' | 'games'
+> = {
   movie: 'movies',
   tv: 'tv',
   anime: 'anime',
+  manga: 'manga',
   game: 'games',
 }
 

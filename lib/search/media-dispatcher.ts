@@ -1,7 +1,10 @@
 import { MediaType, type Prisma } from '@prisma/client'
 import { getMovie, getTv, getTvSeason } from '@/lib/api/tmdb'
+import { getMedia as getAnilistMedia } from '@/lib/api/anilist'
 import { normaliseTmdbMovie } from '@/lib/normalise/movie'
 import { normaliseTmdbTv } from '@/lib/normalise/tv'
+import { normaliseAnilistAnime } from '@/lib/normalise/anime'
+import { normaliseAnilistManga } from '@/lib/normalise/manga'
 
 export type AddMediaSource = 'tmdb' | 'anilist' | 'igdb' | 'steam'
 
@@ -49,6 +52,20 @@ export function getDispatcher(
         return normaliseTmdbTv(show, seasons)
       },
       sourceIdKey: 'tmdb_id',
+    }
+  }
+  if (source === 'anilist' && type === MediaType.ANIME) {
+    return {
+      fetch: (id) => getAnilistMedia(id, 'ANIME'),
+      normalise: (raw) => normaliseAnilistAnime(raw),
+      sourceIdKey: 'anilist_id',
+    }
+  }
+  if (source === 'anilist' && type === MediaType.MANGA) {
+    return {
+      fetch: (id) => getAnilistMedia(id, 'MANGA'),
+      normalise: (raw) => normaliseAnilistManga(raw),
+      sourceIdKey: 'anilist_id',
     }
   }
   return null

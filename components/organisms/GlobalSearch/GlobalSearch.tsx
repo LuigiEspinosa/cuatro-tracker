@@ -23,12 +23,12 @@ type SearchResponse = {
   partialFailure: boolean
 }
 
-type SearchApiType = 'movie' | 'tv' | 'anime' | 'game'
+type SearchApiType = 'movie' | 'tv' | 'anime' | 'manga' | 'game'
 
 type AddBody = {
   source: UnifiedSearchResult['primary_source']
   sourceId: number
-  type: 'MOVIE' | 'TV_SHOW' | 'ANIME' | 'GAME'
+  type: 'MOVIE' | 'TV_SHOW' | 'ANIME' | 'MANGA' | 'GAME'
 }
 
 type Variant =
@@ -50,6 +50,7 @@ const SEARCH_TYPE_TO_MEDIA: Record<UnifiedSearchResult['type'], AddBody['type']>
   movie: 'MOVIE',
   tv: 'TV_SHOW',
   anime: 'ANIME',
+  manga: 'MANGA',
   game: 'GAME',
 }
 
@@ -57,6 +58,7 @@ const SECTION_LABELS: Record<UnifiedSearchResult['type'], string> = {
   movie: 'MOVIES',
   tv: 'TV',
   anime: 'ANIME',
+  manga: 'MANGA',
   game: 'GAMES',
 }
 
@@ -64,6 +66,7 @@ const SECTION_ORDER: ReadonlyArray<UnifiedSearchResult['type']> = [
   'movie',
   'tv',
   'anime',
+  'manga',
   'game',
 ] as const
 
@@ -454,6 +457,7 @@ const COVER_PATH_PREFIX: Record<UnifiedSearchResult['type'], string> = {
   movie: 'movies',
   tv: 'tv',
   anime: 'anime',
+  manga: 'manga',
   game: 'games',
 }
 

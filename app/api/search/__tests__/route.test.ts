@@ -23,6 +23,48 @@ vi.mock('@/lib/api/tmdb', () => ({
   searchMulti: tmdbMock.searchMulti,
 }))
 
+const anilistMock = vi.hoisted(() => ({
+  searchAnime: vi.fn(),
+  searchManga: vi.fn(),
+}))
+
+vi.mock('@/lib/api/anilist', () => ({
+  searchAnime: anilistMock.searchAnime,
+  searchManga: anilistMock.searchManga,
+}))
+
+function anilistMedia(
+  id: number,
+  type: 'ANIME' | 'MANGA',
+  overrides: Partial<{
+    title: { romaji: string | null; english: string | null; native: string | null; userPreferred: string | null }
+    year: number | null
+    description: string | null
+    coverLarge: string | null
+  }> = {},
+) {
+  return {
+    id,
+    type,
+    title: overrides.title ?? {
+      romaji: `Title ${id}`,
+      english: null,
+      native: null,
+      userPreferred: `Title ${id}`,
+    },
+    startDate: {
+      year: overrides.year === undefined ? 2020 : overrides.year,
+      month: null,
+      day: null,
+    },
+    description: overrides.description ?? null,
+    coverImage:
+      overrides.coverLarge === null
+        ? undefined
+        : { large: overrides.coverLarge ?? `https://cdn.example/${id}.jpg` },
+  }
+}
+
 const validEnv: Record<string, string> = {
   NEXTAUTH_SECRET: 'a'.repeat(32),
   NEXTAUTH_URL: 'http://localhost:3000',
@@ -46,6 +88,12 @@ beforeEach(() => {
   vi.resetModules()
   vi.resetAllMocks()
   for (const [k, v] of Object.entries(validEnv)) vi.stubEnv(k, v)
+  // Default AniList to empty so tests that don't explicitly mock it (existing
+  // TMDB-only tests) keep passing now that the AniList adapter is in the
+  // federation registry and is called whenever the requested type matches
+  // its supportedTypes (anime, manga) or the type filter is undefined.
+  anilistMock.searchAnime.mockResolvedValue([])
+  anilistMock.searchManga.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -265,15 +313,106 @@ describe('GET /api/search', () => {
       expect(body.results[0].type).toBe('tv')
     })
 
-    it('type=anime returns empty + partialFailure:false (no adapters wired in E4)', async () => {
+    it('type=anime dispatches ONLY to AniList (TMDB skipped, manga search not called)', async () => {
+      anilistMock.searchAnime.mockResolvedValue([
+        anilistMedia(170942, 'ANIME', {
+          title: {
+            romaji: 'Sousou no Frieren',
+            english: 'Frieren',
+            native: null,
+            userPreferred: 'Sousou no Frieren',
+          },
+          year: 2023,
+        }),
+      ])
       const { GET } = await import('@/app/api/search/route')
 
-      const res = await GET(makeRequest('/api/search?q=foo&type=anime'))
+      const res = await GET(makeRequest('/api/search?q=frieren&type=anime'))
 
       expect(res.status).toBe(200)
       const body = await res.json()
-      expect(body).toEqual({ results: [], partialFailure: false })
+      expect(body.results).toHaveLength(1)
+      expect(body.results[0]).toMatchObject({
+        type: 'anime',
+        title: 'Sousou no Frieren',
+        anilist_id: 170942,
+        primary_source: 'anilist',
+        release_year: 2023,
+        confidence: 1.0,
+      })
       expect(tmdbMock.searchMulti).not.toHaveBeenCalled()
+      expect(anilistMock.searchManga).not.toHaveBeenCalled()
+      expect(anilistMock.searchAnime).toHaveBeenCalledWith('frieren')
+    })
+
+    it('type=manga dispatches ONLY to AniList manga (TMDB + anime search skipped)', async () => {
+      anilistMock.searchManga.mockResolvedValue([
+        anilistMedia(30002, 'MANGA', {
+          title: {
+            romaji: 'Berserk',
+            english: 'Berserk',
+            native: null,
+            userPreferred: 'Berserk',
+          },
+          year: 1989,
+        }),
+      ])
+      const { GET } = await import('@/app/api/search/route')
+
+      const res = await GET(makeRequest('/api/search?q=berserk&type=manga'))
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.results).toHaveLength(1)
+      expect(body.results[0]).toMatchObject({
+        type: 'manga',
+        title: 'Berserk',
+        anilist_id: 30002,
+        primary_source: 'anilist',
+        release_year: 1989,
+      })
+      expect(tmdbMock.searchMulti).not.toHaveBeenCalled()
+      expect(anilistMock.searchAnime).not.toHaveBeenCalled()
+      expect(anilistMock.searchManga).toHaveBeenCalledWith('berserk')
+    })
+
+    it('no type filter fans out to BOTH adapters in parallel (TMDB + AniList anime + AniList manga)', async () => {
+      tmdbMock.searchMulti.mockResolvedValue({
+        page: 1,
+        results: [movieResult],
+        total_pages: 1,
+        total_results: 1,
+      })
+      anilistMock.searchAnime.mockResolvedValue([
+        anilistMedia(170942, 'ANIME', {
+          title: {
+            romaji: 'Sousou no Frieren',
+            english: null,
+            native: null,
+            userPreferred: 'Sousou no Frieren',
+          },
+        }),
+      ])
+      anilistMock.searchManga.mockResolvedValue([
+        anilistMedia(30002, 'MANGA', {
+          title: {
+            romaji: 'Berserk',
+            english: null,
+            native: null,
+            userPreferred: 'Berserk',
+          },
+        }),
+      ])
+      const { GET } = await import('@/app/api/search/route')
+
+      const res = await GET(makeRequest('/api/search?q=mixed'))
+
+      const body = await res.json()
+      expect(tmdbMock.searchMulti).toHaveBeenCalledTimes(1)
+      expect(anilistMock.searchAnime).toHaveBeenCalledTimes(1)
+      expect(anilistMock.searchManga).toHaveBeenCalledTimes(1)
+      const types = body.results.map((r: { type: string }) => r.type).sort()
+      expect(types).toEqual(['anime', 'manga', 'movie'])
     })
 
     it('type=game returns empty + partialFailure:false (no adapters wired in E4)', async () => {
@@ -284,20 +423,52 @@ describe('GET /api/search', () => {
       const body = await res.json()
       expect(body).toEqual({ results: [], partialFailure: false })
       expect(tmdbMock.searchMulti).not.toHaveBeenCalled()
+      expect(anilistMock.searchAnime).not.toHaveBeenCalled()
+      expect(anilistMock.searchManga).not.toHaveBeenCalled()
     })
   })
 
   describe('partial failure', () => {
-    it('flags partialFailure: true when TMDB rejects, returns empty results', async () => {
+    it('flags partialFailure: true when TMDB rejects, but AniList still returns', async () => {
       tmdbMock.searchMulti.mockRejectedValue(new Error('boom'))
+      anilistMock.searchAnime.mockResolvedValue([
+        anilistMedia(170942, 'ANIME'),
+      ])
       const { GET } = await import('@/app/api/search/route')
 
       const res = await GET(makeRequest('/api/search?q=foo'))
 
       expect(res.status).toBe(200)
       const body = await res.json()
-      expect(body.results).toEqual([])
       expect(body.partialFailure).toBe(true)
+      // AniList successes survive the TMDB rejection (Promise.allSettled
+      // semantics from Story 4.3).
+      expect(body.results).toHaveLength(1)
+      expect(body.results[0]).toMatchObject({
+        type: 'anime',
+        anilist_id: 170942,
+      })
+    })
+
+    it('flags partialFailure: true when AniList rejects (e.g. 429), TMDB still returns', async () => {
+      tmdbMock.searchMulti.mockResolvedValue({
+        page: 1,
+        results: [movieResult],
+        total_pages: 1,
+        total_results: 1,
+      })
+      anilistMock.searchAnime.mockRejectedValue(
+        new Error('AniList rate limited (429)'),
+      )
+      const { GET } = await import('@/app/api/search/route')
+
+      const res = await GET(makeRequest('/api/search?q=foo'))
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.partialFailure).toBe(true)
+      expect(body.results).toHaveLength(1)
+      expect(body.results[0]).toMatchObject({ type: 'movie', tmdb_id: 550 })
     })
 
     it('logs each adapter rejection at warn with { source, durationMs, err }', async () => {

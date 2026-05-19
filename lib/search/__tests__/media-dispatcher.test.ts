@@ -157,6 +157,36 @@ describe('lib/search/media-dispatcher: getDispatcher', () => {
     expect(result.seasons).toEqual([])
   })
 
+  it("returns a dispatcher for (anilist, ANIME) and its fetch calls getMedia(id, 'ANIME')", async () => {
+    const { getDispatcher } = await import('@/lib/search/media-dispatcher')
+    const anilist = await import('@/lib/api/anilist')
+    const spy = vi
+      .spyOn(anilist, 'getMedia')
+      .mockResolvedValue({} as never)
+
+    const dispatcher = getDispatcher('anilist', MediaType.ANIME)
+    await dispatcher?.fetch(170942)
+
+    expect(dispatcher).not.toBeNull()
+    expect(dispatcher?.sourceIdKey).toBe('anilist_id')
+    expect(spy).toHaveBeenCalledWith(170942, 'ANIME')
+  })
+
+  it("returns a dispatcher for (anilist, MANGA) and its fetch calls getMedia(id, 'MANGA')", async () => {
+    const { getDispatcher } = await import('@/lib/search/media-dispatcher')
+    const anilist = await import('@/lib/api/anilist')
+    const spy = vi
+      .spyOn(anilist, 'getMedia')
+      .mockResolvedValue({} as never)
+
+    const dispatcher = getDispatcher('anilist', MediaType.MANGA)
+    await dispatcher?.fetch(30002)
+
+    expect(dispatcher).not.toBeNull()
+    expect(dispatcher?.sourceIdKey).toBe('anilist_id')
+    expect(spy).toHaveBeenCalledWith(30002, 'MANGA')
+  })
+
   it('returns null for every unwired (source, type) tuple', async () => {
     const { getDispatcher } = await import('@/lib/search/media-dispatcher')
 
@@ -173,6 +203,8 @@ describe('lib/search/media-dispatcher: getDispatcher', () => {
     const wired = new Set([
       `tmdb:${MediaType.MOVIE}`,
       `tmdb:${MediaType.TV_SHOW}`,
+      `anilist:${MediaType.ANIME}`,
+      `anilist:${MediaType.MANGA}`,
     ])
 
     for (const source of sources) {

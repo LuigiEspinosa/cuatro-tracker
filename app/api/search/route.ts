@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 
 const SearchQuerySchema = z.object({
   q: z.string().trim().min(1).max(200),
-  type: z.enum(['movie', 'tv', 'anime', 'game']).optional(),
+  type: z.enum(['movie', 'tv', 'anime', 'manga', 'game']).optional(),
 })
 
 async function handler(req: NextRequest): Promise<NextResponse> {

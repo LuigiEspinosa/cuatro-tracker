@@ -33,6 +33,21 @@ vi.mock('@/lib/api/tmdb', async () => {
   }
 })
 
+const anilistMock = vi.hoisted(() => ({
+  getMedia: vi.fn(),
+}))
+
+vi.mock('@/lib/api/anilist', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/lib/api/anilist')>(
+      '@/lib/api/anilist',
+    )
+  return {
+    ...actual,
+    getMedia: anilistMock.getMedia,
+  }
+})
+
 const txMock = vi.hoisted(() => ({
   mediaItem: {
     create: vi.fn(),
@@ -216,14 +231,14 @@ describe('POST /api/media', () => {
   })
 
   describe('dispatcher routing', () => {
-    it('returns 501 for unwired source (anilist)', async () => {
+    it('returns 501 for unwired (source, type) tuple (anilist + GAME)', async () => {
       const { POST } = await import('@/app/api/media/route')
 
       const res = await POST(
         postRequest({
           source: 'anilist',
           sourceId: 1234,
-          type: MediaType.ANIME,
+          type: MediaType.GAME,
         }),
       )
 
@@ -251,6 +266,269 @@ describe('POST /api/media', () => {
       )
 
       expect(res.status).toBe(501)
+    })
+  })
+
+  describe('AniList add path (Story 8.3)', () => {
+    const validAnilistAnime = {
+      id: 170942,
+      type: 'ANIME',
+      title: {
+        romaji: 'Sousou no Frieren',
+        english: 'Frieren',
+        native: '葬送のフリーレン',
+        userPreferred: 'Sousou no Frieren',
+      },
+      startDate: { year: 2023, month: 9, day: 29 },
+      description: 'After defeating the Demon King...',
+      coverImage: { large: 'https://s4.anilist.co/x.jpg' },
+      studios: {
+        nodes: [{ id: 11, name: 'Madhouse', isAnimationStudio: true }],
+      },
+      genres: ['Adventure'],
+      episodes: 28,
+      format: 'TV',
+      season: 'FALL',
+      seasonYear: 2023,
+      source: 'MANGA',
+      averageScore: 90,
+    }
+
+    const validAnilistManga = {
+      id: 30002,
+      type: 'MANGA',
+      title: {
+        romaji: 'Berserk',
+        english: 'Berserk',
+        native: 'ベルセルク',
+        userPreferred: 'Berserk',
+      },
+      startDate: { year: 1989, month: 8, day: 25 },
+      description: 'His name is Guts...',
+      coverImage: { large: 'https://s4.anilist.co/y.jpg' },
+      chapters: 374,
+      volumes: 41,
+      format: 'MANGA',
+      genres: ['Action'],
+      staff: {
+        edges: [
+          {
+            role: 'Story & Art',
+            node: { id: 100029, name: { full: 'Kentarou Miura' } },
+          },
+        ],
+      },
+      averageScore: 94,
+    }
+
+    it("returns 201 for source:anilist + type:ANIME when source ID is new (anilist_id set, sourceIdKey 'anilist_id')", async () => {
+      anilistMock.getMedia.mockResolvedValue(validAnilistAnime)
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      dbMock.mediaItem.findMany.mockResolvedValue([])
+      dbMock.mediaItem.create.mockResolvedValue(
+        newMediaItem({
+          id: 'cm_anime_1',
+          type: MediaType.ANIME,
+          title: 'Sousou no Frieren',
+          tmdb_id: null,
+          anilist_id: 170942,
+          user_entry: newUserEntry({ media_item_id: 'cm_anime_1' }),
+        }),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({
+          source: 'anilist',
+          sourceId: 170942,
+          type: MediaType.ANIME,
+        }),
+      )
+
+      expect(res.status).toBe(201)
+      expect(anilistMock.getMedia).toHaveBeenCalledWith(170942, 'ANIME')
+      const body = await res.json()
+      expect(body.mediaItem.anilist_id).toBe(170942)
+      expect(body.mediaItem.type).toBe(MediaType.ANIME)
+      expect(body.merged).toBe(false)
+    })
+
+    it('returns 201 for source:anilist + type:MANGA, mapping author_name + chapter_count + volume_count', async () => {
+      anilistMock.getMedia.mockResolvedValue(validAnilistManga)
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      dbMock.mediaItem.findMany.mockResolvedValue([])
+      dbMock.mediaItem.create.mockResolvedValue(
+        newMediaItem({
+          id: 'cm_manga_1',
+          type: MediaType.MANGA,
+          title: 'Berserk',
+          tmdb_id: null,
+          anilist_id: 30002,
+          user_entry: newUserEntry({ media_item_id: 'cm_manga_1' }),
+        }),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({
+          source: 'anilist',
+          sourceId: 30002,
+          type: MediaType.MANGA,
+        }),
+      )
+
+      expect(res.status).toBe(201)
+      expect(anilistMock.getMedia).toHaveBeenCalledWith(30002, 'MANGA')
+      const createArg = dbMock.mediaItem.create.mock.calls[0]?.[0]
+      expect(createArg.data).toMatchObject({
+        type: MediaType.MANGA,
+        author_name: 'Kentarou Miura',
+        chapter_count: 374,
+        volume_count: 41,
+        format: 'MANGA',
+        anilist_id: 30002,
+      })
+    })
+
+    it('idempotent fast-path: existing MediaItem.anilist_id returns 200 with merged:false', async () => {
+      dbMock.mediaItem.findUnique.mockResolvedValue(
+        newMediaItem({
+          type: MediaType.ANIME,
+          tmdb_id: null,
+          anilist_id: 170942,
+          user_entry: newUserEntry(),
+        }),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({
+          source: 'anilist',
+          sourceId: 170942,
+          type: MediaType.ANIME,
+        }),
+      )
+
+      expect(res.status).toBe(200)
+      expect(anilistMock.getMedia).not.toHaveBeenCalled()
+      const body = await res.json()
+      expect(body.merged).toBe(false)
+    })
+
+    it('502 upstream_failed when AniList rejects (network / 429 / 5xx)', async () => {
+      const { AnilistApiError } = await import('@/lib/api/anilist')
+      anilistMock.getMedia.mockRejectedValue(
+        new AnilistApiError('AniList HTTP 500: media/anime/170942', {
+          endpoint: 'media/anime/170942',
+          httpStatus: 500,
+        }),
+      )
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({
+          source: 'anilist',
+          sourceId: 170942,
+          type: MediaType.ANIME,
+        }),
+      )
+
+      expect(res.status).toBe(502)
+      const body = await res.json()
+      expect(body.error).toBe('upstream_failed')
+    })
+
+    it('cross-source merge: existing MediaItem with tmdb_id and matching type/title/year picks up anilist_id', async () => {
+      anilistMock.getMedia.mockResolvedValue(validAnilistAnime)
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      const candidate = newMediaItem({
+        id: 'cm_existing',
+        type: MediaType.ANIME,
+        title: 'Sousou no Frieren',
+        release_date: new Date('2023-09-29T00:00:00Z'),
+        tmdb_id: null,
+        anilist_id: null,
+        user_entry: newUserEntry({ media_item_id: 'cm_existing' }),
+      })
+      dbMock.mediaItem.findMany.mockResolvedValue([candidate])
+      dbMock.mediaItem.update.mockResolvedValue({
+        ...candidate,
+        anilist_id: 170942,
+      })
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({
+          source: 'anilist',
+          sourceId: 170942,
+          type: MediaType.ANIME,
+        }),
+      )
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.merged).toBe(true)
+      expect(body.mediaItem.anilist_id).toBe(170942)
+      expect(dbMock.mediaItem.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'cm_existing' },
+          data: { anilist_id: 170942 },
+        }),
+      )
+    })
+
+    it('ECH-T7 guard: cross-merge SKIPS candidates of a different MediaType', async () => {
+      // Existing 2007 TMDB-imported MOVIE "Sword of the Stranger" must NOT
+      // cross-merge with an inbound 2007 AniList ANIME of the same name -
+      // they're distinct items that should remain separate rows.
+      anilistMock.getMedia.mockResolvedValue({
+        ...validAnilistAnime,
+        id: 2199,
+        title: {
+          romaji: 'Sword of the Stranger',
+          english: 'Sword of the Stranger',
+          native: null,
+          userPreferred: 'Sword of the Stranger',
+        },
+        startDate: { year: 2007, month: 9, day: 29 },
+      })
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      const movieCandidate = newMediaItem({
+        id: 'cm_movie',
+        type: MediaType.MOVIE,
+        title: 'Sword of the Stranger',
+        release_date: new Date('2007-09-29T00:00:00Z'),
+        tmdb_id: 12345,
+        anilist_id: null,
+        user_entry: newUserEntry({ media_item_id: 'cm_movie' }),
+      })
+      dbMock.mediaItem.findMany.mockResolvedValue([movieCandidate])
+      dbMock.mediaItem.create.mockResolvedValue(
+        newMediaItem({
+          id: 'cm_anime_new',
+          type: MediaType.ANIME,
+          title: 'Sword of the Stranger',
+          tmdb_id: null,
+          anilist_id: 2199,
+          user_entry: newUserEntry({ media_item_id: 'cm_anime_new' }),
+        }),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({
+          source: 'anilist',
+          sourceId: 2199,
+          type: MediaType.ANIME,
+        }),
+      )
+
+      expect(res.status).toBe(201)
+      expect(dbMock.mediaItem.update).not.toHaveBeenCalled()
+      expect(dbMock.mediaItem.create).toHaveBeenCalledTimes(1)
+      const body = await res.json()
+      expect(body.merged).toBe(false)
     })
   })
 

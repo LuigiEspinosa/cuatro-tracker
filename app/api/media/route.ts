@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { logger } from '@/lib/logger'
 import { withRequest } from '@/lib/request-context'
 import { TmdbApiError } from '@/lib/api/tmdb'
+import { AnilistApiError } from '@/lib/api/anilist'
 import {
   getDispatcher,
   type AddMediaSource,
@@ -199,7 +200,7 @@ async function handler(req: NextRequest): Promise<NextResponse> {
   try {
     raw = await dispatcher.fetch(sourceId)
   } catch (err) {
-    if (err instanceof TmdbApiError) {
+    if (err instanceof TmdbApiError || err instanceof AnilistApiError) {
       logger.warn(
         {
           event: 'media.upstream_failed',
@@ -267,8 +268,13 @@ async function persistSingleMediaItem(
       releaseYear === 1970
         ? []
         : await findCrossSourceCandidates(source, releaseYear)
+    // Filter to the same MediaType. Without this, a 2007 TMDB movie titled
+    // "Sword of the Stranger" would collapse with a 2007 AniList anime of the
+    // same name — patching anilist_id onto the movie row and silently changing
+    // the canonical type. Closes ECH-T7 (movie cross-source merge type filter
+    // missing). Same invariant already enforced for TV in persistShowWithEpisodes.
     const crossMatch = candidates.find(
-      (c) => normaliseTitle(c.title) === normalisedKey,
+      (c) => c.type === type && normaliseTitle(c.title) === normalisedKey,
     )
 
     if (crossMatch) {
