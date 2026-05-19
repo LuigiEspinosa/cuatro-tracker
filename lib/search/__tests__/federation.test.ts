@@ -356,4 +356,37 @@ describe('lib/search/federation: anilistAdapter (Story 8.3)', () => {
 
     expect(results[0]?.release_year).toBeUndefined()
   })
+
+  it('ECH-8-3-1: type=undefined uses Promise.allSettled internally; preserves the fulfilled half when one of anime/manga rejects', async () => {
+    // Pre-fix: Promise.all short-circuits on the first rejection, throwing
+    // away the entire successful half. The route`s outer Promise.allSettled
+    // then sees the adapter as fully failed.
+    anilistMock.searchAnime.mockRejectedValue(
+      new Error('AniList rate limited (429)'),
+    )
+    anilistMock.searchManga.mockResolvedValue([
+      anilistMedia(30002, 'MANGA', { title: 'Berserk' }),
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const anilist = ADAPTERS.find((a) => a.source === 'anilist')!
+
+    const results = await anilist.search('mixed', undefined)
+
+    // Manga survives; anime`s rejection is swallowed (logged via partial-failure).
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({
+      type: 'manga',
+      anilist_id: 30002,
+      primary_source: 'anilist',
+    })
+  })
+
+  it('ECH-8-3-1: throws only when BOTH inner calls reject', async () => {
+    anilistMock.searchAnime.mockRejectedValue(new Error('boom anime'))
+    anilistMock.searchManga.mockRejectedValue(new Error('boom manga'))
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const anilist = ADAPTERS.find((a) => a.source === 'anilist')!
+
+    await expect(anilist.search('both', undefined)).rejects.toThrow(/boom/)
+  })
 })

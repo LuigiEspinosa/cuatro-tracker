@@ -43,6 +43,7 @@ const TYPE_TO_API: Record<Exclude<FilterId, 'ALL'>, SearchApiType> = {
   MOVIES: 'movie',
   TV: 'tv',
   ANIME: 'anime',
+  MANGA: 'manga',
   GAMES: 'game',
 }
 
