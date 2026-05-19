@@ -1,12 +1,34 @@
 'use client'
 
-import { useCallback, useRef, type KeyboardEvent } from 'react'
+import { useCallback, useRef, type KeyboardEvent, type ReactNode } from 'react'
+import Link from 'next/link'
 import { MediaType } from '@prisma/client'
 import { EmptyStateCard } from '@/components/molecules/EmptyStateCard'
 import { FramedCover } from '@/components/molecules/FramedCover'
 import type { Medium } from '@/components/molecules/FramedCover/media-registry'
 import { getImageUrl } from '@/lib/api/tmdb-images'
 import type { LibraryItem } from '@/lib/types/library'
+
+function detailRouteFor(item: LibraryItem): string | null {
+  // TV episodes have no per-episode detail page; they're traversed via the
+  // parent show's /tv/[id] page. The dashboard rarely shows episode rows,
+  // but when it does we render the cell without a navigation target.
+  switch (item.mediaType) {
+    case MediaType.MOVIE:
+      return `/movies/${item.mediaItemId}`
+    case MediaType.TV_SHOW:
+      return `/tv/${item.mediaItemId}`
+    case MediaType.ANIME:
+      return `/anime/${item.mediaItemId}`
+    case MediaType.MANGA:
+      return `/manga/${item.mediaItemId}`
+    case MediaType.GAME:
+      return `/games/${item.mediaItemId}`
+    case MediaType.TV_EPISODE:
+    default:
+      return null
+  }
+}
 
 export type HorizontalCoverScrollerProps = {
   items: LibraryItem[]
@@ -54,7 +76,11 @@ export function HorizontalCoverScroller({
   const focusCardAt = useCallback((idx: number) => {
     const list = listRef.current
     if (list === null) return
-    const cards = list.querySelectorAll<HTMLLIElement>('li.hcs-cell')
+    // Focusable element is now the inner .hcs-cell-link (a Link for routable
+    // media types; a div for TV_EPISODE which has no detail page).
+    const cards = list.querySelectorAll<HTMLElement>(
+      'li.hcs-cell > .hcs-cell-link',
+    )
     const target = cards.item(idx)
     if (target === null) return
     target.focus()
@@ -67,7 +93,9 @@ export function HorizontalCoverScroller({
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
       const list = listRef.current
       if (list === null) return
-      const cards = Array.from(list.querySelectorAll<HTMLLIElement>('li.hcs-cell'))
+      const cards = Array.from(
+        list.querySelectorAll<HTMLElement>('li.hcs-cell > .hcs-cell-link'),
+      )
       const currentIdx = cards.findIndex((c) => c === document.activeElement)
 
       // Entry case: keyboard nav reached the band from outside via Tab, then
@@ -115,12 +143,9 @@ export function HorizontalCoverScroller({
         {items.map((item, i) => {
           const medium = MEDIA_TYPE_TO_MEDIUM[item.mediaType]
           const posterUrl = getImageUrl(item.posterPath, 'w342') ?? POSTER_PLACEHOLDER
-          return (
-            <li
-              key={item.id}
-              className='hcs-cell'
-              tabIndex={i === 0 ? 0 : -1}
-            >
+          const route = detailRouteFor(item)
+          const inner: ReactNode = (
+            <>
               <div className='hcs-cell-frame'>
                 <FramedCover
                   medium={medium}
@@ -131,6 +156,23 @@ export function HorizontalCoverScroller({
               </div>
               <p className='hcs-cell-title'>{item.title}</p>
               <p className='hcs-cell-meta'>{metaLine(item)}</p>
+            </>
+          )
+          return (
+            <li key={item.id} className='hcs-cell'>
+              {route !== null ? (
+                <Link
+                  href={route}
+                  className='hcs-cell-link'
+                  tabIndex={i === 0 ? 0 : -1}
+                >
+                  {inner}
+                </Link>
+              ) : (
+                <div className='hcs-cell-link' tabIndex={i === 0 ? 0 : -1}>
+                  {inner}
+                </div>
+              )}
             </li>
           )
         })}

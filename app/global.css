@@ -3058,3 +3058,35 @@ body {
   padding: 96px 24px;
   text-align: center;
 }
+
+/* Dashboard click-through: HorizontalCoverScroller cells + the
+ * CurrentlyActiveCarousel hero now wrap their content in <Link> elements so
+ * the entire card is clickable / keyboard-navigable to the detail route.
+ * .hcs-cell-link spans the whole cell area; .cac-screen-link is positioned
+ * as an invisible overlay on top of the carousel screen so the existing
+ * flex layout of cover + info is preserved underneath. */
+.hcs-cell-link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+.hcs-cell-link:focus-visible {
+  outline: 2px solid var(--phosphor-green, var(--rb-green));
+  outline-offset: 4px;
+}
+
+.cac-screen { position: relative; }
+.cac-screen-link {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  /* Visually invisible but focusable + clickable; covers the whole screen. */
+  display: block;
+}
+.cac-screen-link:focus-visible {
+  outline: 2px solid var(--phosphor-green, var(--rb-green));
+  outline-offset: -2px;
+}
