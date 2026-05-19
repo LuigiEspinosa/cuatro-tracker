@@ -383,4 +383,113 @@ describe('GET /api/library', () => {
       expect(res.status).toBe(400)
     })
   })
+
+  describe('Epic 8 mediaType routing (Story 8.4)', () => {
+    it('forwards type=ANIME to findLibraryItems with MediaType.ANIME', async () => {
+      dbMock.userEntry.findMany.mockResolvedValue([])
+      const { GET } = await import('@/app/api/library/route')
+
+      const res = await GET(makeRequest('/api/library?type=ANIME'))
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body).toEqual({ items: [] })
+      const call = dbMock.userEntry.findMany.mock.calls[0]?.[0]
+      expect(call.where.media_item.type).toBe(MediaType.ANIME)
+    })
+
+    it('forwards type=MANGA to findLibraryItems with MediaType.MANGA', async () => {
+      dbMock.userEntry.findMany.mockResolvedValue([])
+      const { GET } = await import('@/app/api/library/route')
+
+      const res = await GET(makeRequest('/api/library?type=MANGA'))
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body).toEqual({ items: [] })
+      const call = dbMock.userEntry.findMany.mock.calls[0]?.[0]
+      expect(call.where.media_item.type).toBe(MediaType.MANGA)
+    })
+
+    it('serializes an ANIME LibraryItem with anilist_id and a full-URL poster_path (AniList CDN)', async () => {
+      const anilistEntry = fixtureEntry({
+        id: 'anime-entry-1',
+        media_item_id: 'anime-media-1',
+        media_item: {
+          ...fixtureEntry().media_item,
+          id: 'anime-media-1',
+          type: MediaType.ANIME,
+          title: 'Sousou no Frieren',
+          release_date: new Date('2023-09-29T00:00:00Z'),
+          poster_path:
+            'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx170942-x.jpg',
+          tmdb_id: null,
+          anilist_id: 170942,
+          lifecycle_status: null,
+        },
+      })
+      dbMock.userEntry.findMany.mockResolvedValue([anilistEntry])
+      const { GET } = await import('@/app/api/library/route')
+
+      const res = await GET(makeRequest('/api/library?type=ANIME'))
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.items).toHaveLength(1)
+      expect(body.items[0]).toMatchObject({
+        mediaType: MediaType.ANIME,
+        title: 'Sousou no Frieren',
+        anilistId: 170942,
+        tmdbId: null,
+        igdbId: null,
+        steamId: null,
+        sourceLabel: 'From AniList',
+        progressLabel: null,
+        progressPct: null,
+        posterPath:
+          'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx170942-x.jpg',
+        year: 2023,
+      })
+    })
+
+    it('serializes a MANGA LibraryItem with anilist_id and AniList CDN poster_path', async () => {
+      const mangaEntry = fixtureEntry({
+        id: 'manga-entry-1',
+        media_item_id: 'manga-media-1',
+        status: WatchStatus.PLAN_TO_WATCH,
+        media_item: {
+          ...fixtureEntry().media_item,
+          id: 'manga-media-1',
+          type: MediaType.MANGA,
+          title: 'Berserk',
+          release_date: new Date('1989-08-25T00:00:00Z'),
+          poster_path:
+            'https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx30002-x.jpg',
+          tmdb_id: null,
+          anilist_id: 30002,
+          lifecycle_status: null,
+        },
+      })
+      dbMock.userEntry.findMany.mockResolvedValue([mangaEntry])
+      const { GET } = await import('@/app/api/library/route')
+
+      const res = await GET(makeRequest('/api/library?type=MANGA'))
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.items).toHaveLength(1)
+      expect(body.items[0]).toMatchObject({
+        mediaType: MediaType.MANGA,
+        title: 'Berserk',
+        anilistId: 30002,
+        tmdbId: null,
+        igdbId: null,
+        steamId: null,
+        sourceLabel: 'From AniList',
+        progressLabel: null,
+        progressPct: null,
+        year: 1989,
+      })
+    })
+  })
 })

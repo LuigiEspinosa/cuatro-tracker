@@ -1,6 +1,12 @@
 'use client'
 
-import { type KeyboardEvent, useMemo, useRef, useEffect } from 'react'
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  useMemo,
+  useRef,
+  useEffect,
+} from 'react'
 import { CRTPixelButton } from '@/components/atoms/CRTPixelButton'
 import { PhosphorLED, type PhosphorLEDStatus } from '@/components/atoms/PhosphorLED'
 import { FramedCover } from '@/components/molecules/FramedCover'
@@ -82,6 +88,14 @@ export function SearchResultRow({
     }
   }
 
+  function handleRowClick(event: MouseEvent<HTMLLIElement>) {
+    // The action button has its own onClick; let it handle clicks landing
+    // inside `.sr-action` so we don't double-fire on the same press.
+    const target = event.target as HTMLElement | null
+    if (target?.closest('.sr-action')) return
+    onOpenDetail()
+  }
+
   const actionLabel = addingPending
     ? '> ADDING…'
     : inLibrary
@@ -98,6 +112,7 @@ export function SearchResultRow({
       aria-selected={isFocused}
       tabIndex={isFocused ? 0 : -1}
       onKeyDown={handleKeyDown}
+      onClick={handleRowClick}
     >
       <div className='sr-cover'>
         {posterUrl ? (

@@ -146,6 +146,45 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     return jsonResponse(body, 201)
   }
 
+  // Story 8.5 AC-5: anime auto-advance. Gated on MediaType.ANIME and only
+  // fires when the client sent an explicit `progress` field. Movie / TV /
+  // episode paths are unaffected. Server-side so a buggy client cannot drive
+  // progress backwards on a check or override completed_at.
+  if (
+    entry.media_item.type === MediaType.ANIME &&
+    progress !== undefined
+  ) {
+    const existingProgress = entry.progress
+    // Client signals direction via the sent value: progress >= existing is an
+    // increment (max() coalesces to the larger value); progress < existing is a
+    // decrement and we trust the client. AC-5.1.
+    const effectiveProgress =
+      progress >= existingProgress
+        ? Math.max(existingProgress, progress)
+        : progress
+
+    data.progress = effectiveProgress
+
+    const episodeCount = entry.media_item.episode_count
+    if (
+      episodeCount !== null &&
+      effectiveProgress >= episodeCount
+    ) {
+      data.status = WatchStatus.COMPLETED
+      // Idempotent: don't overwrite an existing completion timestamp.
+      if (entry.completed_at === null) {
+        data.completed_at = new Date()
+      }
+      if (!fieldsApplied.includes('status')) fieldsApplied.push('status')
+    } else if (
+      entry.status === WatchStatus.PLAN_TO_WATCH &&
+      effectiveProgress >= 1
+    ) {
+      data.status = WatchStatus.WATCHING
+      if (!fieldsApplied.includes('status')) fieldsApplied.push('status')
+    }
+  }
+
   const updated = await db.userEntry.update({
     where: { id: entry.id },
     data,

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { MediaType } from '@prisma/client'
 import { CRTBezel } from '@/components/molecules/CRTBezel'
 import { EmptyStateCard } from '@/components/molecules/EmptyStateCard'
@@ -8,6 +9,7 @@ import { FramedCover } from '@/components/molecules/FramedCover'
 import type { Medium } from '@/components/molecules/FramedCover/media-registry'
 import { useChannelFlipNavigate } from '@/components/molecules/ChannelFlipTransition'
 import { getImageUrl } from '@/lib/api/tmdb-images'
+import { detailRouteFor } from '@/lib/detail-route'
 import type { LibraryItem } from '@/lib/types/library'
 
 export type CurrentlyActiveCarouselProps = {
@@ -34,6 +36,7 @@ const MEDIA_TYPE_LABEL: Record<MediaType, string> = {
   MANGA: 'MANGA',
   GAME: 'GAME',
 }
+
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false)
@@ -111,6 +114,7 @@ export function CurrentlyActiveCarousel({
   const posterUrl =
     getImageUrl(active.posterPath, 'w342') ??
     'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
+  const detailRoute = detailRouteFor(active)
 
   return (
     <section className='dash-hero cac' aria-label='Currently active'>
@@ -127,6 +131,13 @@ export function CurrentlyActiveCarousel({
             }
           }}
         >
+          {detailRoute !== null ? (
+            <Link
+              href={detailRoute}
+              className='cac-screen-link'
+              aria-label={`Open ${active.title} detail`}
+            />
+          ) : null}
           <div className='cac-cover'>
             <FramedCover
               medium={medium}

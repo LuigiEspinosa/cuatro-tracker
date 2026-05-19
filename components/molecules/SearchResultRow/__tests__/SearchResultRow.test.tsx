@@ -213,4 +213,45 @@ describe('SearchResultRow', () => {
     )
     expect(container.querySelector('.sr-cover-fallback')?.textContent).toBe('?')
   })
+
+  it('fires onOpenDetail when the row body is clicked (outside the action button)', () => {
+    const onOpenDetail = vi.fn()
+    const { container } = render(
+      <SearchResultRow
+        result={makeResult()}
+        inLibrary={true}
+        watchStatus='PLAN_TO_WATCH'
+        isFocused={false}
+        addingPending={false}
+        onAdd={() => {}}
+        onOpenDetail={onOpenDetail}
+      />,
+    )
+    const title = container.querySelector('.sr-title') as HTMLElement
+    fireEvent.click(title)
+    expect(onOpenDetail).toHaveBeenCalledOnce()
+  })
+
+  it('does NOT double-fire onOpenDetail when the action button is clicked (only the button handler runs)', () => {
+    const onOpenDetail = vi.fn()
+    const onAdd = vi.fn()
+    render(
+      <SearchResultRow
+        result={makeResult()}
+        inLibrary={true}
+        watchStatus='PLAN_TO_WATCH'
+        isFocused={false}
+        addingPending={false}
+        onAdd={onAdd}
+        onOpenDetail={onOpenDetail}
+      />,
+    )
+    const button = screen.getByRole('button', { name: /IN LIBRARY/ })
+    fireEvent.click(button)
+    // Button click bubbles to the <li>, but the row-click handler exits early
+    // when the click target is inside `.sr-action`. So onOpenDetail fires
+    // exactly once (from the button handler), not twice.
+    expect(onOpenDetail).toHaveBeenCalledOnce()
+    expect(onAdd).not.toHaveBeenCalled()
+  })
 })

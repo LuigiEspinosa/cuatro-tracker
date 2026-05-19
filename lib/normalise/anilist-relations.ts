@@ -1,4 +1,5 @@
 import type {
+  AnilistMediaType,
   AnilistRelationBuckets,
   AnilistRelationNode,
   AnilistRelationType,
@@ -9,6 +10,11 @@ import type {
 // (consistency with the rest of the unified MediaItem surface).
 export interface NormalisedRelation {
   id: number
+  // Source media type: distinguishes ANIME relations from MANGA relations on
+  // the anime detail page (an ANIME → ADAPTATION row usually points to the
+  // source MANGA). RelationsList uses this to pick the FramedCover medium
+  // and the in-library / out-of-library link target (Story 8.5 AC-6).
+  type: AnilistMediaType
   title: string
   format: string | null
   cover_path: string | null
@@ -58,6 +64,7 @@ function toRelation(
 ): NormalisedRelation {
   return {
     id: node.id,
+    type: node.type,
     title: preferredTitle(node.title),
     format: node.format ?? null,
     cover_path: pickCover(node.coverImage),

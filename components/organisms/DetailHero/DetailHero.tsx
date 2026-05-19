@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { WatchStatus } from '@prisma/client'
 import { FramedCover } from '@/components/molecules/FramedCover/FramedCover'
 import { BitmapText } from '@/components/atoms/BitmapText/BitmapText'
@@ -10,14 +11,20 @@ import { SendToQbtButton } from '@/components/molecules/SendToQbtButton'
 import { WatchOnImdbButton } from '@/components/molecules/WatchOnImdbButton'
 
 export type DetailHeroProps = {
-  mediaItemId: string
+  // Library-state props. Both optional so preview pages (which have no
+  // MediaItem row yet) can render the same hero shell with an
+  // `actionsOverride` slot instead.
+  mediaItemId?: string
+  currentStatus?: WatchStatus
+  // When provided, replaces the default WatchStatusControl in the actions
+  // row. Used by /preview/... to render an ADD TO LIBRARY button.
+  actionsOverride?: ReactNode
   medium: 'movies' | 'tv' | 'anime' | 'manga' | 'games'
   mediumLabel: string
   title: string
   originalTitle: string | null
   posterUrl: string | null
   metadata: MetadataItem[]
-  currentStatus: WatchStatus
   imdbId: string | null
   showQbtButton: boolean
 }
@@ -31,9 +38,21 @@ export function DetailHero({
   posterUrl,
   metadata,
   currentStatus,
+  actionsOverride,
   imdbId,
   showQbtButton,
 }: DetailHeroProps) {
+  // Preview pages pass actionsOverride; detail pages pass currentStatus +
+  // mediaItemId. Both shapes converge on the same hero layout below.
+  const primaryAction =
+    actionsOverride ??
+    (mediaItemId !== undefined && currentStatus !== undefined ? (
+      <WatchStatusControl
+        mediaItemId={mediaItemId}
+        currentStatus={currentStatus}
+      />
+    ) : null)
+
   return (
     <section className='detail-hero' aria-label='Item header'>
       <div className='detail-hero-cover'>
@@ -54,10 +73,7 @@ export function DetailHero({
         ) : null}
         <MetadataRow items={metadata} />
         <div className='detail-hero-actions'>
-          <WatchStatusControl
-            mediaItemId={mediaItemId}
-            currentStatus={currentStatus}
-          />
+          {primaryAction}
           <div className='detail-hero-action-buttons'>
             {showQbtButton ? <SendToQbtButton /> : null}
             <WatchOnImdbButton imdbId={imdbId} />

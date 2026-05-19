@@ -419,7 +419,71 @@ describe('GlobalSearch', () => {
     expect(addButtons).toHaveLength(1)
   })
 
-  it('Enter on a focused row navigates to the detail route stub', async () => {
+  it('Enter on a focused in-library row navigates to /<medium>/<MediaItem.id>', async () => {
+    // Detail pages route by MediaItem.id, not by the external source id. The
+    // library subscription provides the mapping; the bundle-2 hotfix uses that
+    // map to construct the correct URL.
+    vi.stubGlobal(
+      'fetch',
+      routedFetchMock({
+        library: () =>
+          new Response(
+            JSON.stringify({
+              items: [
+                {
+                  id: 'entry-1',
+                  mediaItemId: 'm-fightclub',
+                  mediaType: 'MOVIE',
+                  status: 'PLAN_TO_WATCH',
+                  title: 'Fight Club',
+                  posterPath: '/poster.jpg',
+                  year: 1999,
+                  releaseDate: '1999-10-15T00:00:00.000Z',
+                  progressLabel: null,
+                  progressPct: null,
+                  sourceLabel: 'From TMDB',
+                  tmdbId: 550,
+                  anilistId: null,
+                  igdbId: null,
+                  steamId: null,
+                  createdAt: '2026-05-10T00:00:00.000Z',
+                  updatedAt: '2026-05-10T00:00:00.000Z',
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
+        search: () =>
+          new Response(
+            JSON.stringify({ results: fightResults(), partialFailure: false }),
+            { status: 200 },
+          ),
+      }),
+    )
+    const { container } = renderGS()
+    flushQuery('fight')
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Fight Club' }),
+      ).toBeInTheDocument(),
+    )
+    // Wait for the library subscription to populate before pressing Enter,
+    // otherwise handleOpenDetail no-ops as if Fight Club weren't in the lib.
+    await waitFor(() => {
+      expect(screen.getByText('✓ IN LIBRARY')).toBeInTheDocument()
+    })
+
+    const root = container.querySelector('.gs')!
+    fireEvent.keyDown(root, { key: 'ArrowDown' })
+    fireEvent.keyDown(root, { key: 'Enter' })
+
+    expect(pushMock).toHaveBeenCalledWith('/movies/m-fightclub')
+  })
+
+  it('Enter on a focused NOT-in-library row navigates to /preview/<source>/<type>/<sourceId>', async () => {
+    // For results that aren't in the library, the canonical detail page
+    // doesn't exist (it requires a MediaItem.id). The preview route fetches
+    // the source data on-the-fly and offers an ADD button.
     vi.stubGlobal(
       'fetch',
       routedFetchMock({
@@ -442,6 +506,7 @@ describe('GlobalSearch', () => {
     fireEvent.keyDown(root, { key: 'ArrowDown' })
     fireEvent.keyDown(root, { key: 'Enter' })
 
-    expect(pushMock).toHaveBeenCalledWith('/movies/550')
+    // fightResults() puts Fight Club first: source=tmdb, type=movie, tmdb_id=550.
+    expect(pushMock).toHaveBeenCalledWith('/preview/tmdb/movie/550')
   })
 })

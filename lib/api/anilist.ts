@@ -106,6 +106,44 @@ export const AnilistStaffSchema = z.object({
   edges: z.array(AnilistStaffEdgeSchema),
 })
 
+// AniList returns `role` as an enum string (MAIN / SUPPORTING / BACKGROUND) and
+// `language` as another enum (JAPANESE / ENGLISH / KOREAN / ...). We keep them
+// as `z.string()` to stay loose with future AniList enum additions; downstream
+// rendering treats them as opaque chip labels.
+export const AnilistCharacterImageSchema = z.object({
+  medium: z.string().nullable().optional(),
+})
+
+export const AnilistCharacterNameSchema = z.object({
+  full: z.string(),
+  native: z.string().nullable().optional(),
+})
+
+export const AnilistVoiceActorSchema = z.object({
+  id: z.number(),
+  name: AnilistCharacterNameSchema,
+  language: z.string().optional(),
+})
+export type AnilistVoiceActor = z.infer<typeof AnilistVoiceActorSchema>
+
+export const AnilistCharacterNodeSchema = z.object({
+  id: z.number(),
+  name: AnilistCharacterNameSchema,
+  image: AnilistCharacterImageSchema.optional(),
+})
+export type AnilistCharacterNode = z.infer<typeof AnilistCharacterNodeSchema>
+
+export const AnilistCharacterEdgeSchema = z.object({
+  role: z.string(),
+  voiceActors: z.array(AnilistVoiceActorSchema).optional(),
+  node: AnilistCharacterNodeSchema,
+})
+export type AnilistCharacterEdge = z.infer<typeof AnilistCharacterEdgeSchema>
+
+export const AnilistCharactersSchema = z.object({
+  edges: z.array(AnilistCharacterEdgeSchema),
+})
+
 export const AnilistRelationTypeSchema = z.enum([
   'ADAPTATION',
   'PREQUEL',
@@ -165,6 +203,7 @@ export const AnilistMediaSchema = z.object({
   bannerImage: z.string().nullable().optional(),
   studios: AnilistStudiosSchema.optional(),
   staff: AnilistStaffSchema.optional(),
+  characters: AnilistCharactersSchema.optional(),
   source: z.string().nullable().optional(),
   isAdult: z.boolean().optional(),
   relations: AnilistRelationsSchema.optional(),
@@ -427,6 +466,13 @@ const MEDIA_FIELDS = `
   bannerImage
   studios { nodes { id name isAnimationStudio } }
   staff(perPage: 8) { edges { role node { id name { full native } } } }
+  characters(perPage: 12, sort: ROLE) {
+    edges {
+      role
+      voiceActors(language: JAPANESE) { id name { full native } language }
+      node { id name { full native } image { medium } }
+    }
+  }
   source
   isAdult
 `

@@ -2754,3 +2754,645 @@ body {
   .watch-status-control-button[data-pulsing='true'] .led { animation: none; }
   .detail-hero-title { text-shadow: none; }
 }
+
+/* =========================================================================
+ * Story 8.5 — /anime/[id] detail page
+ *
+ * Mirrors the .movie-detail-page shape for the new media types. The anime
+ * detail page (and the still-WIP manga detail in Story 8.6) reuse the same
+ * outer layout / rule / synopsis primitives. Episode checklist, voice cast,
+ * and relations are new surfaces unique to AniList.
+ * ========================================================================= */
+
+.anime-detail-page,
+.tv-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 24px 96px;
+}
+
+.anime-detail-rule,
+.tv-detail-rule {
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--rb-green) 0%, var(--rb-green) 16.66%,
+    var(--rb-yellow) 16.66%, var(--rb-yellow) 33.33%,
+    var(--rb-orange) 33.33%, var(--rb-orange) 50%,
+    var(--rb-pink) 50%, var(--rb-pink) 66.66%,
+    var(--rb-purple) 66.66%, var(--rb-purple) 83.33%,
+    var(--rb-blue) 83.33%, var(--rb-blue) 100%
+  );
+  width: 100%;
+}
+.anime-detail-rule-thick,
+.tv-detail-rule-thick { height: 6px; }
+
+.anime-detail-synopsis,
+.tv-detail-synopsis {
+  font-family: var(--font-body), 'EB Garamond', serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--phosphor-cream);
+  column-count: 2;
+  column-gap: 48px;
+  column-rule: 1px solid var(--phosphor-cream-ghost);
+}
+@media (max-width: 1024px) {
+  .anime-detail-synopsis,
+  .tv-detail-synopsis { column-count: 1; }
+}
+.anime-detail-synopsis p,
+.tv-detail-synopsis p { margin: 0 0 16px; break-inside: avoid; }
+
+.anime-detail-progress,
+.tv-detail-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.anime-detail-progress-label,
+.tv-detail-progress-label {
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+}
+
+.anime-detail-studio-chip {
+  display: inline-block;
+  padding: 6px 12px;
+  border: 1px solid var(--phosphor-cream-ghost);
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream);
+}
+
+/* EpisodeChecklist molecule (Story 8.5 AC-3) — flat 1..N list of episode
+ * rows with the EpisodeWatchToggle as the trailing affordance. */
+.episode-checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.episode-checklist-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 32px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--phosphor-cream-ghost);
+  background: var(--ground-card, rgba(34, 26, 48, 0.55));
+}
+.episode-checklist-row[data-checked='true'] {
+  border-color: var(--phosphor-green, var(--rb-green));
+  background: rgba(40, 80, 40, 0.18);
+}
+.episode-checklist-row-code {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream);
+}
+.episode-checklist-row-meta {
+  font-family: var(--font-body), serif;
+  font-size: 13px;
+  color: var(--phosphor-cream-dim);
+}
+
+/* Minimal styling for the EpisodeWatchToggle button so it's visible as a
+ * checkbox-like affordance. Pre-existing across the design system (used by
+ * SeasonAccordion as well) — these rules are additive and don't override
+ * any existing token-driven styling that may land later. */
+.episode-watch-toggle,
+.crt-pixel-checkbox {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--phosphor-cream);
+  color: var(--phosphor-cream);
+  font-family: var(--font-mono), monospace;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.episode-watch-toggle:hover,
+.episode-watch-toggle:focus-visible {
+  border-color: var(--phosphor-green, var(--rb-green));
+  outline: none;
+}
+.episode-watch-toggle[data-checked='true'] {
+  background: var(--phosphor-green, var(--rb-green));
+  color: var(--ground-base, #1a1126);
+  border-color: var(--phosphor-green, var(--rb-green));
+}
+.episode-watch-toggle[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.episode-watch-toggle-mark { display: inline-block; line-height: 1; }
+
+/* VoiceCastList organism (Story 8.5 AC-8) — horizontal scroller mirroring
+ * CastList. Composition is character (top) + voice actor (bottom). */
+.voice-cast-list {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  list-style: none;
+  padding: 0 0 8px;
+  margin: 0;
+}
+.voice-cast-list-item {
+  flex: 0 0 auto;
+  width: 112px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+}
+.voice-cast-list-portrait {
+  width: 96px;
+  height: 96px;
+  background: var(--ground-card, #221A30);
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--phosphor-cream-ghost);
+}
+.voice-cast-list-portrait-img { width: 100%; height: 100%; object-fit: cover; }
+.voice-cast-list-portrait-initials {
+  font-family: var(--font-display), serif;
+  font-size: 28px;
+  color: var(--phosphor-cream);
+}
+.voice-cast-list-role {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+}
+.voice-cast-list-name {
+  font-family: var(--font-display), serif;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--phosphor-cream);
+}
+.voice-cast-list-voiced-by {
+  font-family: var(--font-body), serif;
+  font-style: italic;
+  font-size: 12px;
+  color: var(--phosphor-cream-dim);
+}
+
+/* RelationsList organism (Story 8.5 AC-6) — 5 buckets, fixed order, with
+ * in-library Link vs out-of-library ADD-button affordance per row. */
+.relations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.relations-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.relations-list-section-header {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+  font-weight: 400;
+}
+.relations-list-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.relations-list-row {
+  border: 1px solid var(--phosphor-cream-ghost);
+  background: var(--ground-card, rgba(34, 26, 48, 0.55));
+}
+.relations-list-row-link {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.relations-list-row-link:hover,
+.relations-list-row-link:focus-visible {
+  border-color: var(--phosphor-green, var(--rb-green));
+  outline: none;
+}
+.relations-list-row-cover { width: 56px; }
+.relations-list-row-title {
+  font-family: var(--font-display), serif;
+  font-size: 15px;
+  color: var(--phosphor-cream);
+}
+.relations-list-row-chip {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  padding: 4px 8px;
+  border: 1px solid var(--phosphor-cream-ghost);
+}
+
+.anime-not-found {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  padding: 96px 24px;
+  text-align: center;
+}
+
+/* Dashboard click-through: HorizontalCoverScroller cells + the
+ * CurrentlyActiveCarousel hero now wrap their content in <Link> elements so
+ * the entire card is clickable / keyboard-navigable to the detail route.
+ * .hcs-cell-link spans the whole cell area; .cac-screen-link is positioned
+ * as an invisible overlay on top of the carousel screen so the existing
+ * flex layout of cover + info is preserved underneath. */
+.hcs-cell-link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+.hcs-cell-link:focus-visible {
+  outline: 2px solid var(--phosphor-green, var(--rb-green));
+  outline-offset: 4px;
+}
+
+.cac-screen { position: relative; }
+.cac-screen-link {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  /* Visually invisible but focusable + clickable; covers the whole screen. */
+  display: block;
+}
+.cac-screen-link:focus-visible {
+  outline: 2px solid var(--phosphor-green, var(--rb-green));
+  outline-offset: -2px;
+}
+
+/* =========================================================================
+ * /preview/[source]/[type]/[id] — Story 8.5 follow-up
+ *
+ * Source-driven preview page for search results that aren't in the user's
+ * library yet. Fetches from TMDB / AniList on-the-fly and renders a minimal
+ * detail-shaped layout with an ADD TO LIBRARY button that promotes the
+ * record into the canonical /<medium>/<MediaItem.id> detail page on success.
+ * ========================================================================= */
+.preview-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 24px 96px;
+}
+
+.preview-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--phosphor-cream-dim);
+  text-decoration: none;
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  align-self: flex-start;
+}
+.preview-back-link:hover,
+.preview-back-link:focus-visible {
+  color: var(--phosphor-cream);
+  outline: none;
+}
+
+.preview-hero {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: 32px;
+  align-items: flex-start;
+}
+@media (max-width: 768px) {
+  .preview-hero { grid-template-columns: 1fr; gap: 24px; }
+}
+
+.preview-hero-cover {
+  width: 100%;
+  max-width: 320px;
+  justify-self: center;
+  border: 1px solid var(--phosphor-cream-ghost);
+  background: var(--ground-card, #221A30);
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preview-hero-poster {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.preview-hero-poster-fallback {
+  font-family: var(--font-display), serif;
+  font-size: 64px;
+  color: var(--phosphor-cream-dim);
+}
+
+.preview-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.preview-hero-medium {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+}
+.preview-hero-title {
+  font-family: var(--font-display), 'PP Editorial New', 'Cormorant Garamond', serif;
+  font-size: clamp(32px, 4vw, 56px);
+  line-height: 1.05;
+  color: var(--phosphor-cream);
+  margin: 0;
+  font-weight: 400;
+}
+.preview-hero-original-title {
+  font-family: var(--font-body), 'EB Garamond', serif;
+  font-style: italic;
+  font-size: 16px;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+}
+.preview-hero-meta {
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+}
+.preview-hero-source {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--phosphor-cream-ghost);
+  margin: 0;
+}
+
+.preview-add-button {
+  align-self: flex-start;
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  margin-top: 8px;
+  background: transparent;
+  border: 1px solid var(--phosphor-cream);
+  color: var(--phosphor-cream);
+  cursor: pointer;
+}
+.preview-add-button:hover:not(:disabled),
+.preview-add-button:focus-visible:not(:disabled) {
+  border-color: var(--phosphor-green, var(--rb-green));
+  color: var(--phosphor-green, var(--rb-green));
+  outline: none;
+}
+.preview-add-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.preview-synopsis {
+  font-family: var(--font-body), 'EB Garamond', serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--phosphor-cream);
+  column-count: 2;
+  column-gap: 48px;
+  column-rule: 1px solid var(--phosphor-cream-ghost);
+}
+@media (max-width: 1024px) {
+  .preview-synopsis { column-count: 1; }
+}
+.preview-synopsis p { margin: 0 0 16px; break-inside: avoid; }
+
+.preview-not-found {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  padding: 96px 24px;
+  text-align: center;
+}
+
+/* =========================================================================
+ * SeasonAccordion (Story 7.5) — TV detail page episode tracker.
+ *
+ * Classes were referenced by the TV detail page but never styled. The
+ * accordion expands one season at a time, with a PhosphorBar in the header
+ * and a grid of episode rows in the panel.
+ * ========================================================================= */
+.season-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.season-accordion-section {
+  border: 1px solid var(--phosphor-cream-ghost);
+  background: var(--ground-card, rgba(34, 26, 48, 0.55));
+}
+.season-accordion-header {
+  display: grid;
+  grid-template-columns: 1fr 120px minmax(120px, 220px) 24px;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  color: var(--phosphor-cream);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.season-accordion-header:hover,
+.season-accordion-header:focus-visible {
+  background: rgba(123, 92, 255, 0.06);
+  outline: none;
+}
+.season-accordion-header-title {
+  font-family: var(--font-display), serif;
+  font-size: 18px;
+  line-height: 1.2;
+}
+.season-accordion-header-count {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  text-align: right;
+}
+.season-accordion-header-progress { min-width: 0; }
+.season-accordion-header-chev {
+  font-family: var(--font-mono), monospace;
+  font-size: 18px;
+  color: var(--phosphor-cream-dim);
+  transition: transform 200ms ease-out;
+  text-align: center;
+}
+.season-accordion-header-chev[data-rot='90'] { transform: rotate(90deg); }
+
+.season-accordion-panel {
+  border-top: 1px solid var(--phosphor-cream-ghost);
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.season-accordion-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.season-accordion-mark-watched {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--phosphor-cream);
+  color: var(--phosphor-cream);
+  cursor: pointer;
+}
+.season-accordion-mark-watched:hover:not(:disabled),
+.season-accordion-mark-watched:focus-visible:not(:disabled) {
+  border-color: var(--phosphor-green, var(--rb-green));
+  color: var(--phosphor-green, var(--rb-green));
+  outline: none;
+}
+.season-accordion-mark-watched:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.season-accordion-episodes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.season-accordion-episode {
+  display: grid;
+  grid-template-columns: 56px 1fr 96px 64px 24px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px;
+  border: 1px solid transparent;
+}
+.season-accordion-episode:hover { border-color: var(--phosphor-cream-ghost); }
+.season-accordion-episode[data-unaired='true'] { opacity: 0.55; }
+.season-accordion-episode-code {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--phosphor-cream);
+}
+.season-accordion-episode-title {
+  font-family: var(--font-display), serif;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--phosphor-cream);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.season-accordion-episode-air,
+.season-accordion-episode-runtime {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--phosphor-cream-dim);
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .season-accordion-header {
+    grid-template-columns: 1fr 80px 24px;
+  }
+  .season-accordion-header-progress { display: none; }
+  .season-accordion-episode {
+    grid-template-columns: 56px 1fr 24px;
+  }
+  .season-accordion-episode-air,
+  .season-accordion-episode-runtime { display: none; }
+}
+
+/* Shared CRT-pixel button (used by not-found pages + the relations ADD link). */
+.crt-pixel-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid var(--phosphor-cream);
+  color: var(--phosphor-cream);
+  text-decoration: none;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.crt-pixel-button:hover,
+.crt-pixel-button:focus-visible {
+  border-color: var(--phosphor-green, var(--rb-green));
+  color: var(--phosphor-green, var(--rb-green));
+  outline: none;
+}

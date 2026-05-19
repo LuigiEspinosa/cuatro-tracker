@@ -235,6 +235,63 @@ describe('getMedia', () => {
     expect(media.startDate).toEqual({ year: 2023, month: 9, day: 29 })
   })
 
+  it('parses a Media payload that includes the characters connection (Story 8.5)', async () => {
+    mockFetchData({
+      Media: makeMedia({
+        characters: {
+          edges: [
+            {
+              role: 'MAIN',
+              voiceActors: [
+                {
+                  id: 95011,
+                  name: { full: 'Atsumi Tanezaki', native: '種崎敦美' },
+                  language: 'JAPANESE',
+                },
+              ],
+              node: {
+                id: 184884,
+                name: { full: 'Frieren', native: 'フリーレン' },
+                image: {
+                  medium:
+                    'https://s4.anilist.co/file/anilistcdn/character/medium/b184884.png',
+                },
+              },
+            },
+            {
+              role: 'SUPPORTING',
+              voiceActors: [],
+              node: {
+                id: 184885,
+                name: { full: 'Fern', native: 'フェルン' },
+                image: { medium: null },
+              },
+            },
+          ],
+        },
+      }),
+    })
+    const { getMedia } = await import('@/lib/api/anilist')
+    const media = await getMedia(170942, 'ANIME')
+    expect(media.characters).toBeDefined()
+    expect(media.characters?.edges).toHaveLength(2)
+    expect(media.characters?.edges[0]?.role).toBe('MAIN')
+    expect(media.characters?.edges[0]?.voiceActors?.[0]?.name.full).toBe(
+      'Atsumi Tanezaki',
+    )
+    expect(media.characters?.edges[1]?.voiceActors).toEqual([])
+  })
+
+  it('still parses a Media payload that omits the characters field (backward compat)', async () => {
+    // Search results use the same MEDIA_FIELDS fragment but don't surface
+    // characters in the federated-search UI. Schema must keep the field
+    // optional so existing search-row parses don't regress.
+    mockFetchData({ Media: makeMedia() })
+    const { getMedia } = await import('@/lib/api/anilist')
+    const media = await getMedia(170942, 'ANIME')
+    expect(media.characters).toBeUndefined()
+  })
+
   it('preserves partial startDate where month and day are null', async () => {
     mockFetchData({
       Media: makeMedia({ startDate: { year: 2020, month: null, day: null } }),

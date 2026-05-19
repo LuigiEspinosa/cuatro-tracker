@@ -59,6 +59,7 @@ describe('lib/normalise/anilist-relations', () => {
     expect(result.sequel).toEqual([
       {
         id: 1,
+        type: 'ANIME',
         title: 'Romaji 1',
         format: 'TV',
         cover_path: 'https://cdn.example/1.jpg',
@@ -70,6 +71,7 @@ describe('lib/normalise/anilist-relations', () => {
     expect(result.parent[0]?.relationType).toBe('PARENT')
     expect(result.adaptation[0]).toMatchObject({
       id: 5,
+      type: 'MANGA',
       format: 'MANGA',
       relationType: 'ADAPTATION',
     })

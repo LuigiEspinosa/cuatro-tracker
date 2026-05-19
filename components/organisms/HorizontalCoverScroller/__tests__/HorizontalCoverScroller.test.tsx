@@ -25,6 +25,15 @@ const baseItem = (overrides: Partial<LibraryItem> = {}): LibraryItem => ({
   ...overrides,
 })
 
+// Returns the focusable inner link (or non-link content div for media types
+// without a detail route, e.g. TV_EPISODE) inside the i-th listitem. The
+// roving tabindex + arrow-key nav target this element, not the outer <li>.
+function cellLinks(list: HTMLElement): HTMLElement[] {
+  return Array.from(
+    list.querySelectorAll<HTMLElement>('li.hcs-cell > .hcs-cell-link'),
+  )
+}
+
 describe('HorizontalCoverScroller', () => {
   it('renders one cell per item with title + meta', () => {
     const items: LibraryItem[] = [
@@ -74,7 +83,7 @@ describe('HorizontalCoverScroller', () => {
     expect(screen.getByText('Items you add appear here.')).toBeInTheDocument()
   })
 
-  it('only the first cell is tab-focusable initially (roving tabindex)', () => {
+  it('only the first cell-link is tab-focusable initially (roving tabindex)', () => {
     const items: LibraryItem[] = [
       baseItem({ id: 'a' }),
       baseItem({ id: 'b' }),
@@ -88,13 +97,13 @@ describe('HorizontalCoverScroller', () => {
       />,
     )
     const list = screen.getByRole('list')
-    const cells = within(list).getAllByRole('listitem')
-    expect(cells[0]).toHaveAttribute('tabindex', '0')
-    expect(cells[1]).toHaveAttribute('tabindex', '-1')
-    expect(cells[2]).toHaveAttribute('tabindex', '-1')
+    const links = cellLinks(list)
+    expect(links[0]).toHaveAttribute('tabindex', '0')
+    expect(links[1]).toHaveAttribute('tabindex', '-1')
+    expect(links[2]).toHaveAttribute('tabindex', '-1')
   })
 
-  it('ArrowRight on the first cell moves focus to the second cell', () => {
+  it('ArrowRight on the first cell moves focus to the second cell-link', () => {
     const items: LibraryItem[] = [
       baseItem({ id: 'a' }),
       baseItem({ id: 'b' }),
@@ -108,14 +117,14 @@ describe('HorizontalCoverScroller', () => {
       />,
     )
     const list = screen.getByRole('list')
-    const cells = within(list).getAllByRole('listitem')
-    cells[0].focus()
-    expect(cells[0]).toHaveFocus()
+    const links = cellLinks(list)
+    links[0].focus()
+    expect(links[0]).toHaveFocus()
     fireEvent.keyDown(list, { key: 'ArrowRight' })
-    expect(cells[1]).toHaveFocus()
+    expect(links[1]).toHaveFocus()
   })
 
-  it('ArrowLeft on the second cell moves focus back to the first', () => {
+  it('ArrowLeft on the second cell-link moves focus back to the first', () => {
     const items: LibraryItem[] = [
       baseItem({ id: 'a' }),
       baseItem({ id: 'b' }),
@@ -128,13 +137,13 @@ describe('HorizontalCoverScroller', () => {
       />,
     )
     const list = screen.getByRole('list')
-    const cells = within(list).getAllByRole('listitem')
-    cells[1].focus()
+    const links = cellLinks(list)
+    links[1].focus()
     fireEvent.keyDown(list, { key: 'ArrowLeft' })
-    expect(cells[0]).toHaveFocus()
+    expect(links[0]).toHaveFocus()
   })
 
-  it('ArrowRight at last cell does nothing (no wrap)', () => {
+  it('ArrowRight at last cell-link does nothing (no wrap)', () => {
     const items: LibraryItem[] = [baseItem({ id: 'a' }), baseItem({ id: 'b' })]
     render(
       <HorizontalCoverScroller
@@ -144,13 +153,13 @@ describe('HorizontalCoverScroller', () => {
       />,
     )
     const list = screen.getByRole('list')
-    const cells = within(list).getAllByRole('listitem')
-    cells[1].focus()
+    const links = cellLinks(list)
+    links[1].focus()
     fireEvent.keyDown(list, { key: 'ArrowRight' })
-    expect(cells[1]).toHaveFocus()
+    expect(links[1]).toHaveFocus()
   })
 
-  it('ArrowRight with focus outside (currentIdx === -1) lands focus on the first cell', () => {
+  it('ArrowRight with focus outside (currentIdx === -1) lands focus on the first cell-link', () => {
     const items: LibraryItem[] = [
       baseItem({ id: 'a' }),
       baseItem({ id: 'b' }),
@@ -164,10 +173,10 @@ describe('HorizontalCoverScroller', () => {
       />,
     )
     const list = screen.getByRole('list')
-    const cells = within(list).getAllByRole('listitem')
+    const links = cellLinks(list)
     // Note: nothing is focused yet; fire arrow event directly on the ul.
     fireEvent.keyDown(list, { key: 'ArrowRight' })
-    expect(cells[0]).toHaveFocus()
+    expect(links[0]).toHaveFocus()
   })
 
   it('boundary ArrowKey calls preventDefault so the overflow-x container does not scroll', () => {
@@ -180,10 +189,45 @@ describe('HorizontalCoverScroller', () => {
       />,
     )
     const list = screen.getByRole('list')
-    const cells = within(list).getAllByRole('listitem')
-    cells[1].focus()
+    const links = cellLinks(list)
+    links[1].focus()
     const evt = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })
     list.dispatchEvent(evt)
     expect(evt.defaultPrevented).toBe(true)
+  })
+
+  it('cell-link is a <Link> targeting /<medium>/<mediaItemId> for routable media types', () => {
+    const items: LibraryItem[] = [
+      baseItem({ id: 'a', mediaItemId: 'm-movie', mediaType: MediaType.MOVIE }),
+      baseItem({ id: 'b', mediaItemId: 'm-tv', mediaType: MediaType.TV_SHOW }),
+      baseItem({ id: 'c', mediaItemId: 'm-anime', mediaType: MediaType.ANIME }),
+    ]
+    render(
+      <HorizontalCoverScroller items={items} emptyMessage='X' ariaLabel='X' />,
+    )
+    const list = screen.getByRole('list')
+    const links = cellLinks(list)
+    expect(links[0].getAttribute('href')).toBe('/movies/m-movie')
+    expect(links[1].getAttribute('href')).toBe('/tv/m-tv')
+    expect(links[2].getAttribute('href')).toBe('/anime/m-anime')
+  })
+
+  it('renders a non-link content div for TV_EPISODE (no per-episode detail route)', () => {
+    const items: LibraryItem[] = [
+      baseItem({
+        id: 'ep-1',
+        mediaItemId: 'm-ep',
+        mediaType: MediaType.TV_EPISODE,
+      }),
+    ]
+    render(
+      <HorizontalCoverScroller items={items} emptyMessage='X' ariaLabel='X' />,
+    )
+    const list = screen.getByRole('list')
+    const links = cellLinks(list)
+    expect(links).toHaveLength(1)
+    // Element is the focusable .hcs-cell-link wrapper but NOT an anchor.
+    expect(links[0].tagName.toLowerCase()).not.toBe('a')
+    expect(links[0].getAttribute('href')).toBeNull()
   })
 })
