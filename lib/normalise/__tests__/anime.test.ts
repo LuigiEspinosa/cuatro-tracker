@@ -107,9 +107,11 @@ describe('lib/normalise/anime', () => {
         anilist_id: 170942,
       })
       expect(result.release_date).toBeInstanceOf(Date)
-      expect((result.release_date as Date).getFullYear()).toBe(2023)
-      expect((result.release_date as Date).getMonth()).toBe(8) // September is 8 (0-indexed)
-      expect((result.release_date as Date).getDate()).toBe(29)
+      // UTC getters: partialDateToDate now anchors via Date.UTC so the
+      // result is TZ-independent (ECH-8-2-1 fix).
+      expect((result.release_date as Date).getUTCFullYear()).toBe(2023)
+      expect((result.release_date as Date).getUTCMonth()).toBe(8) // September is 8 (0-indexed)
+      expect((result.release_date as Date).getUTCDate()).toBe(29)
     })
   })
 
@@ -183,9 +185,9 @@ describe('lib/normalise/anime', () => {
       )
       const date = result.release_date as Date
       expect(date).toBeInstanceOf(Date)
-      expect(date.getFullYear()).toBe(2020)
-      expect(date.getMonth()).toBe(0)
-      expect(date.getDate()).toBe(1)
+      expect(date.getUTCFullYear()).toBe(2020)
+      expect(date.getUTCMonth()).toBe(0)
+      expect(date.getUTCDate()).toBe(1)
       expect(Number.isNaN(date.getTime())).toBe(false)
     })
 
@@ -195,9 +197,9 @@ describe('lib/normalise/anime', () => {
         makeAnime({ startDate: { year: 2020, month: 6, day: null } }),
       )
       const date = result.release_date as Date
-      expect(date.getFullYear()).toBe(2020)
-      expect(date.getMonth()).toBe(5) // June
-      expect(date.getDate()).toBe(1)
+      expect(date.getUTCFullYear()).toBe(2020)
+      expect(date.getUTCMonth()).toBe(5) // June
+      expect(date.getUTCDate()).toBe(1)
     })
 
     it('falls through to 1970 sentinel when year is null (all-null fuzzy date)', async () => {

@@ -450,7 +450,13 @@ describe('GET /api/search', () => {
       })
     })
 
-    it('flags partialFailure: true when AniList rejects (e.g. 429), TMDB still returns', async () => {
+    it('flags partialFailure: true when BOTH AniList branches reject (e.g. 429 saturation), TMDB still returns', async () => {
+      // ECH-8-3-1 chore PR (#138): the anilistAdapter now uses
+      // Promise.allSettled internally, so a single rejected branch (anime
+      // OR manga) no longer fails the whole adapter - the surviving branch's
+      // results are returned. For outer partialFailure to flip, BOTH branches
+      // must reject. A separate Vitest at the adapter layer covers the
+      // partial-success behaviour (lib/search/__tests__/federation.test.ts).
       tmdbMock.searchMulti.mockResolvedValue({
         page: 1,
         results: [movieResult],
@@ -458,6 +464,9 @@ describe('GET /api/search', () => {
         total_results: 1,
       })
       anilistMock.searchAnime.mockRejectedValue(
+        new Error('AniList rate limited (429)'),
+      )
+      anilistMock.searchManga.mockRejectedValue(
         new Error('AniList rate limited (429)'),
       )
       const { GET } = await import('@/app/api/search/route')
@@ -469,6 +478,40 @@ describe('GET /api/search', () => {
       expect(body.partialFailure).toBe(true)
       expect(body.results).toHaveLength(1)
       expect(body.results[0]).toMatchObject({ type: 'movie', tmdb_id: 550 })
+    })
+
+    it('partialFailure stays false when only ONE AniList branch rejects (the other survives)', async () => {
+      // Companion to the test above: documents the new partial-success
+      // semantics. The half-failure is still observable via the warn log
+      // emitted in lib/search/federation.ts (event: anilist.partial_failure).
+      tmdbMock.searchMulti.mockResolvedValue({
+        page: 1,
+        results: [],
+        total_pages: 1,
+        total_results: 0,
+      })
+      anilistMock.searchAnime.mockRejectedValue(
+        new Error('AniList rate limited (429)'),
+      )
+      anilistMock.searchManga.mockResolvedValue([
+        anilistMedia(30002, 'MANGA', {
+          title: {
+            romaji: 'Berserk',
+            english: null,
+            native: null,
+            userPreferred: 'Berserk',
+          },
+        }),
+      ])
+      const { GET } = await import('@/app/api/search/route')
+
+      const res = await GET(makeRequest('/api/search?q=foo'))
+
+      const body = await res.json()
+      expect(body.partialFailure).toBe(false)
+      // Surviving manga result is returned.
+      expect(body.results).toHaveLength(1)
+      expect(body.results[0]).toMatchObject({ type: 'manga' })
     })
 
     it('logs each adapter rejection at warn with { source, durationMs, err }', async () => {

@@ -4,6 +4,7 @@ import {
   searchManga,
   type AnilistMedia,
 } from '@/lib/api/anilist'
+import { logger } from '@/lib/logger'
 
 export type SearchType = 'movie' | 'tv' | 'anime' | 'manga' | 'game'
 
@@ -130,14 +131,54 @@ const anilistAdapter: AdapterCapability = {
       const manga = await searchManga(query)
       return manga.map((m) => adaptAnilistResult(m, 'manga'))
     }
-    const [anime, manga] = await Promise.all([
+    // Promise.allSettled (not Promise.all): if anime succeeds with 25 results
+    // but manga rejects (or vice versa), we must surface the half that
+    // succeeded rather than discarding both. Pre-fix code used Promise.all
+    // which short-circuited on the first rejection - the outer route's
+    // Promise.allSettled then marked the entire anilist adapter as failed,
+    // silently throwing away valid manga rows when anime's 429'd. ECH-8-3-1.
+    // If BOTH inner calls reject we still throw, so the outer route can flag
+    // partialFailure correctly.
+    const [animeResult, mangaResult] = await Promise.allSettled([
       searchAnime(query),
       searchManga(query),
     ])
-    return [
-      ...anime.map((m) => adaptAnilistResult(m, 'anime')),
-      ...manga.map((m) => adaptAnilistResult(m, 'manga')),
-    ]
+    if (
+      animeResult.status === 'rejected' &&
+      mangaResult.status === 'rejected'
+    ) {
+      // Re-throw anime's rejection (the first-listed); the route's outer
+      // Promise.allSettled will record the adapter as failed and set
+      // partialFailure: true. The specific error identity is preserved so a
+      // 429 surfaces as a 429 in the warn log.
+      throw animeResult.reason
+    }
+    const merged: UnifiedSearchResult[] = []
+    if (animeResult.status === 'fulfilled') {
+      merged.push(
+        ...animeResult.value.map((m) => adaptAnilistResult(m, 'anime')),
+      )
+    } else {
+      // Log the half-failure so partial AniList degradation is observable
+      // even though the outer route's partialFailure stays false (the adapter
+      // returned results overall). A per-source partialFailure surface in the
+      // response contract is tracked in deferred-work.md (ECH-8-3-10).
+      logger.warn(
+        { event: 'anilist.partial_failure', branch: 'anime', err: animeResult.reason },
+        'AniList anime search rejected while manga succeeded',
+      )
+    }
+    if (mangaResult.status === 'fulfilled') {
+      merged.push(
+        ...mangaResult.value.map((m) => adaptAnilistResult(m, 'manga')),
+      )
+    } else {
+      logger.warn(
+        { event: 'anilist.partial_failure', branch: 'manga', err: mangaResult.reason },
+        'AniList manga search rejected while anime succeeded',
+      )
+    }
+    return merged
   },
 }
 

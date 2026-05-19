@@ -3,7 +3,6 @@ import {
   AnilistMediaSchema,
   partialDateToDate,
   type AnilistMedia,
-  type AnilistStaffEdge,
 } from '@/lib/api/anilist'
 import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
 
@@ -91,9 +90,3 @@ export function normaliseAnilistAnime(
     anilist_id: source.id,
   }
 }
-
-// Exported for parity with normaliseAnilistManga and for unit-test ergonomics;
-// route handlers should depend on the exported normalisers rather than the
-// helper directly.
-export { preferredTitle as _animeTitlePreferred }
-export type { AnilistStaffEdge }

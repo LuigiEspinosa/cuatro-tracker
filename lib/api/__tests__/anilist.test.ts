@@ -116,33 +116,36 @@ describe('partialDateToDate', () => {
     const { partialDateToDate } = await import('@/lib/api/anilist')
     const d = partialDateToDate(2020, 3, 15)
     expect(d).not.toBeNull()
-    expect(d?.getFullYear()).toBe(2020)
-    expect(d?.getMonth()).toBe(2)
-    expect(d?.getDate()).toBe(15)
+    // UTC getters: ECH-8-2-1 fix anchors construction via Date.UTC(...) so
+    // assertions are TZ-independent (a developer running in Asia/Tokyo gets
+    // the same result as one running in UTC).
+    expect(d?.getUTCFullYear()).toBe(2020)
+    expect(d?.getUTCMonth()).toBe(2)
+    expect(d?.getUTCDate()).toBe(15)
   })
 
   it('falls back day to 1 when null', async () => {
     const { partialDateToDate } = await import('@/lib/api/anilist')
     const d = partialDateToDate(2020, 3, null)
-    expect(d?.getFullYear()).toBe(2020)
-    expect(d?.getMonth()).toBe(2)
-    expect(d?.getDate()).toBe(1)
+    expect(d?.getUTCFullYear()).toBe(2020)
+    expect(d?.getUTCMonth()).toBe(2)
+    expect(d?.getUTCDate()).toBe(1)
   })
 
   it('falls back month to January (index 0) when null', async () => {
     const { partialDateToDate } = await import('@/lib/api/anilist')
     const d = partialDateToDate(2020, null, 15)
-    expect(d?.getFullYear()).toBe(2020)
-    expect(d?.getMonth()).toBe(0)
-    expect(d?.getDate()).toBe(15)
+    expect(d?.getUTCFullYear()).toBe(2020)
+    expect(d?.getUTCMonth()).toBe(0)
+    expect(d?.getUTCDate()).toBe(15)
   })
 
   it('falls back to Jan 1 when month and day are both null', async () => {
     const { partialDateToDate } = await import('@/lib/api/anilist')
     const d = partialDateToDate(2020, null, null)
-    expect(d?.getFullYear()).toBe(2020)
-    expect(d?.getMonth()).toBe(0)
-    expect(d?.getDate()).toBe(1)
+    expect(d?.getUTCFullYear()).toBe(2020)
+    expect(d?.getUTCMonth()).toBe(0)
+    expect(d?.getUTCDate()).toBe(1)
   })
 
   it('returns null when year is null (no anchor)', async () => {
@@ -360,5 +363,138 @@ describe('rate limiting', () => {
     await expect(searchAnime('Frieren')).rejects.toBeInstanceOf(
       AnilistApiError,
     )
+  })
+})
+
+describe('Epic 8 retroactive followups (Pass 2)', () => {
+  it('ECH-8-1-1: a third concurrent caller is NOT contaminated by another caller`s rejection', async () => {
+    // Setup: three pending fetches via deferred promises. The first rejects,
+    // the second + third are still in flight. Pre-fix, withLimit would
+    // re-throw the first call`s rejection to the third caller awaiting
+    // Promise.race(inflight) BEFORE the third caller ran its own fetch.
+    const deferred: Array<{
+      resolve: (r: Response) => void
+      reject: (e: unknown) => void
+    }> = []
+    let i = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve, reject) => {
+            const slot = i
+            deferred[slot] = { resolve, reject }
+            i += 1
+          }),
+      ),
+    )
+
+    const { searchAnime, AnilistApiError } = await import('@/lib/api/anilist')
+
+    // Fire three concurrent searches. The first two saturate the limiter
+    // (concurrency cap = 2); the third waits.
+    const p1 = searchAnime('a').catch((err) => ({ kind: 'err', err }))
+    // p2 is held in-flight via deferred[1] but its result is irrelevant - it
+    // exists only to occupy the second concurrency slot so p3 has to wait
+    // on Promise.race(inflight).
+    const _p2 = searchAnime('b').catch((err) => ({ kind: 'err', err }))
+    const p3 = searchAnime('c').catch((err) => ({ kind: 'err', err }))
+
+    // Wait a microtask so the first two register in `inflight`.
+    await new Promise((r) => setTimeout(r, 0))
+
+    // Reject the first caller. The second + third should be unaffected.
+    deferred[0]!.reject(new Error('caller 1 boom'))
+
+    // p1 should reject with the boom (wrapped inside AnilistApiError.cause -
+    // the adapter's anilistFetch wraps fetch failures in AnilistApiError).
+    // p3 must NOT see "caller 1 boom" - it gets its own fetch slot and waits
+    // for deferred[2].
+    const r1 = await p1
+    expect(r1).toMatchObject({
+      kind: 'err',
+      err: expect.objectContaining({
+        name: 'AnilistApiError',
+        cause: expect.objectContaining({
+          message: expect.stringContaining('caller 1 boom'),
+        }),
+      }),
+    })
+
+    // p3 should now have its own pending fetch. Resolve it with valid data.
+    // (deferred[2] was created when p3 entered the limiter.)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(deferred[2]).toBeDefined()
+    deferred[2]!.resolve(
+      new Response(JSON.stringify({ data: { Page: { media: [] } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    // Drain p2 too so the test doesn`t leak.
+    deferred[1]!.resolve(
+      new Response(JSON.stringify({ data: { Page: { media: [] } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const r3 = await p3
+    expect(r3).toEqual([])
+    // Confirm p3 was NOT contaminated by caller 1`s rejection.
+    expect(r3).not.toMatchObject({ kind: 'err' })
+    // Sanity: AnilistApiError shouldn`t even be involved.
+    expect(AnilistApiError).toBeDefined()
+  })
+
+  it('ECH-8-2-1: partialDateToDate is UTC-anchored regardless of process TZ', async () => {
+    // Stash original TZ; force to Asia/Tokyo (UTC+9) which would offset
+    // local-time Date constructor by 9 hours west. process.env.TZ is the
+    // only path to override the Node runtime TZ; this is a legit Node API
+    // (not a config value the Zod env schema should own), hence the
+    // eslint-disable below.
+    /* eslint-disable no-restricted-syntax */
+    const originalTz = process.env.TZ
+    process.env.TZ = 'Asia/Tokyo'
+    try {
+      const { partialDateToDate } = await import('@/lib/api/anilist')
+      const d = partialDateToDate(2023, 9, 29)
+      expect(d).not.toBeNull()
+      // Must serialise to midnight UTC on the requested calendar day.
+      expect(d!.toISOString()).toBe('2023-09-29T00:00:00.000Z')
+
+      const yearOnly = partialDateToDate(2020, null, null)
+      expect(yearOnly!.toISOString()).toBe('2020-01-01T00:00:00.000Z')
+    } finally {
+      if (originalTz === undefined) {
+        delete process.env.TZ
+      } else {
+        process.env.TZ = originalTz
+      }
+    }
+    /* eslint-enable no-restricted-syntax */
+  })
+
+  it('ECH-8-3-8: getMedia throws AnilistNotFoundError when AniList returns Media: null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Response(JSON.stringify({ data: { Media: null } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    )
+    const { getMedia, AnilistNotFoundError } = await import('@/lib/api/anilist')
+
+    await expect(getMedia(30002, 'ANIME')).rejects.toBeInstanceOf(
+      AnilistNotFoundError,
+    )
+    await expect(getMedia(30002, 'ANIME')).rejects.toMatchObject({
+      id: 30002,
+      format: 'ANIME',
+    })
   })
 })

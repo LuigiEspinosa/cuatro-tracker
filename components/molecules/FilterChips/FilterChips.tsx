@@ -1,6 +1,6 @@
 'use client'
 
-export type FilterId = 'ALL' | 'MOVIES' | 'TV' | 'ANIME' | 'GAMES'
+export type FilterId = 'ALL' | 'MOVIES' | 'TV' | 'ANIME' | 'MANGA' | 'GAMES'
 
 export type FilterChipsProps = {
   active: FilterId
@@ -13,7 +13,10 @@ const CHIPS: readonly ChipDef[] = [
   { id: 'ALL', label: 'All', muted: false },
   { id: 'MOVIES', label: 'Movies', muted: false },
   { id: 'TV', label: 'TV', muted: false },
-  { id: 'ANIME', label: 'Anime', muted: true },
+  // Anime + Manga active as of Story 8.3 (federated search dispatches AniList
+  // for both). Games remain muted until Epic 9 lands the IGDB / Steam adapter.
+  { id: 'ANIME', label: 'Anime', muted: false },
+  { id: 'MANGA', label: 'Manga', muted: false },
   { id: 'GAMES', label: 'Games', muted: true },
 ] as const
 

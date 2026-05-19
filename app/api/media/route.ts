@@ -5,7 +5,7 @@ import { db } from '@/lib/db'
 import { logger } from '@/lib/logger'
 import { withRequest } from '@/lib/request-context'
 import { TmdbApiError } from '@/lib/api/tmdb'
-import { AnilistApiError } from '@/lib/api/anilist'
+import { AnilistApiError, AnilistNotFoundError } from '@/lib/api/anilist'
 import {
   getDispatcher,
   type AddMediaSource,
@@ -56,33 +56,41 @@ function findExistingBySourceId(
 function findCrossSourceCandidates(
   source: AddMediaSource,
   releaseYear: number,
+  type: MediaType,
 ): Promise<MediaItemWithUserEntry[]> {
   const include = { user_entry: true } as const
   const yearStart = new Date(Date.UTC(releaseYear, 0, 1))
   const yearEnd = new Date(Date.UTC(releaseYear + 1, 0, 1))
   const release_date = { gte: yearStart, lt: yearEnd }
+  // ECH-8-3-6: filter by type in the WHERE clause so the 50-row take cap
+  // is spent only on rows that are eligible candidates. Without this filter,
+  // saturated years (e.g. 1989 with hundreds of TV_EPISODE rows) can starve
+  // the per-type cross-merge match - the real ANIME or MANGA candidate at
+  // row 51+ would be missed. The redundant JS-side `c.type === type` filter
+  // in persistSingleMediaItem / persistShowWithEpisodes is now defence in
+  // depth, not the primary guard.
   switch (source) {
     case 'tmdb':
       return db.mediaItem.findMany({
-        where: { tmdb_id: null, release_date },
+        where: { tmdb_id: null, release_date, type },
         include,
         take: 50,
       })
     case 'anilist':
       return db.mediaItem.findMany({
-        where: { anilist_id: null, release_date },
+        where: { anilist_id: null, release_date, type },
         include,
         take: 50,
       })
     case 'igdb':
       return db.mediaItem.findMany({
-        where: { igdb_id: null, release_date },
+        where: { igdb_id: null, release_date, type },
         include,
         take: 50,
       })
     case 'steam':
       return db.mediaItem.findMany({
-        where: { steam_id: null, release_date },
+        where: { steam_id: null, release_date, type },
         include,
         take: 50,
       })
@@ -200,6 +208,21 @@ async function handler(req: NextRequest): Promise<NextResponse> {
   try {
     raw = await dispatcher.fetch(sourceId)
   } catch (err) {
+    // AniList returned `Media: null` (HTTP 200) for the requested id-type
+    // tuple. The user posted a sourceId that resolves to a different format
+    // (e.g. type=ANIME but the id is actually a manga). 404 is the correct
+    // surface, not the generic 502 upstream_failed - the upstream call
+    // succeeded; the user's input was the problem. ECH-8-3-8.
+    if (err instanceof AnilistNotFoundError) {
+      logger.warn(
+        { event: 'media.not_found', source, sourceId, type },
+        'AniList Media not found for id-type tuple',
+      )
+      return jsonResponse(
+        { error: 'not_found', source, sourceId, type },
+        404,
+      )
+    }
     if (err instanceof TmdbApiError || err instanceof AnilistApiError) {
       logger.warn(
         {
@@ -262,15 +285,15 @@ async function persistSingleMediaItem(
       ? normalised.release_date.getUTCFullYear()
       : new Date(normalised.release_date as string).getUTCFullYear()
     const normalisedKey = normaliseTitle(normalised.title)
-    // Skip cross-merge when the normaliser fell back to the 1970 sentinel —
-    // every undated item shares that year bucket and would falsely collide.
+    // Skip cross-merge when the normaliser fell back to the 1970 sentinel.
+    // Every undated item shares that year bucket and would falsely collide.
     const candidates =
       releaseYear === 1970
         ? []
-        : await findCrossSourceCandidates(source, releaseYear)
+        : await findCrossSourceCandidates(source, releaseYear, type)
     // Filter to the same MediaType. Without this, a 2007 TMDB movie titled
     // "Sword of the Stranger" would collapse with a 2007 AniList anime of the
-    // same name — patching anilist_id onto the movie row and silently changing
+    // same name, patching anilist_id onto the movie row and silently changing
     // the canonical type. Closes ECH-T7 (movie cross-source merge type filter
     // missing). Same invariant already enforced for TV in persistShowWithEpisodes.
     const crossMatch = candidates.find(
@@ -323,12 +346,12 @@ async function persistShowWithEpisodes(
       ? normalised.show.release_date.getUTCFullYear()
       : new Date(normalised.show.release_date as string).getUTCFullYear()
     const normalisedKey = normaliseTitle(normalised.show.title)
-    // Skip cross-merge when the normaliser fell back to the 1970 sentinel —
-    // every undated item shares that year bucket and would falsely collide.
+    // Skip cross-merge when the normaliser fell back to the 1970 sentinel.
+    // Every undated item shares that year bucket and would falsely collide.
     const candidates =
       releaseYear === 1970
         ? []
-        : await findCrossSourceCandidates(source, releaseYear)
+        : await findCrossSourceCandidates(source, releaseYear, type)
     // Filter to TV_SHOW only: a 1984 movie and a 1984 TV show with the same
     // normalised title (e.g. "Dune") must not collapse.
     const crossMatch = candidates.find(
@@ -339,7 +362,7 @@ async function persistShowWithEpisodes(
 
     if (crossMatch) {
       // Patch the source ID onto the existing show row; the inbound episodes
-      // are DISCARDED — the cross-source sibling's episodes from the original
+      // are DISCARDED. The cross-source sibling's episodes from the original
       // adapter remain authoritative (per OI #6 in the impl-artifact).
       const patched = await patchSourceId(crossMatch.id, source, sourceId)
       const ensured = await ensureUserEntry(patched)
@@ -386,7 +409,7 @@ async function persistShowWithEpisodes(
         }
         // Episode tmdb_id collided with a foreign MediaItem row. Atomic
         // transactions can't leave orphan episodes, so the "same-parent
-        // re-import" case is unreachable here — this is a real cross-context
+        // re-import" case is unreachable here. This is a real cross-context
         // collision worth surfacing for operator investigation. The schema
         // fix is the @@unique([type, tmdb_id]) follow-up migration (ECH-4).
         logger.error(

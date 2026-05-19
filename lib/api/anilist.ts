@@ -186,9 +186,26 @@ const AnilistSearchPageSchema = z.object({
   }),
 })
 
+// AniList returns `{ data: { Media: null } }` (HTTP 200) when the id-type tuple
+// does not resolve to a record - e.g. requesting `getMedia(<manga-id>, 'ANIME')`.
+// We model that as a typed `AnilistNotFoundError` so the route handler can map
+// it to 404 instead of bubbling a "parse failure" 502 through the upstream-
+// failed path. Schema accepts null so Zod does not reject the legit response.
 const AnilistGetMediaSchema = z.object({
-  Media: AnilistMediaSchema,
+  Media: AnilistMediaSchema.nullable(),
 })
+
+export class AnilistNotFoundError extends Error {
+  readonly id: number
+  readonly format: 'ANIME' | 'MANGA'
+
+  constructor(id: number, format: 'ANIME' | 'MANGA') {
+    super(`AniList Media not found for id=${id} format=${format}`)
+    this.name = 'AnilistNotFoundError'
+    this.id = id
+    this.format = format
+  }
+}
 
 const AnilistGetRelationsSchema = z.object({
   Media: z.object({
@@ -208,26 +225,46 @@ const AnilistGraphQLErrorSchema = z.object({
 // NFR14: AniList fuzzy dates may have null month or day. `new Date(year, null, null)`
 // produces "Invalid Date" silently. Always build via (month ?? 1) - 1, day ?? 1.
 // Returns null when year is null (no anchor); callers map that to a sentinel.
+//
+// IMPORTANT: build via `Date.UTC(...)` so the resulting Date represents
+// midnight UTC on that day. The pre-fix code used `new Date(year, m, d)`
+// which interprets the args in the local TZ and then writes to Postgres as
+// a UTC instant - drifting `release_date` up to one day east of UTC vs the
+// UTC-anchored TMDB normaliser at lib/normalise/release-date.ts. Caught by
+// the Epic 8 retroactive code-review sweep (ECH-8-2-1).
 export function partialDateToDate(
   year: number | null,
   month: number | null,
   day: number | null,
 ): Date | null {
   if (year === null) return null
-  return new Date(year, (month ?? 1) - 1, day ?? 1)
+  return new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1))
 }
 
+// Each promise added to `inflight` is wrapped with a `.catch` so that
+// `Promise.race(inflight)` from a future caller can settle WITHOUT re-throwing
+// a rejection that belongs to a different caller. Pre-fix code stored the
+// `fn()` promise directly: when call A 429'd while calls B + C were waiting
+// on `Promise.race`, the race rejected with A's error and B + C re-threw it
+// before ever calling fetch (ECH-8-1-1).
 const inflight = new Set<Promise<unknown>>()
 async function withLimit<T>(fn: () => Promise<T>): Promise<T> {
   while (inflight.size >= ANILIST_CONCURRENCY) {
+    // race-safe waiter: every entry in `inflight` already has its real error
+    // path handled via the `await p` below in its own `withLimit` invocation;
+    // this loop only needs to know when a slot frees up.
     await Promise.race(inflight)
   }
-  const p = (async () => fn())()
-  inflight.add(p)
+  const real = (async () => fn())()
+  // Settled-token swallows rejections so cross-caller waiters do not get
+  // contaminated. The real promise (with the real rejection) is awaited
+  // directly by the originating caller.
+  const token: Promise<unknown> = real.catch(() => undefined)
+  inflight.add(token)
   try {
-    return await p
+    return await real
   } finally {
-    inflight.delete(p)
+    inflight.delete(token)
   }
 }
 
@@ -473,6 +510,12 @@ export function getMedia(
       AnilistGetMediaSchema,
       `media/${format.toLowerCase()}/${id}`,
     )
+    // AniList responds with `Media: null` (HTTP 200) for unresolved id-type
+    // tuples. Surface as AnilistNotFoundError so the /api/media route can map
+    // to 404 instead of the 502 upstream_failed path. ECH-8-3-8.
+    if (result.Media === null) {
+      throw new AnilistNotFoundError(id, format)
+    }
     return result.Media
   })
 }

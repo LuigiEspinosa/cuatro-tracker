@@ -111,7 +111,8 @@ describe('lib/normalise/manga', () => {
         anilist_id: 30002,
       })
       expect(result.release_date).toBeInstanceOf(Date)
-      expect((result.release_date as Date).getFullYear()).toBe(1989)
+      // UTC getter: ECH-8-2-1 fix anchors construction via Date.UTC.
+      expect((result.release_date as Date).getUTCFullYear()).toBe(1989)
     })
   })
 
@@ -216,9 +217,9 @@ describe('lib/normalise/manga', () => {
         makeManga({ startDate: { year: 2020, month: null, day: null } }),
       )
       const date = result.release_date as Date
-      expect(date.getFullYear()).toBe(2020)
-      expect(date.getMonth()).toBe(0)
-      expect(date.getDate()).toBe(1)
+      expect(date.getUTCFullYear()).toBe(2020)
+      expect(date.getUTCMonth()).toBe(0)
+      expect(date.getUTCDate()).toBe(1)
       expect(Number.isNaN(date.getTime())).toBe(false)
     })
 
