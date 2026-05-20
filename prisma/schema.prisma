@@ -155,10 +155,11 @@ model UserEntry {
   id            String      @id @default(cuid())
   media_item_id String      @unique
   media_item    MediaItem   @relation(fields: [media_item_id], references: [id], onDelete: Cascade)
-  status        WatchStatus @default(PLAN_TO_WATCH)
-  user_rating   Float? // personal rating 1-10
-  progress      Int         @default(0) // episode / chapter / achievement count
-  notes         String?
+  status         WatchStatus @default(PLAN_TO_WATCH)
+  user_rating    Float? // personal rating 1-10
+  progress       Int         @default(0) // episode / chapter / achievement count
+  volume_progress Int        @default(0) // manga: volumes completed (default 0 for non-manga; backfilled via Math.floor(progress / CHAPTERS_PER_VOLUME) for existing MANGA rows in the 20260520 migration)
+  notes          String?
   started_at    DateTime?
   completed_at  DateTime?
   created_at    DateTime    @default(now())
