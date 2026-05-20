@@ -15,9 +15,7 @@ export function detailRouteFor(item: DetailRouteInput): string | null {
     case MediaType.ANIME:
       return `/anime/${item.mediaItemId}`
     case MediaType.MANGA:
-      return item.anilistId != null
-        ? `/preview/anilist/manga/${item.anilistId}`
-        : null
+      return `/manga/${item.mediaItemId}`
     case MediaType.TV_EPISODE:
     case MediaType.GAME:
     default:
