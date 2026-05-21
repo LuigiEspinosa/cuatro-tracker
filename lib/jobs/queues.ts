@@ -61,13 +61,16 @@ export const processors = registry.processors
 //   - igdbTokenRefresh: 0 3 * * * UTC (daily 3am, low-traffic window) per Story 9.1 AC-6.
 //   - steamAchievementSync: 0 */6 * * * UTC (every 6h) per Story 9.2 AC-8.
 //
-// jobId on a repeat is BullMQ's dedup key — re-calling registerScheduledJobs
-// on subsequent worker restarts replaces the same scheduler entry instead of
-// fanning out.
+// Uses `upsertJobScheduler` (BullMQ v5 idiomatic). Unlike the legacy
+// `queue.add(name, data, { repeat, jobId })` path which keys repeatables by
+// `{name, pattern, jobId}` and silently duplicates when the pattern changes,
+// `upsertJobScheduler` keys solely by `schedulerId`. Subsequent calls with
+// the same id replace the previous entry — pattern edits land cleanly on
+// the next deploy (Bundle A code-review finding).
 type CronEntry = {
   queueName: string
   jobName: string
-  jobId: string
+  schedulerId: string
   pattern: string
 }
 
@@ -75,13 +78,13 @@ const CRONS: CronEntry[] = [
   {
     queueName: IGDB_TOKEN_REFRESH_QUEUE,
     jobName: 'refresh',
-    jobId: 'igdbTokenRefresh-cron',
+    schedulerId: 'igdbTokenRefresh-cron',
     pattern: '0 3 * * *',
   },
   {
     queueName: STEAM_ACHIEVEMENT_SYNC_QUEUE,
     jobName: 'sync',
-    jobId: 'steamAchievementSync-cron',
+    schedulerId: 'steamAchievementSync-cron',
     pattern: '0 */6 * * *',
   },
 ]
@@ -90,32 +93,27 @@ export async function registerScheduledJobs(): Promise<void> {
   for (const cron of CRONS) {
     const entry = queues.find((q) => q.name === cron.queueName)
     if (!entry) continue
-    try {
-      await entry.queue.add(
-        cron.jobName,
-        {},
-        {
-          repeat: { pattern: cron.pattern, tz: 'UTC' },
-          jobId: cron.jobId,
-        },
-      )
-      logger.info(
-        {
-          event: 'queue.cron.registered',
-          queue: cron.queueName,
-          pattern: cron.pattern,
-        },
-        'cron registered',
-      )
-    } catch (err) {
-      logger.error(
-        {
-          event: 'queue.cron.register_error',
-          queue: cron.queueName,
-          err,
-        },
-        'cron registration failed',
-      )
-    }
+    await entry.queue.upsertJobScheduler(
+      cron.schedulerId,
+      { pattern: cron.pattern, tz: 'UTC' },
+      { name: cron.jobName, data: {} },
+    )
+    logger.info(
+      {
+        event: 'queue.cron.registered',
+        queue: cron.queueName,
+        pattern: cron.pattern,
+      },
+      'cron registered',
+    )
   }
+}
+
+// Close every Queue in the registry and clear the global singleton slot.
+// Called from worker.ts gracefulShutdown so SIGTERM doesn't leave open
+// BullMQ Queue handles attached to the Redis connection — and so tests can
+// dispose between runs (Bundle A code-review finding).
+export async function closeQueueRegistry(): Promise<void> {
+  await Promise.all(queues.map(({ queue }) => queue.close()))
+  globalForQueues.__cuatroQueueRegistry = undefined
 }

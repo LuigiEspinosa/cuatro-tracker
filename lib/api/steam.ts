@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
+import { parseRetryAfter, summariseZodError } from '@/lib/api/zod-error'
 
 const STEAM_BASE_URL = 'https://api.steampowered.com'
 const STEAM_TIMEOUT_MS = 8000
@@ -9,7 +10,12 @@ const STEAM_TIMEOUT_MS = 8000
 // sync job (lib/jobs/steamAchievementSync.ts) iterates games sequentially,
 // which is the effective rate cap. No slot limiter here.
 
+// One initial attempt + up to 3 retries on 429/5xx (backoffs 1s, 2s, 4s).
 const RETRY_BACKOFFS_MS = [1000, 2000, 4000] as const
+
+// Upper cap on honoured Retry-After. Without a clamp, a misbehaving upstream
+// can pin a BullMQ job for hours (Bundle A code-review finding).
+const MAX_RETRY_BACKOFF_MS = 30_000
 
 export class SteamApiError extends Error {
   readonly endpoint: string
@@ -108,6 +114,7 @@ const SteamGlobalPercentagesResponseSchema = z.object({
 
 export type SteamAchievementSyncEntry = {
   steam_api_name: string
+  unlocked: boolean
   unlocked_at: Date | null
   percent_global: number | null
 }
@@ -159,16 +166,15 @@ async function steamFetch<T extends z.ZodType>(
 
     const durationMs = Date.now() - startedAt
 
-    if (response.status >= 500) {
-      const retryAfterRaw = response.headers.get('Retry-After')
-      const retryAfterSeconds = retryAfterRaw ? Number(retryAfterRaw) : NaN
-      const retryAfterMs = Number.isFinite(retryAfterSeconds)
-        ? retryAfterSeconds * 1000
-        : undefined
+    if (response.status === 429 || response.status >= 500) {
+      const retryAfterMs = parseRetryAfter(response.headers.get('Retry-After'))
 
       if (attempt < RETRY_BACKOFFS_MS.length) {
         const baseBackoff = RETRY_BACKOFFS_MS[attempt]!
-        const backoffMs = Math.max(baseBackoff, retryAfterMs ?? 0)
+        const backoffMs = Math.min(
+          Math.max(baseBackoff, retryAfterMs ?? 0),
+          MAX_RETRY_BACKOFF_MS,
+        )
         logger.warn(
           {
             event: 'steam.fetch.retry',
@@ -195,7 +201,9 @@ async function steamFetch<T extends z.ZodType>(
         'steam_fetch_retries_exhausted',
       )
       throw new SteamApiError(
-        `Steam HTTP ${response.status} after ${RETRY_BACKOFFS_MS.length} retries: ${endpointLabel}`,
+        response.status === 429
+          ? `Steam rate limited (429) after ${RETRY_BACKOFFS_MS.length} retries: ${endpointLabel}`
+          : `Steam HTTP ${response.status} after ${RETRY_BACKOFFS_MS.length} retries: ${endpointLabel}`,
         {
           endpoint: endpointLabel,
           httpStatus: response.status,
@@ -205,6 +213,18 @@ async function steamFetch<T extends z.ZodType>(
     }
 
     if (!response.ok) {
+      // Mirror igdbFetch: surface a structured log line before throwing
+      // so 4xx errors aren't silent at the adapter layer
+      // (Bundle A code-review finding).
+      logger.error(
+        {
+          event: 'steam.fetch.http_error',
+          endpoint: endpointLabel,
+          status: response.status,
+          durationMs,
+        },
+        'steam_fetch_http_error',
+      )
       throw new SteamApiError(
         `Steam HTTP ${response.status}: ${endpointLabel}`,
         { endpoint: endpointLabel, httpStatus: response.status },
@@ -242,7 +262,7 @@ async function steamFetch<T extends z.ZodType>(
           status: response.status,
           durationMs,
           fieldPath,
-          err: parsed.error,
+          zodIssues: summariseZodError(parsed.error),
         },
         'steam_fetch_parse_error',
       )
@@ -304,10 +324,15 @@ async function getGlobalAchievementPercentages(
     }
     return map
   } catch (err) {
-    // Some apps (especially recent releases or games without public stats)
-    // return a non-200 here even when player achievements work. Treat as
-    // empty rather than failing the whole sync.
-    if (err instanceof SteamApiError && err.httpStatus !== undefined) {
+    // Only swallow the documented "no public stats" cases (403 / 404).
+    // Letting 401 (bad API key for upstream paths) or 5xx (after retries
+    // exhausted) bubble surfaces real config / infra issues instead of
+    // silently degrading every game's percent_global to null
+    // (Bundle A code-review finding).
+    if (
+      err instanceof SteamApiError &&
+      (err.httpStatus === 403 || err.httpStatus === 404)
+    ) {
       logger.warn(
         {
           event: 'steam.fetch.global_percentages_unavailable',
@@ -349,18 +374,31 @@ export async function getPlayerAchievements(
     return { status: 'ok', appId, achievements: [] }
   }
 
-  const globalPercentages = await getGlobalAchievementPercentages(appId)
+  const playerAchievements = player.playerstats.achievements ?? []
 
-  const achievements: SteamAchievementSyncEntry[] = (
-    player.playerstats.achievements ?? []
-  ).map((entry) => ({
-    steam_api_name: entry.apiname,
-    unlocked_at:
-      entry.achieved === 1 && entry.unlocktime > 0
-        ? new Date(entry.unlocktime * 1000)
-        : null,
-    percent_global: globalPercentages.get(entry.apiname) ?? null,
-  }))
+  // Skip the global-percentages round-trip when the player has no achievement
+  // entries for this app. Saves one HTTP call per zero-achievement game per
+  // 6h sync (Bundle A code-review finding).
+  const globalPercentages =
+    playerAchievements.length > 0
+      ? await getGlobalAchievementPercentages(appId)
+      : new Map<string, number>()
+
+  const achievements: SteamAchievementSyncEntry[] = playerAchievements.map(
+    (entry) => ({
+      steam_api_name: entry.apiname,
+      // Decouple `unlocked` from `unlocked_at`: Steam ships `achieved: 1` with
+      // `unlocktime: 0` for pre-timestamp-era unlocks and some stat-injected
+      // achievements. Treating those as "not unlocked" loses real state
+      // (Bundle A code-review finding).
+      unlocked: entry.achieved === 1,
+      unlocked_at:
+        entry.achieved === 1 && entry.unlocktime > 0
+          ? new Date(entry.unlocktime * 1000)
+          : null,
+      percent_global: globalPercentages.get(entry.apiname) ?? null,
+    }),
+  )
 
   return { status: 'ok', appId, achievements }
 }

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { redis } from '@/lib/redis'
+import { parseRetryAfter, summariseZodError } from '@/lib/api/zod-error'
 
 const IGDB_BASE_URL = 'https://api.igdb.com/v4'
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token'
@@ -16,8 +17,13 @@ const IGDB_CONCURRENCY = 4
 // before this threshold ever triggers an inline refresh.
 const TOKEN_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000
 
-// 3 attempts, then bail. Sequence is 1s, 2s, 4s (AC-4).
+// One initial attempt + up to 3 retries on 429/5xx (backoffs 1s, 2s, 4s) per AC-4.
 const RETRY_BACKOFFS_MS = [1000, 2000, 4000] as const
+
+// Upper cap on honoured Retry-After. Without a clamp, a misconfigured or
+// hostile upstream can pin a BullMQ job for hours and starve the rest of the
+// queue (Bundle A code-review finding).
+const MAX_RETRY_BACKOFF_MS = 30_000
 
 const TOKEN_KEY = 'igdb:token'
 const TOKEN_EXPIRES_AT_KEY = 'igdb:token:expiresAt'
@@ -146,6 +152,10 @@ export async function refreshIgdbToken(): Promise<{
     return inflightRefresh
   }
   inflightRefresh = (async () => {
+    // Send credentials in the request body, not the URL query string.
+    // URL-borne secrets are vulnerable to leaking via proxy access logs,
+    // undici fetch error messages, and OTel trace attributes
+    // (Bundle A code-review finding).
     const params = new URLSearchParams({
       client_id: env.IGDB_CLIENT_ID,
       client_secret: env.IGDB_CLIENT_SECRET,
@@ -155,8 +165,10 @@ export async function refreshIgdbToken(): Promise<{
     const startedAt = Date.now()
     let response: Response
     try {
-      response = await fetch(`${TWITCH_TOKEN_URL}?${params.toString()}`, {
+      response = await fetch(TWITCH_TOKEN_URL, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params,
         signal: AbortSignal.timeout(IGDB_TIMEOUT_MS),
       })
     } catch (err) {
@@ -217,7 +229,7 @@ export async function refreshIgdbToken(): Promise<{
           event: 'igdb.token.parse_error',
           fieldPath,
           durationMs,
-          err: parsed.error,
+          zodIssues: summariseZodError(parsed.error),
         },
         'igdb_token_parse_error',
       )
@@ -233,13 +245,15 @@ export async function refreshIgdbToken(): Promise<{
     }
 
     const expiresAt = Date.now() + parsed.data.expires_in * 1000
-    await redis.set(
-      TOKEN_KEY,
-      parsed.data.access_token,
-      'EX',
-      parsed.data.expires_in,
-    )
-    await redis.set(TOKEN_EXPIRES_AT_KEY, String(expiresAt))
+    // Persist both keys atomically via a pipeline so a process-kill between
+    // the two writes can't leave the cache half-populated. Both keys carry
+    // the same TTL so the secondary scalar never outlives the token itself
+    // (Bundle A code-review finding).
+    await redis
+      .multi()
+      .set(TOKEN_KEY, parsed.data.access_token, 'EX', parsed.data.expires_in)
+      .set(TOKEN_EXPIRES_AT_KEY, String(expiresAt), 'EX', parsed.data.expires_in)
+      .exec()
 
     logger.info(
       { event: 'igdb.token.refreshed', expiresAt, durationMs },
@@ -267,6 +281,12 @@ async function getIgdbToken(): Promise<string> {
   }
   const refreshed = await refreshIgdbToken()
   return refreshed.token
+}
+
+// Wipe the cached token so the next call forces a Twitch refresh.
+// Used on IGDB 401 to recover from a stale-but-not-yet-expired cache entry.
+async function invalidateIgdbToken(): Promise<void> {
+  await redis.del(TOKEN_KEY, TOKEN_EXPIRES_AT_KEY)
 }
 
 async function igdbFetch<T extends z.ZodType>(
@@ -316,15 +336,17 @@ async function igdbFetch<T extends z.ZodType>(
     const durationMs = Date.now() - startedAt
 
     if (response.status === 429 || response.status >= 500) {
-      const retryAfterRaw = response.headers.get('Retry-After')
-      const retryAfterSeconds = retryAfterRaw ? Number(retryAfterRaw) : NaN
-      const retryAfterMs = Number.isFinite(retryAfterSeconds)
-        ? retryAfterSeconds * 1000
-        : undefined
+      const retryAfterMs = parseRetryAfter(response.headers.get('Retry-After'))
 
       if (attempt < RETRY_BACKOFFS_MS.length) {
         const baseBackoff = RETRY_BACKOFFS_MS[attempt]!
-        const backoffMs = Math.max(baseBackoff, retryAfterMs ?? 0)
+        // Clamp the upper bound so a misbehaving upstream that sends
+        // Retry-After: <huge> cannot pin the BullMQ job for hours and
+        // starve the rest of the queue (Bundle A code-review finding).
+        const backoffMs = Math.min(
+          Math.max(baseBackoff, retryAfterMs ?? 0),
+          MAX_RETRY_BACKOFF_MS,
+        )
         logger.warn(
           {
             event: 'igdb.fetch.retry',
@@ -409,7 +431,7 @@ async function igdbFetch<T extends z.ZodType>(
           status: response.status,
           durationMs,
           fieldPath,
-          err: parsed.error,
+          zodIssues: summariseZodError(parsed.error),
         },
         'igdb_fetch_parse_error',
       )
@@ -432,6 +454,32 @@ async function igdbFetch<T extends z.ZodType>(
   })
 }
 
+// One-shot 401 recovery: on a stale-but-not-yet-expired cached token
+// (Redis ahead-of-IGDB on revocation, or partial-write corruption),
+// the bare `igdbFetch` would throw without ever refreshing. This wrapper
+// catches the first 401, invalidates the cache, and retries once.
+// (Bundle A code-review finding.)
+async function igdbFetchWithAuthRetry<T extends z.ZodType>(
+  endpoint: string,
+  body: string,
+  schema: T,
+  endpointLabel: string,
+): Promise<z.infer<T>> {
+  try {
+    return await igdbFetch(endpoint, body, schema, endpointLabel)
+  } catch (err) {
+    if (err instanceof IgdbApiError && err.httpStatus === 401) {
+      logger.warn(
+        { event: 'igdb.fetch.token_invalidated', endpoint: endpointLabel },
+        'igdb_fetch_token_invalidated',
+      )
+      await invalidateIgdbToken()
+      return igdbFetch(endpoint, body, schema, endpointLabel)
+    }
+    throw err
+  }
+}
+
 const GAME_FIELDS =
   'fields name,summary,first_release_date,cover.image_id,screenshots.image_id,genres.name,platforms.name,involved_companies.company.name,involved_companies.developer,involved_companies.publisher,release_dates.y;'
 
@@ -443,17 +491,31 @@ export function searchGames(
   query: string,
   opts: { limit?: number } = {},
 ): Promise<IgdbGame[]> {
+  // Guard against empty / whitespace-only queries: IGDB responds 400 to
+  // `search "";` and the failure surfaces as an opaque IgdbApiError.
+  // Treat the empty case as "no results" at the boundary instead.
+  const trimmed = query.trim()
+  if (trimmed.length === 0) {
+    return Promise.resolve([])
+  }
   return withIgdbLimit(async () => {
-    const limit = opts.limit ?? 25
-    const body = `${GAME_FIELDS} search "${escapeApicalypseString(query)}"; limit ${limit};`
-    return igdbFetch('games', body, IgdbGamesArraySchema, `search/games`)
+    // Clamp limit to IGDB's documented [1, 500] range.
+    const requestedLimit = opts.limit ?? 25
+    const limit = Math.min(Math.max(requestedLimit, 1), 500)
+    const body = `${GAME_FIELDS} search "${escapeApicalypseString(trimmed)}"; limit ${limit};`
+    return igdbFetchWithAuthRetry(
+      'games',
+      body,
+      IgdbGamesArraySchema,
+      `search/games`,
+    )
   })
 }
 
 export function getGame(id: number): Promise<IgdbGame> {
   return withIgdbLimit(async () => {
     const body = `${GAME_FIELDS} where id = ${id};`
-    const games = await igdbFetch(
+    const games = await igdbFetchWithAuthRetry(
       'games',
       body,
       IgdbGamesArraySchema,
