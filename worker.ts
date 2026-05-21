@@ -4,7 +4,12 @@ import { env } from '@/lib/env'
 import { redis } from '@/lib/redis'
 import { logger } from '@/lib/logger'
 import { scrubEvent } from '@/lib/sentry-scrub'
-import { processors, queues, registerScheduledJobs } from '@/lib/jobs/queues'
+import {
+  closeQueueRegistry,
+  processors,
+  queues,
+  registerScheduledJobs,
+} from '@/lib/jobs/queues'
 
 if (env.SENTRY_DSN) {
   Sentry.init({
@@ -60,12 +65,28 @@ const workers = queues.map(({ name }) =>
   ),
 )
 
-void registerScheduledJobs()
-
-logger.info(
-  { event: 'worker.ready', queues: queues.map((q) => q.name) },
-  'worker ready',
-)
+// Gate `worker.ready` on cron registration completing: if Redis is briefly
+// unavailable at boot (rolling deploy), the previous fire-and-forget path
+// would silently leave crons unregistered until manual restart. A failure
+// here propagates and crashes the worker so the orchestrator restarts it
+// (Bundle A code-review finding).
+//
+// Uses a then/catch chain instead of top-level await because project-context
+// `target: ES2017` forbids top-level await in the worker entrypoint module.
+registerScheduledJobs()
+  .then(() => {
+    logger.info(
+      { event: 'worker.ready', queues: queues.map((q) => q.name) },
+      'worker ready',
+    )
+  })
+  .catch((err: unknown) => {
+    logger.error(
+      { event: 'worker.cron.registration_failed', err },
+      'worker cron registration failed; crashing for orchestrator restart',
+    )
+    process.exit(1)
+  })
 
 let shutdownStarted = false
 async function gracefulShutdown(signal: string) {
@@ -77,6 +98,10 @@ async function gracefulShutdown(signal: string) {
   )
   try {
     await Promise.all(workers.map((w) => w.close()))
+    // Close registry Queues before quitting redis so BullMQ flushes any
+    // pending writes through the shared connection (Bundle A code-review
+    // finding).
+    await closeQueueRegistry()
     await redis.quit()
     logger.info({ event: 'worker.shutdown.complete' }, 'worker shutdown complete')
     process.exit(0)

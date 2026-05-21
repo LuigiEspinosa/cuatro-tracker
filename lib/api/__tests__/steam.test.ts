@@ -227,16 +227,19 @@ describe('getPlayerAchievements', () => {
       expect(result.achievements).toHaveLength(3)
       expect(result.achievements[0]).toEqual({
         steam_api_name: 'ach_01',
+        unlocked: true,
         unlocked_at: new Date(1700000000 * 1000),
         percent_global: 75.5,
       })
       expect(result.achievements[1]).toEqual({
         steam_api_name: 'ach_02',
+        unlocked: false,
         unlocked_at: null,
         percent_global: 30.0,
       })
       // Achievement absent from the global response gets null
       expect(result.achievements[2]?.percent_global).toBeNull()
+      expect(result.achievements[2]?.unlocked).toBe(true)
     }
   })
 
@@ -281,6 +284,33 @@ describe('getPlayerAchievements', () => {
     await expect(
       getPlayerAchievements('76561197960287930', '1942'),
     ).rejects.toMatchObject({ httpStatus: 401 })
+  })
+})
+
+describe('retry on 429', () => {
+  it('retries 429 with the same backoff schedule as 5xx', async () => {
+    vi.useFakeTimers()
+    const fetchSpy = vi
+      .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response('slow down', {
+          status: 429,
+          headers: { 'Retry-After': '1' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          response: { game_count: 1, games: [{ appid: 1, name: 'Test', playtime_forever: 0 }] },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { getOwnedGames } = await import('@/lib/api/steam')
+    const promise = getOwnedGames('76561197960287930')
+    await vi.advanceTimersByTimeAsync(1500)
+    const games = await promise
+    expect(games).toHaveLength(1)
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
 })
 

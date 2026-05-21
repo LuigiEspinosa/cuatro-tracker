@@ -10,6 +10,25 @@ const loggerMock = vi.hoisted(() => ({
 }))
 
 const redisStore = vi.hoisted(() => new Map<string, string>())
+const makeMultiChain = vi.hoisted(() => () => {
+  type SetArgs =
+    | [string, string]
+    | [string, string, string, number]
+  const ops: Array<{ key: string; args: SetArgs }> = []
+  const chain = {
+    set(...args: SetArgs) {
+      ops.push({ key: args[0], args })
+      return chain
+    },
+    async exec() {
+      for (const op of ops) {
+        redisStore.set(op.key, op.args[1])
+      }
+      return ops.map(() => [null, 'OK'])
+    },
+  }
+  return chain
+})
 const redisMock = vi.hoisted(() => ({
   get: vi.fn(async (key: string) => redisStore.get(key) ?? null),
   set: vi.fn(
@@ -30,6 +49,7 @@ const redisMock = vi.hoisted(() => ({
     }
     return removed
   }),
+  multi: vi.fn(() => makeMultiChain()),
 }))
 
 vi.mock('@/lib/logger', () => ({
@@ -120,6 +140,7 @@ beforeEach(() => {
     }
     return removed
   })
+  redisMock.multi.mockImplementation(() => makeMultiChain())
   for (const [k, v] of Object.entries(validEnv)) vi.stubEnv(k, v)
 })
 
@@ -197,21 +218,19 @@ describe('refreshIgdbToken', () => {
     expect(expiresAt).toBeGreaterThanOrEqual(before + 5184000 * 1000 - 5)
 
     const [url, init] = fetchSpy.mock.calls[0]!
-    expect(String(url)).toBe(
-      'https://id.twitch.tv/oauth2/token?client_id=igdb-id&client_secret=igdb-secret&grant_type=client_credentials',
-    )
+    expect(String(url)).toBe('https://id.twitch.tv/oauth2/token')
     expect((init as RequestInit | undefined)?.method).toBe('POST')
+    const headers = (init as RequestInit).headers as Record<string, string>
+    expect(headers['Content-Type']).toBe('application/x-www-form-urlencoded')
+    const body = (init as RequestInit).body
+    expect(body).toBeInstanceOf(URLSearchParams)
+    const bodyParams = body as URLSearchParams
+    expect(bodyParams.get('client_id')).toBe('igdb-id')
+    expect(bodyParams.get('client_secret')).toBe('igdb-secret')
+    expect(bodyParams.get('grant_type')).toBe('client_credentials')
 
-    expect(redisMock.set).toHaveBeenCalledWith(
-      'igdb:token',
-      'fresh-token',
-      'EX',
-      5184000,
-    )
-    expect(redisMock.set).toHaveBeenCalledWith(
-      'igdb:token:expiresAt',
-      expect.stringMatching(/^\d+$/),
-    )
+    expect(redisStore.get('igdb:token')).toBe('fresh-token')
+    expect(redisStore.get('igdb:token:expiresAt')).toMatch(/^\d+$/)
   })
 
   it('triggers a refresh when expiresAt is within the 24h threshold', async () => {
@@ -368,6 +387,116 @@ describe('parse failures', () => {
       expect(igdbErr.fieldPath).toBe('0.name')
       expect(igdbErr.endpoint).toBe('games/1942')
     }
+  })
+})
+
+describe('IGDB 401 token-invalidation retry', () => {
+  it('invalidates the cached token and retries once on a 401 from IGDB', async () => {
+    seedFreshToken()
+    const fetchSpy = vi
+      .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
+      // 1st: IGDB games call returns 401 (stale token)
+      .mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }))
+      // 2nd: Twitch token refresh returns a new token
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: 'rotated-after-401',
+            expires_in: 5184000,
+            token_type: 'bearer',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      // 3rd: IGDB games call succeeds with the new token
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([makeGame()]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { getGame } = await import('@/lib/api/igdb')
+    const game = await getGame(1942)
+    expect(game.id).toBe(1942)
+    expect(fetchSpy).toHaveBeenCalledTimes(3)
+
+    // The 1st and 3rd calls hit IGDB; the 2nd hits Twitch.
+    expect(String(fetchSpy.mock.calls[0]![0])).toBe(
+      'https://api.igdb.com/v4/games',
+    )
+    expect(String(fetchSpy.mock.calls[1]![0])).toBe(
+      'https://id.twitch.tv/oauth2/token',
+    )
+    expect(String(fetchSpy.mock.calls[2]![0])).toBe(
+      'https://api.igdb.com/v4/games',
+    )
+  })
+
+  it('does not retry a second time when the refresh-then-retry also returns 401', async () => {
+    seedFreshToken()
+    const fetchSpy = vi
+      .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: 'still-rejected',
+            expires_in: 5184000,
+            token_type: 'bearer',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { getGame, IgdbApiError } = await import('@/lib/api/igdb')
+    try {
+      await getGame(1942)
+      expect.fail('expected getGame to throw on persistent 401')
+    } catch (err) {
+      expect(err).toBeInstanceOf(IgdbApiError)
+      expect((err as InstanceType<typeof IgdbApiError>).httpStatus).toBe(401)
+    }
+    expect(fetchSpy).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('searchGames empty-query guard', () => {
+  it('returns [] without calling fetch when the query is empty / whitespace', async () => {
+    seedFreshToken()
+    const fetchSpy = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        jsonResponse([makeGame()]),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { searchGames } = await import('@/lib/api/igdb')
+    expect(await searchGames('')).toEqual([])
+    expect(await searchGames('   ')).toEqual([])
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('clamps an out-of-range limit to IGDB`s [1, 500] window', async () => {
+    seedFreshToken()
+    const fetchSpy = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        jsonResponse([makeGame()]),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { searchGames } = await import('@/lib/api/igdb')
+    await searchGames('witcher', { limit: 9999 })
+    expect((fetchSpy.mock.calls[0]![1] as RequestInit).body).toContain(
+      'limit 500',
+    )
+
+    await searchGames('witcher', { limit: 0 })
+    expect((fetchSpy.mock.calls[1]![1] as RequestInit).body).toContain(
+      'limit 1',
+    )
   })
 })
 

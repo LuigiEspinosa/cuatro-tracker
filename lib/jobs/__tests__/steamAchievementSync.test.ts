@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Queue, Worker } from 'bullmq'
-import { MediaType } from '@prisma/client'
 import type Redis from 'ioredis'
 
 const dbMock = vi.hoisted(() => ({
@@ -11,6 +10,11 @@ const dbMock = vi.hoisted(() => ({
   achievement: {
     upsert: vi.fn(),
   },
+  // The sync processor wraps each game's upserts + status update in a
+  // db.$transaction([...]) — the mock awaits the array verbatim so the
+  // individual upsert/update calls remain trackable on their dedicated
+  // mocks (Bundle A code-review followup).
+  $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
 }))
 
 vi.mock('@/lib/db', () => ({ db: dbMock }))
@@ -226,6 +230,3 @@ describe('steamAchievementSync processor (BullMQ integration, mocked db + fetch)
     25_000,
   )
 })
-// Reference to MediaType to keep the import from being flagged as unused if
-// the where-clause assertion is removed in a future refactor.
-void MediaType
