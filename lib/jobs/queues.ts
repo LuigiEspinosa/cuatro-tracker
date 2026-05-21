@@ -5,6 +5,10 @@ import {
   IGDB_TOKEN_REFRESH_QUEUE,
   igdbTokenRefreshProcessor,
 } from '@/lib/jobs/igdbTokenRefresh'
+import {
+  STEAM_ACHIEVEMENT_SYNC_QUEUE,
+  steamAchievementSyncProcessor,
+} from '@/lib/jobs/steamAchievementSync'
 
 // Module-level Queue singletons via the globalThis pattern (mirrors
 // lib/redis.ts and lib/db.ts). Survives dev hot-reload without leaking
@@ -27,11 +31,18 @@ function makeRegistry(): {
   const igdbTokenRefresh = new Queue(IGDB_TOKEN_REFRESH_QUEUE, {
     connection: redis,
   })
+  const steamAchievementSync = new Queue(STEAM_ACHIEVEMENT_SYNC_QUEUE, {
+    connection: redis,
+  })
 
   return {
-    queues: [{ name: IGDB_TOKEN_REFRESH_QUEUE, queue: igdbTokenRefresh }],
+    queues: [
+      { name: IGDB_TOKEN_REFRESH_QUEUE, queue: igdbTokenRefresh },
+      { name: STEAM_ACHIEVEMENT_SYNC_QUEUE, queue: steamAchievementSync },
+    ],
     processors: {
       [IGDB_TOKEN_REFRESH_QUEUE]: igdbTokenRefreshProcessor,
+      [STEAM_ACHIEVEMENT_SYNC_QUEUE]: steamAchievementSyncProcessor,
     },
   }
 }
@@ -47,35 +58,64 @@ export const processors = registry.processors
 // job import `queues` without triggering cron writes.
 //
 // Repeat patterns:
-//   - igdbTokenRefresh: 0 3 * * * UTC (daily 3am, low-traffic window) per AC-6.
+//   - igdbTokenRefresh: 0 3 * * * UTC (daily 3am, low-traffic window) per Story 9.1 AC-6.
+//   - steamAchievementSync: 0 */6 * * * UTC (every 6h) per Story 9.2 AC-8.
 //
 // jobId on a repeat is BullMQ's dedup key — re-calling registerScheduledJobs
 // on subsequent worker restarts replaces the same scheduler entry instead of
 // fanning out.
+type CronEntry = {
+  queueName: string
+  jobName: string
+  jobId: string
+  pattern: string
+}
+
+const CRONS: CronEntry[] = [
+  {
+    queueName: IGDB_TOKEN_REFRESH_QUEUE,
+    jobName: 'refresh',
+    jobId: 'igdbTokenRefresh-cron',
+    pattern: '0 3 * * *',
+  },
+  {
+    queueName: STEAM_ACHIEVEMENT_SYNC_QUEUE,
+    jobName: 'sync',
+    jobId: 'steamAchievementSync-cron',
+    pattern: '0 */6 * * *',
+  },
+]
+
 export async function registerScheduledJobs(): Promise<void> {
-  const igdb = queues.find((q) => q.name === IGDB_TOKEN_REFRESH_QUEUE)?.queue
-  if (!igdb) return
-  try {
-    await igdb.add(
-      'refresh',
-      {},
-      {
-        repeat: { pattern: '0 3 * * *', tz: 'UTC' },
-        jobId: 'igdbTokenRefresh-cron',
-      },
-    )
-    logger.info(
-      {
-        event: 'queue.cron.registered',
-        queue: IGDB_TOKEN_REFRESH_QUEUE,
-        pattern: '0 3 * * *',
-      },
-      'cron registered',
-    )
-  } catch (err) {
-    logger.error(
-      { event: 'queue.cron.register_error', queue: IGDB_TOKEN_REFRESH_QUEUE, err },
-      'cron registration failed',
-    )
+  for (const cron of CRONS) {
+    const entry = queues.find((q) => q.name === cron.queueName)
+    if (!entry) continue
+    try {
+      await entry.queue.add(
+        cron.jobName,
+        {},
+        {
+          repeat: { pattern: cron.pattern, tz: 'UTC' },
+          jobId: cron.jobId,
+        },
+      )
+      logger.info(
+        {
+          event: 'queue.cron.registered',
+          queue: cron.queueName,
+          pattern: cron.pattern,
+        },
+        'cron registered',
+      )
+    } catch (err) {
+      logger.error(
+        {
+          event: 'queue.cron.register_error',
+          queue: cron.queueName,
+          err,
+        },
+        'cron registration failed',
+      )
+    }
   }
 }
