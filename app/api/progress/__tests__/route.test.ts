@@ -519,7 +519,7 @@ describe('PUT /api/progress (Story 8.5 anime auto-advance)', () => {
   it('respects an explicit body.status alongside auto-advance computation', async () => {
     // The auto-advance branch can override status (last writer wins on `data`).
     // If body.status is provided AND progress triggers auto-complete, the
-    // anime branch's COMPLETED takes precedence — matches AC-5's "computed
+    // anime branch's COMPLETED takes precedence, matches AC-5's "computed
     // status in a single update".
     dbMock.userEntry.findUnique.mockResolvedValue(
       animeEntry({ progress: 27, status: WatchStatus.WATCHING }),
@@ -541,5 +541,243 @@ describe('PUT /api/progress (Story 8.5 anime auto-advance)', () => {
     const call = dbMock.userEntry.update.mock.calls[0][0]
     expect(call.data.status).toBe(WatchStatus.COMPLETED)
     vi.useRealTimers()
+  })
+})
+
+// Story 8.6 AC-5 + AC-10 #1: PUT /api/progress manga auto-advance branch.
+describe('PUT /api/progress (Story 8.6 manga auto-advance)', () => {
+  const mangaEntry = (overrides: Record<string, unknown> = {}) => ({
+    id: 'entry-manga-1',
+    media_item_id: 'manga-1',
+    status: WatchStatus.PLAN_TO_WATCH,
+    user_rating: null,
+    progress: 0,
+    volume_progress: 0,
+    notes: null,
+    started_at: null,
+    completed_at: null,
+    created_at: new Date('2026-05-10T12:00:00Z'),
+    updated_at: new Date('2026-05-12T12:00:00Z'),
+    media_item: {
+      id: 'manga-1',
+      type: MediaType.MANGA,
+      title: 'Chainsaw Man',
+      anilist_id: 105778,
+      chapter_count: 150,
+      volume_count: 15,
+    },
+    ...overrides,
+  })
+
+  it('advances PLAN_TO_WATCH to WATCHING on first chapter progress', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(mangaEntry())
+    dbMock.userEntry.update.mockResolvedValue(
+      mangaEntry({ progress: 1, status: WatchStatus.WATCHING }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'manga-1', progress: 1, volumeProgress: 0 }),
+    )
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(1)
+    expect(call.data.volume_progress).toBe(0)
+    expect(call.data.status).toBe(WatchStatus.WATCHING)
+    expect(call.data.completed_at).toBeUndefined()
+  })
+
+  it('advances PLAN_TO_WATCH to WATCHING when only volumeProgress increments', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(mangaEntry())
+    dbMock.userEntry.update.mockResolvedValue(
+      mangaEntry({ volume_progress: 1, status: WatchStatus.WATCHING }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'manga-1', volumeProgress: 1 }),
+    )
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.volume_progress).toBe(1)
+    expect(call.data.status).toBe(WatchStatus.WATCHING)
+    // progress is untouched when only volumeProgress is sent.
+    expect(call.data.progress).toBeUndefined()
+  })
+
+  it('auto-completes when chapter progress reaches chapter_count and sets completed_at', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      mangaEntry({
+        progress: 149,
+        volume_progress: 14,
+        status: WatchStatus.WATCHING,
+      }),
+    )
+    const fakeNow = new Date('2026-05-20T16:00:00.000Z')
+    vi.setSystemTime(fakeNow)
+    dbMock.userEntry.update.mockResolvedValue(
+      mangaEntry({
+        progress: 150,
+        volume_progress: 15,
+        status: WatchStatus.COMPLETED,
+        completed_at: fakeNow,
+      }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({
+        mediaItemId: 'manga-1',
+        progress: 150,
+        volumeProgress: 15,
+      }),
+    )
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(150)
+    expect(call.data.volume_progress).toBe(15)
+    expect(call.data.status).toBe(WatchStatus.COMPLETED)
+    expect(call.data.completed_at).toBeInstanceOf(Date)
+    expect((call.data.completed_at as Date).toISOString()).toBe(
+      fakeNow.toISOString(),
+    )
+    vi.useRealTimers()
+  })
+
+  it('does NOT overwrite an existing completed_at when chapter progress stays at chapter_count', async () => {
+    const previousCompletedAt = new Date('2026-05-15T10:00:00.000Z')
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      mangaEntry({
+        progress: 150,
+        volume_progress: 15,
+        status: WatchStatus.COMPLETED,
+        completed_at: previousCompletedAt,
+      }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(
+      mangaEntry({ progress: 150, status: WatchStatus.COMPLETED }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'manga-1', progress: 150 }),
+    )
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.status).toBe(WatchStatus.COMPLETED)
+    expect(call.data.completed_at).toBeUndefined()
+  })
+
+  it('retreats independently on chapter and volume axes', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      mangaEntry({
+        progress: 50,
+        volume_progress: 5,
+        status: WatchStatus.WATCHING,
+      }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(
+      mangaEntry({ progress: 40, volume_progress: 4 }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'manga-1', progress: 40, volumeProgress: 4 }),
+    )
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(40)
+    expect(call.data.volume_progress).toBe(4)
+    // No status flip on retreat.
+    expect(call.data.status).toBeUndefined()
+  })
+
+  it('does NOT auto-complete when chapter_count is null (ongoing serialisation)', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      mangaEntry({
+        progress: 200,
+        volume_progress: 20,
+        status: WatchStatus.WATCHING,
+        media_item: {
+          id: 'manga-1',
+          type: MediaType.MANGA,
+          title: 'One Piece',
+          anilist_id: 30013,
+          chapter_count: null,
+          volume_count: null,
+        },
+      }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(
+      mangaEntry({ progress: 201 }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'manga-1', progress: 201 }),
+    )
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(201)
+    expect(call.data.status).toBeUndefined()
+    expect(call.data.completed_at).toBeUndefined()
+  })
+
+  it('coalesces chapter increments to max() but trusts strict decrements', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      mangaEntry({ progress: 80, volume_progress: 8, status: WatchStatus.WATCHING }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(
+      mangaEntry({ progress: 80 }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    // Increment-then-stale-write scenario: client sends 75 (smaller), trusted.
+    const res = await PUT(
+      putRequest({ mediaItemId: 'manga-1', progress: 75 }),
+    )
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.progress).toBe(75)
+  })
+
+  it('ignores manga-specific coalesce on non-manga entries (gate preserves anime behaviour)', async () => {
+    const animeWithVolumeBody = {
+      id: 'entry-anime-2',
+      media_item_id: 'anime-2',
+      status: WatchStatus.PLAN_TO_WATCH,
+      user_rating: null,
+      progress: 0,
+      volume_progress: 0,
+      notes: null,
+      started_at: null,
+      completed_at: null,
+      created_at: new Date('2026-05-10T12:00:00Z'),
+      updated_at: new Date('2026-05-12T12:00:00Z'),
+      media_item: {
+        id: 'anime-2',
+        type: MediaType.ANIME,
+        title: 'Hunter x Hunter',
+        anilist_id: 11061,
+        episode_count: 148,
+      },
+    }
+    dbMock.userEntry.findUnique.mockResolvedValue(animeWithVolumeBody)
+    dbMock.userEntry.update.mockResolvedValue({
+      ...animeWithVolumeBody,
+      progress: 5,
+      volume_progress: 99,
+      status: WatchStatus.WATCHING,
+    })
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({
+        mediaItemId: 'anime-2',
+        progress: 5,
+        volumeProgress: 99, // sent but anime branch should not surface manga-specific coalesce
+      }),
+    )
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    // Anime branch coalesces progress per its own logic; volumeProgress is
+    // written verbatim via the body-mapping step (data.volume_progress = 99)
+    // because the column is on UserEntry for all media types. The MANGA-specific
+    // coalesce / chapter-count-driven completion is NOT applied to anime rows.
+    expect(call.data.progress).toBe(5)
+    expect(call.data.volume_progress).toBe(99)
+    expect(call.data.status).toBe(WatchStatus.WATCHING) // anime auto-advance still runs
   })
 })

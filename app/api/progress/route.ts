@@ -27,8 +27,12 @@ export const dynamic = 'force-dynamic'
 const ProgressBodySchema = z.object({
   mediaItemId: z.string().min(1),
   // progress: episode / chapter / achievement count. DB CHECK enforces >= 0
-  // (no upper cap — TV / games can have hundreds of episodes / achievements).
+  // (no upper cap, TV / games can have hundreds of episodes / achievements).
   progress: z.number().int().min(0).optional(),
+  // volumeProgress: manga volumes completed. Mirrors `progress` shape. Story 8.6.
+  // Only the MANGA branch reads this; non-manga types pass it through to the
+  // update unchanged (the DB column defaults to 0 for non-manga rows).
+  volumeProgress: z.number().int().min(0).optional(),
   status: z.nativeEnum(WatchStatus).optional(),
   completed_at: z.string().datetime().nullable().optional(),
 })
@@ -68,13 +72,18 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     )
   }
 
-  const { mediaItemId, progress, status, completed_at } = parsed.data
+  const { mediaItemId, progress, volumeProgress, status, completed_at } =
+    parsed.data
 
   const data: Prisma.UserEntryUpdateInput = {}
   const fieldsApplied: string[] = []
   if (progress !== undefined) {
     data.progress = progress
     fieldsApplied.push('progress')
+  }
+  if (volumeProgress !== undefined) {
+    data.volume_progress = volumeProgress
+    fieldsApplied.push('volumeProgress')
   }
   if (status !== undefined) {
     data.status = status
@@ -179,6 +188,50 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     } else if (
       entry.status === WatchStatus.PLAN_TO_WATCH &&
       effectiveProgress >= 1
+    ) {
+      data.status = WatchStatus.WATCHING
+      if (!fieldsApplied.includes('status')) fieldsApplied.push('status')
+    }
+  }
+
+  // Story 8.6 AC-5: manga auto-advance. Gated on MediaType.MANGA. Parallel
+  // shape to the anime branch above but applies the coalesce rule
+  // independently to chapter progress and volume progress, and uses
+  // chapter_count as the completion threshold. Anime / movie / TV / episode
+  // paths are unaffected.
+  if (
+    entry.media_item.type === MediaType.MANGA &&
+    (progress !== undefined || volumeProgress !== undefined)
+  ) {
+    let effectiveProgress = entry.progress
+    if (progress !== undefined) {
+      effectiveProgress =
+        progress >= entry.progress
+          ? Math.max(entry.progress, progress)
+          : progress
+      data.progress = effectiveProgress
+    }
+
+    const existingVolume = entry.volume_progress
+    let effectiveVolume = existingVolume
+    if (volumeProgress !== undefined) {
+      effectiveVolume =
+        volumeProgress >= existingVolume
+          ? Math.max(existingVolume, volumeProgress)
+          : volumeProgress
+      data.volume_progress = effectiveVolume
+    }
+
+    const chapterCount = entry.media_item.chapter_count
+    if (chapterCount !== null && effectiveProgress >= chapterCount) {
+      data.status = WatchStatus.COMPLETED
+      if (entry.completed_at === null) {
+        data.completed_at = new Date()
+      }
+      if (!fieldsApplied.includes('status')) fieldsApplied.push('status')
+    } else if (
+      entry.status === WatchStatus.PLAN_TO_WATCH &&
+      (effectiveProgress >= 1 || effectiveVolume >= 1)
     ) {
       data.status = WatchStatus.WATCHING
       if (!fieldsApplied.includes('status')) fieldsApplied.push('status')

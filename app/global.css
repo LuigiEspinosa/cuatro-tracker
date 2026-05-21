@@ -3396,3 +3396,78 @@ body {
   color: var(--phosphor-green, var(--rb-green));
   outline: none;
 }
+
+/* =========================================================================
+ * ChapterVolumeTracker (Story 8.6) — manga detail page two-axis tracker.
+ *
+ * Two stacked rows: chapter axis (always present) and volume axis (rendered
+ * only when volume_count > 0). Each row has a label, a PhosphorBar, and a
+ * controls strip with +1 / -1 buttons. The chapter row also surfaces the
+ * MARK VOLUME N COMPLETE shortcut when a next volume is available.
+ * ========================================================================= */
+.chapter-volume-tracker {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.chapter-volume-tracker-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--phosphor-cream-ghost);
+  background: var(--ground-card, rgba(34, 26, 48, 0.55));
+}
+.chapter-volume-tracker-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream);
+}
+.chapter-volume-tracker-ongoing {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--phosphor-green, var(--rb-green));
+  color: var(--phosphor-green, var(--rb-green));
+  font-size: 10px;
+  animation: phosphor-pulse 2.4s ease-in-out infinite;
+}
+@keyframes phosphor-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chapter-volume-tracker-ongoing { animation: none; }
+}
+.chapter-volume-tracker-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chapter-volume-tracker-button {
+  min-width: 48px;
+}
+.chapter-volume-tracker-button-mark {
+  min-width: auto;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.chapter-volume-tracker-button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.manga-detail-genre-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
