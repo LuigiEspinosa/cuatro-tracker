@@ -4,7 +4,7 @@ import { env } from '@/lib/env'
 import { redis } from '@/lib/redis'
 import { logger } from '@/lib/logger'
 import { scrubEvent } from '@/lib/sentry-scrub'
-import { queues } from '@/lib/jobs/queues'
+import { processors, queues, registerScheduledJobs } from '@/lib/jobs/queues'
 
 if (env.SENTRY_DSN) {
   Sentry.init({
@@ -27,7 +27,11 @@ const workers = queues.map(({ name }) =>
         'job started',
       )
       try {
-        const result = undefined
+        const processor = processors[name]
+        if (!processor) {
+          throw new Error(`No processor bound for queue: ${name}`)
+        }
+        const result = await processor(job)
         logger.info(
           {
             event: 'job.complete',
@@ -55,6 +59,8 @@ const workers = queues.map(({ name }) =>
     { connection: redis },
   ),
 )
+
+void registerScheduledJobs()
 
 logger.info(
   { event: 'worker.ready', queues: queues.map((q) => q.name) },
