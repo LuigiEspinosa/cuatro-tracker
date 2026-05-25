@@ -10,6 +10,7 @@ import {
 import { CRTPixelButton } from '@/components/atoms/CRTPixelButton'
 import { PhosphorLED, type PhosphorLEDStatus } from '@/components/atoms/PhosphorLED'
 import { FramedCover } from '@/components/molecules/FramedCover'
+import { getGameImageUrl } from '@/lib/api/igdb-images'
 import { getImageUrl } from '@/lib/api/tmdb-images'
 import type { UnifiedSearchResult } from '@/lib/search/federation'
 
@@ -65,7 +66,17 @@ export function SearchResultRow({
   const liRef = useRef<HTMLLIElement | null>(null)
   // TMDB schema allows `null` but tests can pass `''` — treat empty as null.
   const posterPath = result.poster_path?.trim() ? result.poster_path : null
-  const posterUrl = getImageUrl(posterPath, 'w185')
+  // IGDB stores bare `image_id` strings on the wire (NFR15 / Story 9.3 AC-8);
+  // the search row resolves to a full CDN URL here, matching the per-source
+  // branching done server-side in /api/library and client-side in the /games
+  // SSR mapper. `t_cover_big` matches what the library renders so the
+  // browser-cached asset is reused across surfaces.
+  const posterUrl =
+    posterPath === null
+      ? null
+      : result.type === 'game'
+        ? getGameImageUrl(posterPath, 't_cover_big')
+        : getImageUrl(posterPath, 'w185')
   const chips = useMemo(() => collectSourceChips(result), [result])
 
   // When this row becomes focused via keyboard nav, scroll it into view + focus

@@ -200,6 +200,53 @@ describe('SearchResultRow', () => {
     expect(onAdd).toHaveBeenCalledOnce()
   })
 
+  it('builds a TMDB CDN URL for movie/tv/anime/manga poster_paths', () => {
+    // Movies, TV, anime, and manga all flow through getImageUrl, which prefixes
+    // the TMDB CDN base for path-style inputs and passes absolute URLs through.
+    const { container } = render(
+      <SearchResultRow
+        result={makeResult({ poster_path: '/abc.jpg' })}
+        inLibrary={false}
+        isFocused={false}
+        addingPending={false}
+        onAdd={() => {}}
+        onOpenDetail={() => {}}
+      />,
+    )
+    const img = container.querySelector('img')
+    expect(img?.getAttribute('src')).toContain('image.tmdb.org/t/p/w185')
+    expect(img?.getAttribute('src')).toContain('/abc.jpg')
+  })
+
+  it('builds an IGDB CDN URL (t_cover_big) for game poster_paths, NOT a TMDB URL', () => {
+    // Regression for "Games image broken in search results": IGDB stores bare
+    // image_id strings on the wire (NFR15 / Story 9.3 AC-8). Before this fix,
+    // a game's poster_path ('co1xkj') was being fed to getImageUrl which
+    // produced https://image.tmdb.org/t/p/w185co1xkj — a 404.
+    const { container } = render(
+      <SearchResultRow
+        result={makeResult({
+          type: 'game',
+          title: 'Hollow Knight',
+          poster_path: 'co1xkj',
+          primary_source: 'igdb',
+          igdb_id: 4152,
+          tmdb_id: undefined,
+        })}
+        inLibrary={false}
+        isFocused={false}
+        addingPending={false}
+        onAdd={() => {}}
+        onOpenDetail={() => {}}
+      />,
+    )
+    const img = container.querySelector('img')
+    expect(img?.getAttribute('src')).toContain(
+      'images.igdb.com/igdb/image/upload/t_cover_big/co1xkj.jpg',
+    )
+    expect(img?.getAttribute('src')).not.toContain('image.tmdb.org')
+  })
+
   it('renders the fallback ? glyph when poster_path is null', () => {
     const { container } = render(
       <SearchResultRow
