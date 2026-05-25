@@ -142,11 +142,12 @@ model MediaItem {
 
   // Games + Steam metadata (Story 9.3).
   // screenshots / platforms default to '{}' at the database layer (see migration
-  // add_game_columns) so existing non-GAME rows remain valid post-add.
+  // add_game_columns); @default([]) makes the DSL-level default explicit so
+  // future `prisma migrate dev` runs don't propose drift-correction migrations.
   // playtime_minutes carries a raw-SQL CHECK (>= 0 or NULL); see top-of-file
   // warning block.
-  screenshots      String[] // game: IGDB screenshot image_id strings (NFR15 - store id, build URL at render via lib/api/igdb-images.ts)
-  platforms        String[] // game: IGDB platforms.name (e.g. PC, PlayStation 5, Nintendo Switch)
+  screenshots      String[]  @default([]) // game: IGDB screenshot image_id strings (NFR15 - store id, build URL at render via lib/api/igdb-images.ts)
+  platforms        String[]  @default([]) // game: IGDB platforms.name (e.g. PC, PlayStation 5, Nintendo Switch)
   developer_name   String? // game: first involved_company with developer = true (IGDB)
   publisher_name   String? // game: first involved_company with publisher = true (IGDB)
   playtime_minutes Int? // game: Steam playtime_forever (already in minutes); raw-SQL CHECK >= 0

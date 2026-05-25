@@ -133,6 +133,27 @@ describe('lib/normalise/game', () => {
       expect(result.playtime_minutes).toBeNull()
       expect(result.last_played).toBeNull()
     })
+
+    it('coerces negative playtime_forever to playtime_minutes: null (CHECK >= 0 guard)', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(makeIgdbGame(), {
+        appId: 1145360,
+        playtime_forever: -1,
+        rtime_last_played: 0,
+      })
+      expect(result.playtime_minutes).toBeNull()
+    })
+
+    it('returns last_played: null when rtime_last_played overflows JS Date range', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(makeIgdbGame(), {
+        appId: 1145360,
+        playtime_forever: 0,
+        // 1e15 seconds * 1000 = 1e18 ms, exceeds JS Date max (~8.64e15 ms).
+        rtime_last_played: 1e15,
+      })
+      expect(result.last_played).toBeNull()
+    })
   })
 
   describe('release-date fallback (NFR13)', () => {
@@ -142,7 +163,7 @@ describe('lib/normalise/game', () => {
       expect((result.release_date as Date).getTime()).toBe(1568764800 * 1000)
     })
 
-    it('falls back to release_dates[0].y -> Jan 1 UTC when first_release_date is null', async () => {
+    it('falls back to the year-only branch -> Jan 1 UTC when first_release_date is null', async () => {
       const { normaliseIgdbGame } = await import('@/lib/normalise/game')
       const result = normaliseIgdbGame(
         makeIgdbGame({
@@ -157,10 +178,57 @@ describe('lib/normalise/game', () => {
       expect(date.getUTCDate()).toBe(1)
     })
 
+    it('picks the earliest valid year when release_dates contains multiple regional entries', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(
+        makeIgdbGame({
+          first_release_date: null,
+          release_dates: [
+            { id: 1, y: 2020 }, // JP
+            { id: 2, y: 2018 }, // NA - earliest valid
+            { id: 3, y: 2019 }, // EU
+          ],
+        }),
+      )
+      const date = result.release_date as Date
+      expect(date.getUTCFullYear()).toBe(2018)
+    })
+
+    it('skips y === 0 entries (IGDB unknown-year sentinel) and picks the earliest valid one', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(
+        makeIgdbGame({
+          first_release_date: null,
+          release_dates: [
+            { id: 1, y: 0 },
+            { id: 2, y: 2021 },
+            { id: 3, y: null },
+          ],
+        }),
+      )
+      const date = result.release_date as Date
+      expect(date.getUTCFullYear()).toBe(2021)
+    })
+
     it('falls through to 1970 sentinel when first_release_date is null and release_dates is empty', async () => {
       const { normaliseIgdbGame } = await import('@/lib/normalise/game')
       const result = normaliseIgdbGame(
         makeIgdbGame({ first_release_date: null, release_dates: [] }),
+      )
+      const date = result.release_date as Date
+      expect(date.toISOString()).toBe('1970-01-01T00:00:00.000Z')
+    })
+
+    it('falls through to 1970 sentinel when every release_dates[].y is 0 or null', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(
+        makeIgdbGame({
+          first_release_date: null,
+          release_dates: [
+            { id: 1, y: 0 },
+            { id: 2, y: null },
+          ],
+        }),
       )
       const date = result.release_date as Date
       expect(date.toISOString()).toBe('1970-01-01T00:00:00.000Z')
@@ -176,6 +244,30 @@ describe('lib/normalise/game', () => {
         expect(s.startsWith('http')).toBe(false)
         expect(s.includes('images.igdb.com')).toBe(false)
       }
+    })
+
+    it('filters out empty-string image_ids from screenshots (broken-CDN-URL guard)', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(
+        makeIgdbGame({
+          screenshots: [
+            { id: 1, image_id: 'sc1' },
+            { id: 2, image_id: '' },
+            { id: 3, image_id: 'sc3' },
+          ],
+        }),
+      )
+      expect(result.screenshots).toEqual(['sc1', 'sc3'])
+    })
+
+    it('returns poster_path: null when cover.image_id is an empty string', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(
+        makeIgdbGame({
+          cover: { id: 1, image_id: '' },
+        }),
+      )
+      expect(result.poster_path).toBeNull()
     })
   })
 

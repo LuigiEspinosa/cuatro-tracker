@@ -67,6 +67,10 @@ export async function steamAchievementSyncProcessor(
   }
 
   for (const game of games) {
+    // * TypeScript narrowing only: Prisma types steam_app_id as number | null
+    // * despite the { not: null, gt: 0 } where clause above. Removing this
+    // * guard would silently call the Steam API with appId "null" and burn
+    // * a status update on every Steam-linked row.
     if (game.steam_app_id === null) continue
     totals.processed += 1
     const appId = String(game.steam_app_id)
