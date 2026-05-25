@@ -47,7 +47,7 @@ function findExistingBySourceId(
       return db.mediaItem.findUnique({ where: { igdb_id: sourceId }, include })
     case 'steam':
       return db.mediaItem.findUnique({
-        where: { steam_id: sourceId },
+        where: { steam_app_id: sourceId },
         include,
       })
   }
@@ -90,7 +90,7 @@ function findCrossSourceCandidates(
       })
     case 'steam':
       return db.mediaItem.findMany({
-        where: { steam_id: null, release_date, type },
+        where: { steam_app_id: null, release_date, type },
         include,
         take: 50,
       })
@@ -110,7 +110,7 @@ function patchSourceId(
         ? { anilist_id: sourceId }
         : source === 'igdb'
           ? { igdb_id: sourceId }
-          : { steam_id: sourceId }
+          : { steam_app_id: sourceId }
   return db.mediaItem.update({ where: { id }, data, include })
 }
 

@@ -48,9 +48,15 @@ async function safeMarkStatus(
 export async function steamAchievementSyncProcessor(
   _job: Job,
 ): Promise<{ totals: SteamAchievementSyncTotals }> {
+  // Story 9.3: `steam_app_id` rename + `gt: 0` sentinel filter (Steam never
+  // assigns appid 0; a stray 0 row would always 4xx against the player-
+  // achievement endpoint and burn a status update for no reason).
   const games = await db.mediaItem.findMany({
-    where: { type: MediaType.GAME, steam_id: { not: null } },
-    select: { id: true, steam_id: true },
+    where: {
+      type: MediaType.GAME,
+      steam_app_id: { not: null, gt: 0 },
+    },
+    select: { id: true, steam_app_id: true },
   })
 
   const totals: SteamAchievementSyncTotals = {
@@ -61,9 +67,9 @@ export async function steamAchievementSyncProcessor(
   }
 
   for (const game of games) {
-    if (game.steam_id === null) continue
+    if (game.steam_app_id === null) continue
     totals.processed += 1
-    const appId = String(game.steam_id)
+    const appId = String(game.steam_app_id)
 
     try {
       const result = await getPlayerAchievements(env.STEAM_USER_ID, appId)

@@ -126,7 +126,7 @@ function deriveSourceLabel(mediaItem: MediaItem): string | null {
   if (mediaItem.tmdb_id !== null) return 'From TMDB'
   if (mediaItem.anilist_id !== null) return 'From AniList'
   if (mediaItem.igdb_id !== null) return 'From IGDB'
-  if (mediaItem.steam_id !== null) return 'From Steam'
+  if (mediaItem.steam_app_id !== null) return 'From Steam'
   return null
 }
 
@@ -147,7 +147,7 @@ function serializeLibraryItem(entry: UserEntryWithMedia): LibraryItem {
     tmdbId: mediaItem.tmdb_id,
     anilistId: mediaItem.anilist_id,
     igdbId: mediaItem.igdb_id,
-    steamId: mediaItem.steam_id,
+    steamId: mediaItem.steam_app_id,
     createdAt: entry.created_at.toISOString(),
     updatedAt: entry.updated_at.toISOString(),
   }

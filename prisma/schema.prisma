@@ -18,6 +18,7 @@ datasource db {
 // !   - UserEntry.progress CHECK >= 0
 // !   - MergeSuggestion CHECK source_id <> target_id
 // !   - MergeSuggestion.confidence CHECK BETWEEN 0 AND 1
+// !   - MediaItem.playtime_minutes CHECK >= 0 (NULL allowed)
 
 // ---- Auth (NextAuth v4 Prisma adapter) ----
 
@@ -106,10 +107,10 @@ model MediaItem {
   lifecycle_status String? // derived enum: 'ended' | 'continuing' | 'in_production' (Story 7.2 mapping; TV grid filter)
 
   // Source API foreign keys - null for manually added items
-  tmdb_id    Int? @unique
-  anilist_id Int? @unique
-  igdb_id    Int? @unique
-  steam_id   Int? @unique
+  tmdb_id      Int? @unique
+  anilist_id   Int? @unique
+  igdb_id      Int? @unique
+  steam_app_id Int? @unique
 
   // Self-relation for TV_EPISODE -> TV_SHOW and anime episode -> series
   parent_id String?
@@ -139,10 +140,23 @@ model MediaItem {
   season_year     Int? // AniList seasonYear (anime release / airing year)
   source_material String? // AniList source: MANGA / LIGHT_NOVEL / ORIGINAL / VISUAL_NOVEL / etc.
 
+  // Games + Steam metadata (Story 9.3).
+  // screenshots / platforms default to '{}' at the database layer (see migration
+  // add_game_columns) so existing non-GAME rows remain valid post-add.
+  // playtime_minutes carries a raw-SQL CHECK (>= 0 or NULL); see top-of-file
+  // warning block.
+  screenshots      String[] // game: IGDB screenshot image_id strings (NFR15 - store id, build URL at render via lib/api/igdb-images.ts)
+  platforms        String[] // game: IGDB platforms.name (e.g. PC, PlayStation 5, Nintendo Switch)
+  developer_name   String? // game: first involved_company with developer = true (IGDB)
+  publisher_name   String? // game: first involved_company with publisher = true (IGDB)
+  playtime_minutes Int? // game: Steam playtime_forever (already in minutes); raw-SQL CHECK >= 0
+  last_played      DateTime? // game: Steam rtime_last_played -> Date; null when never played (Steam 0 sentinel coerces to null in the normaliser)
+
   // Steam achievement sync status (Story 9.2). Raw SQL CHECK constraint in
   // migration 20260521120000 restricts to ('ok', 'private_profile',
   // 'never_synced', 'failed'); the Prisma DSL cannot express CHECK so the
   // migration sql is the source of truth.
+  // ! Valid values: 'ok' | 'private_profile' | 'never_synced' | 'failed'
   achievement_sync_status String @default("never_synced")
 
   user_entry    UserEntry?

@@ -73,7 +73,7 @@ const SECTION_ORDER: ReadonlyArray<UnifiedSearchResult['type']> = [
 
 function getResultKey(result: UnifiedSearchResult): string {
   const sourceId =
-    result.tmdb_id ?? result.anilist_id ?? result.igdb_id ?? result.steam_id
+    result.tmdb_id ?? result.anilist_id ?? result.igdb_id ?? result.steam_app_id
   // Fallback to title + year keeps the key unique when every source ID is
   // missing (malformed federation result). React duplicate-key warning ducked.
   if (sourceId === undefined) {
@@ -91,7 +91,7 @@ function getSourceId(result: UnifiedSearchResult): number | undefined {
     case 'igdb':
       return result.igdb_id
     case 'steam':
-      return result.steam_id
+      return result.steam_app_id
   }
 }
 

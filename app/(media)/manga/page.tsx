@@ -85,7 +85,7 @@ export default async function MangaPage({
     tmdbId: entry.media_item.tmdb_id,
     anilistId: entry.media_item.anilist_id,
     igdbId: entry.media_item.igdb_id,
-    steamId: entry.media_item.steam_id,
+    steamId: entry.media_item.steam_app_id,
     createdAt: entry.created_at.toISOString(),
     updatedAt: entry.updated_at.toISOString(),
   }))

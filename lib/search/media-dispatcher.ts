@@ -18,7 +18,7 @@ export type AddMediaDispatcher = {
   normalise: (
     raw: unknown,
   ) => Prisma.MediaItemCreateInput | NormalisedShowWithEpisodes
-  sourceIdKey: 'tmdb_id' | 'anilist_id' | 'igdb_id' | 'steam_id'
+  sourceIdKey: 'tmdb_id' | 'anilist_id' | 'igdb_id' | 'steam_app_id'
 }
 
 export function getDispatcher(

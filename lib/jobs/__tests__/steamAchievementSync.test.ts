@@ -88,7 +88,7 @@ describe('steamAchievementSync processor (BullMQ integration, mocked db + fetch)
     'upserts achievements and sets achievement_sync_status to ok for a public-profile game',
     async () => {
       dbMock.mediaItem.findMany.mockResolvedValueOnce([
-        { id: 'game-1', steam_id: 1942 },
+        { id: 'game-1', steam_app_id: 1942 },
       ])
       dbMock.achievement.upsert.mockResolvedValue({})
       dbMock.mediaItem.update.mockResolvedValue({})
@@ -192,7 +192,7 @@ describe('steamAchievementSync processor (BullMQ integration, mocked db + fetch)
     'sets achievement_sync_status to private_profile and does not upsert achievements on 403',
     async () => {
       dbMock.mediaItem.findMany.mockResolvedValueOnce([
-        { id: 'game-private', steam_id: 1942 },
+        { id: 'game-private', steam_app_id: 1942 },
       ])
       dbMock.achievement.upsert.mockResolvedValue({})
       dbMock.mediaItem.update.mockResolvedValue({})

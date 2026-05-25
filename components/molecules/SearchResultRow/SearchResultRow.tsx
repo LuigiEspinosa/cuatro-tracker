@@ -49,7 +49,7 @@ function collectSourceChips(result: UnifiedSearchResult): string[] {
   if (result.tmdb_id !== undefined) chips.push('TMDB')
   if (result.anilist_id !== undefined) chips.push('ANILIST')
   if (result.igdb_id !== undefined) chips.push('IGDB')
-  if (result.steam_id !== undefined) chips.push('STEAM')
+  if (result.steam_app_id !== undefined) chips.push('STEAM')
   return chips
 }
 

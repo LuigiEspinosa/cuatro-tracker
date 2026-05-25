@@ -20,7 +20,7 @@ export type UnifiedSearchResult = {
   tmdb_id?: number
   anilist_id?: number
   igdb_id?: number
-  steam_id?: number
+  steam_app_id?: number
   confidence: number
 }
 
@@ -221,13 +221,13 @@ export function dedupResults(
       tmdb_id: existing.tmdb_id ?? result.tmdb_id,
       anilist_id: existing.anilist_id ?? result.anilist_id,
       igdb_id: existing.igdb_id ?? result.igdb_id,
-      steam_id: existing.steam_id ?? result.steam_id,
+      steam_app_id: existing.steam_app_id ?? result.steam_app_id,
     }
     const sourceCount = [
       merged.tmdb_id,
       merged.anilist_id,
       merged.igdb_id,
-      merged.steam_id,
+      merged.steam_app_id,
     ].filter((id) => id !== undefined).length
     merged.confidence = confidenceFor(sourceCount)
     byKey.set(key, merged)
