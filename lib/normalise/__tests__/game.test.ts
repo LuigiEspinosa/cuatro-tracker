@@ -134,6 +134,20 @@ describe('lib/normalise/game', () => {
       expect(result.last_played).toBeNull()
     })
 
+    it('preserves playtime_forever: 0 as playtime_minutes: 0 (unplayed owned game)', async () => {
+      // * Steam returns playtime_forever: 0 for owned-but-never-launched
+      // games. 0 satisfies the CHECK (>= 0) and is a real value (not a
+      // null sentinel), so it must be preserved -- the UI distinguishes
+      // "owned + never played" (0 min) from "not in library" (null).
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(makeIgdbGame(), {
+        appId: 1145360,
+        playtime_forever: 0,
+        rtime_last_played: 0,
+      })
+      expect(result.playtime_minutes).toBe(0)
+    })
+
     it('coerces negative playtime_forever to playtime_minutes: null (CHECK >= 0 guard)', async () => {
       const { normaliseIgdbGame } = await import('@/lib/normalise/game')
       const result = normaliseIgdbGame(makeIgdbGame(), {

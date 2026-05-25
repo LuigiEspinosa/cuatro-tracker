@@ -85,6 +85,7 @@ const fixtureEntry = (overrides: Record<string, unknown> = {}) => ({
     anilist_id: null,
     igdb_id: null,
     steam_app_id: null,
+    achievement_sync_status: 'never_synced',
     parent_id: null,
     franchise_id: null,
     created_at: new Date('2026-05-10T12:00:00Z'),

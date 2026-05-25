@@ -86,9 +86,13 @@ test.describe('/games grid smoke (Story 9.4)', () => {
   test('games page renders with the GAMES heading and item count', async ({
     page,
   }) => {
+    // ! The smoke test only renders /games and asserts heading + item count.
+    // It does NOT exercise the federated search path, so TMDB credentials are
+    // irrelevant here -- gate on ADMIN_PASS alone (the auth gate that lets
+    // us load any authenticated page).
     test.skip(
-      process.env.TMDB_API_KEY === 'test' || !process.env.TMDB_API_KEY,
-      'Requires real TMDB key for the layout providers + auth gate.',
+      !process.env.ADMIN_PASS,
+      'Requires ADMIN_PASS to authenticate. Smoke test does not call TMDB/AniList/IGDB.',
     )
 
     await page.goto('/login')
