@@ -30,40 +30,23 @@ describe('FilterChips', () => {
     expect(inactive.getAttribute('data-active')).toBe('false')
   })
 
-  it('renders the (soon) suffix on muted chips (GAMES only, after Epic 8)', () => {
+  it('no chip renders the (soon) suffix (GAMES unmuted as of Story 9.4)', () => {
     render(<FilterChips active='ALL' onChange={() => {}} />)
 
-    const games = screen.getByRole('tab', { name: /^GAMES/ })
-    const movies = screen.getByRole('tab', { name: /^MOVIES/ })
-    const anime = screen.getByRole('tab', { name: /^ANIME/ })
-    const manga = screen.getByRole('tab', { name: /^MANGA/ })
-
-    expect(games.textContent).toContain('(soon)')
-    expect(movies.textContent).not.toContain('(soon)')
-    // ANIME + MANGA unmuted as of Epic 8 retroactive followups; the federated
-    // search route dispatches AniList for both.
-    expect(anime.textContent).not.toContain('(soon)')
-    expect(manga.textContent).not.toContain('(soon)')
+    for (const id of ['ALL', 'MOVIES', 'TV', 'ANIME', 'MANGA', 'GAMES']) {
+      const chip = screen.getByRole('tab', { name: new RegExp(`^${id}`) })
+      expect(chip.textContent).not.toContain('(soon)')
+    }
   })
 
-  it('marks muted chips with aria-disabled + data-muted (GAMES only)', () => {
+  it('no chip is aria-disabled / data-muted (GAMES unmuted as of Story 9.4)', () => {
     render(<FilterChips active='ALL' onChange={() => {}} />)
 
-    const games = screen.getByRole('tab', { name: /^GAMES/ })
-    expect(games.getAttribute('aria-disabled')).toBe('true')
-    expect(games.getAttribute('data-muted')).toBe('true')
-
-    const all = screen.getByRole('tab', { name: /^ALL/ })
-    expect(all.getAttribute('aria-disabled')).toBe('false')
-    expect(all.getAttribute('data-muted')).toBe('false')
-
-    const anime = screen.getByRole('tab', { name: /^ANIME/ })
-    expect(anime.getAttribute('aria-disabled')).toBe('false')
-    expect(anime.getAttribute('data-muted')).toBe('false')
-
-    const manga = screen.getByRole('tab', { name: /^MANGA/ })
-    expect(manga.getAttribute('aria-disabled')).toBe('false')
-    expect(manga.getAttribute('data-muted')).toBe('false')
+    for (const id of ['ALL', 'MOVIES', 'TV', 'ANIME', 'MANGA', 'GAMES']) {
+      const chip = screen.getByRole('tab', { name: new RegExp(`^${id}`) })
+      expect(chip.getAttribute('aria-disabled')).toBe('false')
+      expect(chip.getAttribute('data-muted')).toBe('false')
+    }
   })
 
   it('fires onChange when a non-muted chip is clicked', () => {
@@ -88,12 +71,12 @@ describe('FilterChips', () => {
     expect(onChange).toHaveBeenCalledTimes(2)
   })
 
-  it('does NOT fire onChange when GAMES (muted) is clicked', () => {
+  it('fires onChange when GAMES is clicked (unmuted as of Story 9.4)', () => {
     const onChange = vi.fn()
     render(<FilterChips active='ALL' onChange={onChange} />)
 
     screen.getByRole('tab', { name: /^GAMES/ }).click()
 
-    expect(onChange).not.toHaveBeenCalled()
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('GAMES')
   })
 })

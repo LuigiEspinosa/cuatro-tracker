@@ -361,6 +361,7 @@ export function LibraryGrid({
                         status={item.status}
                         progressLabel={item.progressLabel}
                         progressPct={item.progressPct}
+                        achievementSyncStatus={item.achievementSyncStatus}
                       />
                     </div>
                   </Link>

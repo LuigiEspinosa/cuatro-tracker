@@ -14,10 +14,11 @@ const CHIPS: readonly ChipDef[] = [
   { id: 'MOVIES', label: 'Movies', muted: false },
   { id: 'TV', label: 'TV', muted: false },
   // Anime + Manga active as of Story 8.3 (federated search dispatches AniList
-  // for both). Games remain muted until Epic 9 lands the IGDB / Steam adapter.
+  // for both). Games active as of Story 9.4: IGDB adapter dispatches in
+  // federated search; Steam adapter pulls library on a future story.
   { id: 'ANIME', label: 'Anime', muted: false },
   { id: 'MANGA', label: 'Manga', muted: false },
-  { id: 'GAMES', label: 'Games', muted: true },
+  { id: 'GAMES', label: 'Games', muted: false },
 ] as const
 
 export function FilterChips({ active, onChange }: FilterChipsProps) {

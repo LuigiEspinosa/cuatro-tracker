@@ -9,6 +9,7 @@ import {
   type LifecycleStatus,
   type UserEntryWithMedia,
 } from '@/lib/db/library'
+import { getGameImageUrl } from '@/lib/api/igdb-images'
 import { logger } from '@/lib/logger'
 import { withRequest } from '@/lib/request-context'
 import type { LibraryItem, LibraryListResponse } from '@/lib/types/library'
@@ -130,15 +131,25 @@ function deriveSourceLabel(mediaItem: MediaItem): string | null {
   return null
 }
 
+// IGDB stores bare `image_id` strings per NFR15. Construct the full CDN URL at
+// the serialisation boundary so the existing client-side `getImageUrl`
+// http-passthrough (lib/api/tmdb-images.ts) carries it through unchanged.
+function gameCoverUrl(mediaItem: MediaItem): string | null {
+  return mediaItem.poster_path
+    ? getGameImageUrl(mediaItem.poster_path, 't_cover_big')
+    : null
+}
+
 function serializeLibraryItem(entry: UserEntryWithMedia): LibraryItem {
   const mediaItem = entry.media_item
+  const isGame = mediaItem.type === MediaType.GAME
   return {
     id: entry.id,
     mediaItemId: mediaItem.id,
     mediaType: mediaItem.type,
     status: entry.status,
     title: mediaItem.title,
-    posterPath: mediaItem.poster_path,
+    posterPath: isGame ? gameCoverUrl(mediaItem) : mediaItem.poster_path,
     year: deriveYear(mediaItem),
     releaseDate: deriveReleaseDate(mediaItem),
     progressLabel: formatProgressLabel(entry),
@@ -148,6 +159,7 @@ function serializeLibraryItem(entry: UserEntryWithMedia): LibraryItem {
     anilistId: mediaItem.anilist_id,
     igdbId: mediaItem.igdb_id,
     steamId: mediaItem.steam_app_id,
+    achievementSyncStatus: isGame ? mediaItem.achievement_sync_status : null,
     createdAt: entry.created_at.toISOString(),
     updatedAt: entry.updated_at.toISOString(),
   }

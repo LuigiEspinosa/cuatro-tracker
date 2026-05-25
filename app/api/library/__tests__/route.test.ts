@@ -492,4 +492,102 @@ describe('GET /api/library', () => {
       })
     })
   })
+
+  describe('Epic 9 mediaType routing (Story 9.4)', () => {
+    it('forwards type=GAME to findLibraryItems with MediaType.GAME', async () => {
+      dbMock.userEntry.findMany.mockResolvedValue([])
+      const { GET } = await import('@/app/api/library/route')
+
+      const res = await GET(makeRequest('/api/library?type=GAME'))
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body).toEqual({ items: [] })
+      const call = dbMock.userEntry.findMany.mock.calls[0]?.[0]
+      expect(call.where.media_item.type).toBe(MediaType.GAME)
+    })
+
+    it('serializes a GAME LibraryItem with full IGDB CDN posterPath + achievementSyncStatus=never_synced', async () => {
+      const gameEntry = fixtureEntry({
+        id: 'game-entry-1',
+        media_item_id: 'game-media-1',
+        media_item: {
+          ...fixtureEntry().media_item,
+          id: 'game-media-1',
+          type: MediaType.GAME,
+          title: 'Hollow Knight',
+          release_date: new Date('2017-02-24T00:00:00Z'),
+          poster_path: 'co1uii',
+          tmdb_id: null,
+          igdb_id: 9415,
+          achievement_sync_status: 'never_synced',
+          lifecycle_status: null,
+        },
+      })
+      dbMock.userEntry.findMany.mockResolvedValue([gameEntry])
+      const { GET } = await import('@/app/api/library/route')
+
+      const res = await GET(makeRequest('/api/library?type=GAME'))
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.items).toHaveLength(1)
+      expect(body.items[0]).toMatchObject({
+        mediaType: MediaType.GAME,
+        title: 'Hollow Knight',
+        igdbId: 9415,
+        tmdbId: null,
+        anilistId: null,
+        steamId: null,
+        sourceLabel: 'From IGDB',
+        progressLabel: null,
+        progressPct: null,
+        posterPath:
+          'https://images.igdb.com/igdb/image/upload/t_cover_big/co1uii.jpg',
+        achievementSyncStatus: 'never_synced',
+        year: 2017,
+      })
+    })
+
+    it('round-trips achievement_sync_status="private_profile" on a GAME LibraryItem', async () => {
+      const privateGameEntry = fixtureEntry({
+        id: 'game-entry-2',
+        media_item_id: 'game-media-2',
+        media_item: {
+          ...fixtureEntry().media_item,
+          id: 'game-media-2',
+          type: MediaType.GAME,
+          title: 'Stardew Valley',
+          release_date: new Date('2016-02-26T00:00:00Z'),
+          poster_path: 'co2xqg',
+          tmdb_id: null,
+          igdb_id: 17000,
+          steam_app_id: 413150,
+          achievement_sync_status: 'private_profile',
+          lifecycle_status: null,
+        },
+      })
+      dbMock.userEntry.findMany.mockResolvedValue([privateGameEntry])
+      const { GET } = await import('@/app/api/library/route')
+
+      const res = await GET(makeRequest('/api/library?type=GAME'))
+
+      const body = await res.json()
+      expect(body.items[0].achievementSyncStatus).toBe('private_profile')
+      expect(body.items[0].steamId).toBe(413150)
+      expect(body.items[0].posterPath).toBe(
+        'https://images.igdb.com/igdb/image/upload/t_cover_big/co2xqg.jpg',
+      )
+    })
+
+    it('serializes achievementSyncStatus=null for non-GAME entries', async () => {
+      dbMock.userEntry.findMany.mockResolvedValue([fixtureEntry()])
+      const { GET } = await import('@/app/api/library/route')
+
+      const res = await GET(makeRequest('/api/library?type=MOVIE'))
+
+      const body = await res.json()
+      expect(body.items[0].achievementSyncStatus).toBeNull()
+    })
+  })
 })

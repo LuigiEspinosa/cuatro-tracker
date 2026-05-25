@@ -4,6 +4,7 @@ import {
   searchManga,
   type AnilistMedia,
 } from '@/lib/api/anilist'
+import { searchGames, type IgdbGame } from '@/lib/api/igdb'
 import { logger } from '@/lib/logger'
 
 export type SearchType = 'movie' | 'tv' | 'anime' | 'manga' | 'game'
@@ -182,9 +183,57 @@ const anilistAdapter: AdapterCapability = {
   },
 }
 
+// IGDB stores bare image_id strings on the wire per NFR15 (Story 9.3 AC-8);
+// the unified result shape mirrors that. UI consumers resolve full CDN URLs
+// at render time via lib/api/igdb-images.ts. The `|| null` coerces empty
+// image_id strings (the same pattern as lib/normalise/game.ts:95).
+function computeIgdbYear(raw: IgdbGame): number | undefined {
+  if (
+    typeof raw.first_release_date === 'number' &&
+    Number.isFinite(raw.first_release_date) &&
+    raw.first_release_date !== 0
+  ) {
+    const candidate = new Date(raw.first_release_date * 1000)
+    if (!Number.isNaN(candidate.getTime())) return candidate.getUTCFullYear()
+  }
+  const validYears = raw.release_dates
+    ?.map((r) => r.y)
+    .filter(
+      (y): y is number => typeof y === 'number' && Number.isFinite(y) && y > 0,
+    )
+  if (validYears && validYears.length > 0) return Math.min(...validYears)
+  return undefined
+}
+
+function adaptIgdbResult(raw: IgdbGame): UnifiedSearchResult {
+  return {
+    type: 'game',
+    title: raw.name,
+    release_year: computeIgdbYear(raw),
+    poster_path: raw.cover?.image_id || null,
+    overview: raw.summary ?? null,
+    primary_source: 'igdb',
+    igdb_id: raw.id,
+    confidence: 1.0,
+  }
+}
+
+const igdbAdapter: AdapterCapability = {
+  source: 'igdb',
+  supportedTypes: ['game'] as const,
+  async search(query, type) {
+    // Cheap exit when the caller scoped the federated search to a non-game
+    // type; mirrors tmdbAdapter's no-op for non-matching types.
+    if (type !== undefined && type !== 'game') return []
+    const games = await searchGames(query)
+    return games.map(adaptIgdbResult)
+  },
+}
+
 export const ADAPTERS: readonly AdapterCapability[] = [
   tmdbAdapter,
   anilistAdapter,
+  igdbAdapter,
 ]
 
 const CONFIDENCE_LADDER: Record<number, number> = {

@@ -2276,6 +2276,15 @@ body {
 .media-card-overlay-status[data-status='on_hold'] { color: var(--status-color-on_hold); }
 .media-card-overlay-status[data-status='dropped'] { color: var(--status-color-dropped); }
 
+.media-card-overlay-private-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  margin: 0;
+  text-transform: uppercase;
+  color: var(--led-on-hold);
+}
+
 .empty-library {
   display: flex;
   flex-direction: column;

@@ -150,4 +150,52 @@ describe('FilterSortBar', () => {
       expect(onLifecycleChange).toHaveBeenCalledWith(null)
     })
   })
+
+  describe('Story 9.4: per-medium status chip labels', () => {
+    it('medium=games renders PLAN TO PLAY / PLAYING in place of PLAN TO WATCH / WATCHING', () => {
+      setup({ medium: 'games' })
+      expect(screen.getByText('PLAN TO PLAY')).toBeInTheDocument()
+      expect(screen.getByText('PLAYING')).toBeInTheDocument()
+      expect(screen.queryByText('PLAN TO WATCH')).toBeNull()
+      expect(screen.queryByText('WATCHING')).toBeNull()
+      // Shared labels still render.
+      expect(screen.getByText('COMPLETED')).toBeInTheDocument()
+      expect(screen.getByText('ON HOLD')).toBeInTheDocument()
+      expect(screen.getByText('DROPPED')).toBeInTheDocument()
+    })
+
+    it('medium=games chip count stays at 5', () => {
+      setup({ medium: 'games' })
+      const chipsGroup = screen.getByRole('group', {
+        name: /Filter by status/,
+      })
+      expect(chipsGroup.querySelectorAll('button').length).toBe(5)
+    })
+
+    it('medium=games + click PLAN TO PLAY still fires onStatusChange(PLAN_TO_WATCH)', () => {
+      const { onStatusChange } = setup({ medium: 'games' })
+      fireEvent.click(screen.getByText('PLAN TO PLAY'))
+      expect(onStatusChange).toHaveBeenCalledWith(WatchStatus.PLAN_TO_WATCH)
+    })
+
+    it('medium=games + click PLAYING still fires onStatusChange(WATCHING)', () => {
+      const { onStatusChange } = setup({ medium: 'games' })
+      fireEvent.click(screen.getByText('PLAYING'))
+      expect(onStatusChange).toHaveBeenCalledWith(WatchStatus.WATCHING)
+    })
+
+    it('medium=movies still renders PLAN TO WATCH / WATCHING (regression guard)', () => {
+      setup({ medium: 'movies' })
+      expect(screen.getByText('PLAN TO WATCH')).toBeInTheDocument()
+      expect(screen.getByText('WATCHING')).toBeInTheDocument()
+      expect(screen.queryByText('PLAN TO PLAY')).toBeNull()
+      expect(screen.queryByText('PLAYING')).toBeNull()
+    })
+
+    it('medium=anime still renders PLAN TO WATCH / WATCHING (regression guard)', () => {
+      setup({ medium: 'anime' })
+      expect(screen.getByText('PLAN TO WATCH')).toBeInTheDocument()
+      expect(screen.getByText('WATCHING')).toBeInTheDocument()
+    })
+  })
 })

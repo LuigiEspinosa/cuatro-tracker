@@ -187,6 +187,43 @@ describe('lib/search/media-dispatcher: getDispatcher', () => {
     expect(spy).toHaveBeenCalledWith(30002, 'MANGA')
   })
 
+  it("returns a dispatcher for (igdb, GAME) and its fetch calls getGame(id) (Story 9.4)", async () => {
+    const { getDispatcher } = await import('@/lib/search/media-dispatcher')
+    const igdb = await import('@/lib/api/igdb')
+    const spy = vi
+      .spyOn(igdb, 'getGame')
+      .mockResolvedValue({} as never)
+
+    const dispatcher = getDispatcher('igdb', MediaType.GAME)
+    await dispatcher?.fetch(9415)
+
+    expect(dispatcher).not.toBeNull()
+    expect(dispatcher?.sourceIdKey).toBe('igdb_id')
+    expect(spy).toHaveBeenCalledExactlyOnceWith(9415)
+  })
+
+  it('the (igdb, GAME) dispatcher normalises via normaliseIgdbGame', async () => {
+    const { getDispatcher } = await import('@/lib/search/media-dispatcher')
+    const normaliser = await import('@/lib/normalise/game')
+    const spy = vi
+      .spyOn(normaliser, 'normaliseIgdbGame')
+      .mockReturnValue({ type: 'GAME', title: 'fixture' } as never)
+
+    const dispatcher = getDispatcher('igdb', MediaType.GAME)
+    const raw = { id: 1, name: 'fixture' }
+    const out = dispatcher?.normalise(raw)
+
+    expect(spy).toHaveBeenCalledExactlyOnceWith(raw)
+    expect(out).toEqual({ type: 'GAME', title: 'fixture' })
+  })
+
+  it('returns null for (igdb, MOVIE) - no cross-type IGDB dispatch', async () => {
+    const { getDispatcher } = await import('@/lib/search/media-dispatcher')
+    expect(getDispatcher('igdb', MediaType.MOVIE)).toBeNull()
+    expect(getDispatcher('igdb', MediaType.TV_SHOW)).toBeNull()
+    expect(getDispatcher('igdb', MediaType.ANIME)).toBeNull()
+  })
+
   it('returns null for every unwired (source, type) tuple', async () => {
     const { getDispatcher } = await import('@/lib/search/media-dispatcher')
 
@@ -205,6 +242,7 @@ describe('lib/search/media-dispatcher: getDispatcher', () => {
       `tmdb:${MediaType.TV_SHOW}`,
       `anilist:${MediaType.ANIME}`,
       `anilist:${MediaType.MANGA}`,
+      `igdb:${MediaType.GAME}`,
     ])
 
     for (const source of sources) {

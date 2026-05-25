@@ -33,6 +33,14 @@ vi.mock('@/lib/api/anilist', () => ({
   searchManga: anilistMock.searchManga,
 }))
 
+const igdbMock = vi.hoisted(() => ({
+  searchGames: vi.fn(),
+}))
+
+vi.mock('@/lib/api/igdb', () => ({
+  searchGames: igdbMock.searchGames,
+}))
+
 function anilistMedia(
   id: number,
   type: 'ANIME' | 'MANGA',
@@ -94,6 +102,10 @@ beforeEach(() => {
   // its supportedTypes (anime, manga) or the type filter is undefined.
   anilistMock.searchAnime.mockResolvedValue([])
   anilistMock.searchManga.mockResolvedValue([])
+  // Same convention for IGDB (Story 9.4): default to empty so legacy
+  // TMDB-only / AniList-only tests don't bubble adapter failures via
+  // partialFailure when they don't explicitly mock it.
+  igdbMock.searchGames.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -415,13 +427,30 @@ describe('GET /api/search', () => {
       expect(types).toEqual(['anime', 'manga', 'movie'])
     })
 
-    it('type=game returns empty + partialFailure:false (no adapters wired in E4)', async () => {
+    it('type=game dispatches ONLY to IGDB (TMDB + AniList skipped) (Story 9.4)', async () => {
+      igdbMock.searchGames.mockResolvedValue([
+        {
+          id: 9415,
+          name: 'Hollow Knight',
+          summary: 'A 2D action-adventure.',
+          first_release_date: 1487894400,
+          cover: { id: 100, image_id: 'co1uii' },
+        },
+      ])
       const { GET } = await import('@/app/api/search/route')
 
-      const res = await GET(makeRequest('/api/search?q=foo&type=game'))
+      const res = await GET(makeRequest('/api/search?q=hollow&type=game'))
 
       const body = await res.json()
-      expect(body).toEqual({ results: [], partialFailure: false })
+      expect(body.partialFailure).toBe(false)
+      expect(body.results).toHaveLength(1)
+      expect(body.results[0]).toMatchObject({
+        type: 'game',
+        title: 'Hollow Knight',
+        igdb_id: 9415,
+        primary_source: 'igdb',
+      })
+      expect(igdbMock.searchGames).toHaveBeenCalledExactlyOnceWith('hollow')
       expect(tmdbMock.searchMulti).not.toHaveBeenCalled()
       expect(anilistMock.searchAnime).not.toHaveBeenCalled()
       expect(anilistMock.searchManga).not.toHaveBeenCalled()
@@ -529,6 +558,26 @@ describe('GET /api/search', () => {
         }),
         expect.any(String),
       )
+    })
+
+    it('flags partialFailure: true when IGDB rejects (Story 9.4)', async () => {
+      tmdbMock.searchMulti.mockResolvedValue({
+        page: 1,
+        results: [movieResult],
+        total_pages: 1,
+        total_results: 1,
+      })
+      igdbMock.searchGames.mockRejectedValue(new Error('IGDB 429 rate limited'))
+      const { GET } = await import('@/app/api/search/route')
+
+      const res = await GET(makeRequest('/api/search?q=foo'))
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.partialFailure).toBe(true)
+      // TMDB result still surfaces despite IGDB rejection.
+      expect(body.results).toHaveLength(1)
+      expect(body.results[0]).toMatchObject({ type: 'movie', tmdb_id: 550 })
     })
   })
 })
