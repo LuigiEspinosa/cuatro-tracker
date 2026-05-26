@@ -20,6 +20,7 @@ const baseItem = (overrides: Partial<LibraryItem> = {}): LibraryItem => ({
   anilistId: null,
   igdbId: null,
   steamId: null,
+  achievementSyncStatus: null,
   createdAt: '2026-05-10T12:00:00.000Z',
   updatedAt: '2026-05-12T12:00:00.000Z',
   ...overrides,

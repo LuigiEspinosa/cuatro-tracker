@@ -42,13 +42,49 @@ export type FilterSortBarProps = {
   onLifecycleChange?: (next: LifecycleFilter | null) => void
 }
 
-const STATUS_CHIPS: ReadonlyArray<{ status: WatchStatus; label: string }> = [
-  { status: WatchStatus.PLAN_TO_WATCH, label: 'PLAN TO WATCH' },
-  { status: WatchStatus.WATCHING, label: 'WATCHING' },
-  { status: WatchStatus.COMPLETED, label: 'COMPLETED' },
-  { status: WatchStatus.ON_HOLD, label: 'ON HOLD' },
-  { status: WatchStatus.DROPPED, label: 'DROPPED' },
-]
+// Per-medium status chip labels honour the "games speak play" convention
+// (Story 9.4 AC-5 / Q-2). The chip count stays at 5 across all mediums; only
+// the games row substitutes PLAN TO PLAY / PLAYING for the first two entries.
+const STATUS_CHIPS_BY_MEDIUM: Record<
+  LibraryMedium,
+  ReadonlyArray<{ status: WatchStatus; label: string }>
+> = {
+  movies: [
+    { status: WatchStatus.PLAN_TO_WATCH, label: 'PLAN TO WATCH' },
+    { status: WatchStatus.WATCHING, label: 'WATCHING' },
+    { status: WatchStatus.COMPLETED, label: 'COMPLETED' },
+    { status: WatchStatus.ON_HOLD, label: 'ON HOLD' },
+    { status: WatchStatus.DROPPED, label: 'DROPPED' },
+  ],
+  tv: [
+    { status: WatchStatus.PLAN_TO_WATCH, label: 'PLAN TO WATCH' },
+    { status: WatchStatus.WATCHING, label: 'WATCHING' },
+    { status: WatchStatus.COMPLETED, label: 'COMPLETED' },
+    { status: WatchStatus.ON_HOLD, label: 'ON HOLD' },
+    { status: WatchStatus.DROPPED, label: 'DROPPED' },
+  ],
+  anime: [
+    { status: WatchStatus.PLAN_TO_WATCH, label: 'PLAN TO WATCH' },
+    { status: WatchStatus.WATCHING, label: 'WATCHING' },
+    { status: WatchStatus.COMPLETED, label: 'COMPLETED' },
+    { status: WatchStatus.ON_HOLD, label: 'ON HOLD' },
+    { status: WatchStatus.DROPPED, label: 'DROPPED' },
+  ],
+  manga: [
+    { status: WatchStatus.PLAN_TO_WATCH, label: 'PLAN TO WATCH' },
+    { status: WatchStatus.WATCHING, label: 'WATCHING' },
+    { status: WatchStatus.COMPLETED, label: 'COMPLETED' },
+    { status: WatchStatus.ON_HOLD, label: 'ON HOLD' },
+    { status: WatchStatus.DROPPED, label: 'DROPPED' },
+  ],
+  games: [
+    { status: WatchStatus.PLAN_TO_WATCH, label: 'PLAN TO PLAY' },
+    { status: WatchStatus.WATCHING, label: 'PLAYING' },
+    { status: WatchStatus.COMPLETED, label: 'COMPLETED' },
+    { status: WatchStatus.ON_HOLD, label: 'ON HOLD' },
+    { status: WatchStatus.DROPPED, label: 'DROPPED' },
+  ],
+}
 
 const LIFECYCLE_CHIPS: ReadonlyArray<{ key: LifecycleFilter; label: string }> = [
   { key: 'in_progress', label: 'IN PROGRESS' },
@@ -165,7 +201,7 @@ export function FilterSortBar({
         role='group'
         aria-label='Filter by status'
       >
-        {STATUS_CHIPS.map((chip) => (
+        {STATUS_CHIPS_BY_MEDIUM[medium].map((chip) => (
           <FilterChip
             key={chip.status}
             active={activeStatus === chip.status}

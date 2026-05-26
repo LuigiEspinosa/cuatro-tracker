@@ -2276,6 +2276,20 @@ body {
 .media-card-overlay-status[data-status='on_hold'] { color: var(--status-color-on_hold); }
 .media-card-overlay-status[data-status='dropped'] { color: var(--status-color-dropped); }
 
+/* ! `--led-warning` token is not defined in tokens.css yet; `--led-on-hold`
+ * (amber LED) is the closest existing token to the design intent (a muted
+ * warning chip). Swap to `--led-warning` once the token lands in a future
+ * tokens pass.
+ */
+.media-card-overlay-private-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  margin: 0;
+  text-transform: uppercase;
+  color: var(--led-on-hold);
+}
+
 .empty-library {
   display: flex;
   flex-direction: column;

@@ -25,6 +25,7 @@ export type LibraryItem = {
   anilistId: number | null
   igdbId: number | null
   steamId: number | null
+  achievementSyncStatus: string | null // GAME only; null for every other type. Plain string (not literal union) so future CHECK-constraint enum additions don't force a coordinated client release.
   createdAt: string // ISO, UserEntry.created_at
   updatedAt: string // ISO, UserEntry.updated_at
 }

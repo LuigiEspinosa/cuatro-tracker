@@ -19,6 +19,14 @@ vi.mock('@/lib/api/tmdb', () => ({
   searchMulti: tmdbMock.searchMulti,
 }))
 
+const igdbMock = vi.hoisted(() => ({
+  searchGames: vi.fn(),
+}))
+
+vi.mock('@/lib/api/igdb', () => ({
+  searchGames: igdbMock.searchGames,
+}))
+
 const validEnv: Record<string, string> = {
   NEXTAUTH_SECRET: 'a'.repeat(32),
   NEXTAUTH_URL: 'http://localhost:3000',
@@ -46,6 +54,7 @@ beforeEach(() => {
   // that don't care about adapter wiring keep working untouched.
   anilistMock.searchAnime.mockResolvedValue([])
   anilistMock.searchManga.mockResolvedValue([])
+  igdbMock.searchGames.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -388,5 +397,170 @@ describe('lib/search/federation: anilistAdapter (Story 8.3)', () => {
     const anilist = ADAPTERS.find((a) => a.source === 'anilist')!
 
     await expect(anilist.search('both', undefined)).rejects.toThrow(/boom/)
+  })
+})
+
+describe('lib/search/federation: igdbAdapter (Story 9.4)', () => {
+  type IgdbReleaseDate = { id: number; y?: number | null }
+  type IgdbCover = { id: number; image_id: string }
+  type IgdbGameFixture = {
+    id: number
+    name: string
+    summary?: string | null
+    first_release_date?: number | null
+    cover?: IgdbCover | null
+    release_dates?: IgdbReleaseDate[]
+  }
+
+  function igdbGame(
+    id: number,
+    overrides: Partial<IgdbGameFixture> = {},
+  ): IgdbGameFixture {
+    return {
+      id,
+      name: `Game ${id}`,
+      summary: null,
+      first_release_date: 1487894400, // 2017-02-24
+      cover: { id: id + 1000, image_id: `co${id}` },
+      ...overrides,
+    }
+  }
+
+  it('is registered with source: igdb and supports game only', async () => {
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')
+    expect(igdb).toBeDefined()
+    expect(igdb?.supportedTypes).toEqual(['game'])
+  })
+
+  it('type=game maps each IGDB game to a UnifiedSearchResult', async () => {
+    igdbMock.searchGames.mockResolvedValue([
+      igdbGame(9415, {
+        name: 'Hollow Knight',
+        summary: 'A 2D action-adventure.',
+        first_release_date: 1487894400,
+        cover: { id: 100, image_id: 'co1uii' },
+      }),
+      igdbGame(11208, {
+        name: 'Celeste',
+        first_release_date: 1517356800, // 2018-01-30
+        cover: { id: 101, image_id: 'co1y2g' },
+      }),
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    const results = await igdb.search('platformer', 'game')
+
+    expect(igdbMock.searchGames).toHaveBeenCalledExactlyOnceWith('platformer')
+    expect(results).toHaveLength(2)
+    expect(results[0]).toMatchObject({
+      type: 'game',
+      title: 'Hollow Knight',
+      igdb_id: 9415,
+      primary_source: 'igdb',
+      poster_path: 'co1uii',
+      release_year: 2017,
+      overview: 'A 2D action-adventure.',
+      confidence: 1.0,
+    })
+    expect(results[1]).toMatchObject({
+      type: 'game',
+      title: 'Celeste',
+      igdb_id: 11208,
+      release_year: 2018,
+      poster_path: 'co1y2g',
+    })
+  })
+
+  it('type=movie returns [] without invoking searchGames (cheap exit)', async () => {
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    const results = await igdb.search('something', 'movie')
+
+    expect(results).toEqual([])
+    expect(igdbMock.searchGames).not.toHaveBeenCalled()
+  })
+
+  it('type=undefined invokes searchGames (single-backend adapter)', async () => {
+    igdbMock.searchGames.mockResolvedValue([igdbGame(1)])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    const results = await igdb.search('anything', undefined)
+
+    expect(igdbMock.searchGames).toHaveBeenCalledExactlyOnceWith('anything')
+    expect(results).toHaveLength(1)
+    expect(results[0]?.type).toBe('game')
+  })
+
+  it('release_year falls back to earliest valid release_dates[].y when first_release_date is null', async () => {
+    igdbMock.searchGames.mockResolvedValue([
+      igdbGame(50, {
+        first_release_date: null,
+        release_dates: [
+          { id: 1, y: 2014 },
+          { id: 2, y: 2013 }, // earliest -> wins
+          { id: 3, y: null },
+          { id: 4, y: 0 }, // IGDB "unknown year" sentinel; filtered out
+        ],
+      }),
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    const results = await igdb.search('q', 'game')
+
+    expect(results[0]?.release_year).toBe(2013)
+  })
+
+  it('release_year is undefined when both first_release_date and release_dates are absent', async () => {
+    igdbMock.searchGames.mockResolvedValue([
+      igdbGame(60, { first_release_date: null, release_dates: undefined }),
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    const results = await igdb.search('q', 'game')
+
+    expect(results[0]?.release_year).toBeUndefined()
+  })
+
+  it('release_year is undefined when first_release_date is the 0 sentinel and release_dates has only invalid years', async () => {
+    igdbMock.searchGames.mockResolvedValue([
+      igdbGame(70, {
+        first_release_date: 0,
+        release_dates: [{ id: 1, y: 0 }, { id: 2, y: null }],
+      }),
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    const results = await igdb.search('q', 'game')
+
+    expect(results[0]?.release_year).toBeUndefined()
+  })
+
+  it('poster_path is null when cover is missing or image_id is empty', async () => {
+    igdbMock.searchGames.mockResolvedValue([
+      igdbGame(80, { cover: null }),
+      igdbGame(81, { cover: { id: 9, image_id: '' } }),
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    const results = await igdb.search('q', 'game')
+
+    expect(results[0]?.poster_path).toBeNull()
+    expect(results[1]?.poster_path).toBeNull()
+  })
+
+  it('searchGames rejection bubbles up so the outer route can flag partialFailure', async () => {
+    igdbMock.searchGames.mockRejectedValue(new Error('IGDB 429 rate limited'))
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    await expect(igdb.search('q', 'game')).rejects.toThrow(/IGDB 429/)
   })
 })

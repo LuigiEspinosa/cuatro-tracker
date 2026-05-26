@@ -61,6 +61,7 @@ function fixtureItem(overrides: Partial<LibraryItem> = {}): LibraryItem {
     posterPath: '/poster.jpg',
     year: 1999,
     releaseDate: '1999-10-15T00:00:00.000Z',
+    achievementSyncStatus: null,
     progressLabel: 'WATCHING',
     progressPct: 0,
     sourceLabel: 'From TMDB',

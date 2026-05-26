@@ -123,4 +123,177 @@ describe('MediaCardOverlay', () => {
       unmount()
     }
   })
+
+  describe('Story 9.4: per-medium status labels (games speak play)', () => {
+    it('GAME + PLAN_TO_WATCH renders "PLAN TO PLAY"', () => {
+      render(
+        <MediaCardOverlay
+          title='Hollow Knight'
+          year={2017}
+          mediaType={MediaType.GAME}
+          status={WatchStatus.PLAN_TO_WATCH}
+        />,
+      )
+      expect(screen.getByText('PLAN TO PLAY')).toBeInTheDocument()
+      expect(screen.queryByText('PLAN TO WATCH')).toBeNull()
+    })
+
+    it('GAME + WATCHING renders "PLAYING"', () => {
+      render(
+        <MediaCardOverlay
+          title='Hollow Knight'
+          year={2017}
+          mediaType={MediaType.GAME}
+          status={WatchStatus.WATCHING}
+        />,
+      )
+      expect(screen.getByText('PLAYING')).toBeInTheDocument()
+      expect(screen.queryByText('WATCHING')).toBeNull()
+    })
+
+    it('GAME + COMPLETED / ON_HOLD / DROPPED keep their shared labels', () => {
+      const cases: Array<[WatchStatus, string]> = [
+        [WatchStatus.COMPLETED, 'COMPLETED'],
+        [WatchStatus.ON_HOLD, 'ON HOLD'],
+        [WatchStatus.DROPPED, 'DROPPED'],
+      ]
+      for (const [status, label] of cases) {
+        const { unmount } = render(
+          <MediaCardOverlay
+            title='Sample'
+            year={2024}
+            mediaType={MediaType.GAME}
+            status={status}
+          />,
+        )
+        expect(screen.getByText(label)).toBeInTheDocument()
+        unmount()
+      }
+    })
+
+    it('MOVIE + PLAN_TO_WATCH still renders "PLAN TO WATCH" (regression guard)', () => {
+      render(
+        <MediaCardOverlay
+          title='Fight Club'
+          year={1999}
+          mediaType={MediaType.MOVIE}
+          status={WatchStatus.PLAN_TO_WATCH}
+        />,
+      )
+      expect(screen.getByText('PLAN TO WATCH')).toBeInTheDocument()
+      expect(screen.queryByText('PLAN TO PLAY')).toBeNull()
+    })
+
+    it('TV_SHOW + WATCHING still renders "WATCHING" (regression guard)', () => {
+      render(
+        <MediaCardOverlay
+          title='Breaking Bad'
+          year={2008}
+          mediaType={MediaType.TV_SHOW}
+          status={WatchStatus.WATCHING}
+        />,
+      )
+      expect(screen.getByText('WATCHING')).toBeInTheDocument()
+      expect(screen.queryByText('PLAYING')).toBeNull()
+    })
+
+    it('ANIME + PLAN_TO_WATCH still renders "PLAN TO WATCH" (regression guard)', () => {
+      render(
+        <MediaCardOverlay
+          title='Frieren'
+          year={2023}
+          mediaType={MediaType.ANIME}
+          status={WatchStatus.PLAN_TO_WATCH}
+        />,
+      )
+      expect(screen.getByText('PLAN TO WATCH')).toBeInTheDocument()
+      expect(screen.queryByText('PLAN TO PLAY')).toBeNull()
+    })
+  })
+
+  describe('Story 9.4: Steam private-profile chip', () => {
+    it('GAME + achievementSyncStatus="private_profile" renders the PRIVATE PROFILE chip', () => {
+      const { container } = render(
+        <MediaCardOverlay
+          title='Hollow Knight'
+          year={2017}
+          mediaType={MediaType.GAME}
+          status={WatchStatus.WATCHING}
+          achievementSyncStatus='private_profile'
+        />,
+      )
+      expect(screen.getByText('PRIVATE PROFILE')).toBeInTheDocument()
+      const chip = container.querySelector('.media-card-overlay-private-chip')
+      expect(chip).not.toBeNull()
+      expect(chip?.getAttribute('data-achievement-sync-status')).toBe(
+        'private_profile',
+      )
+    })
+
+    it('GAME + achievementSyncStatus="ok" does NOT render the chip', () => {
+      const { container } = render(
+        <MediaCardOverlay
+          title='Hollow Knight'
+          year={2017}
+          mediaType={MediaType.GAME}
+          status={WatchStatus.WATCHING}
+          achievementSyncStatus='ok'
+        />,
+      )
+      expect(screen.queryByText('PRIVATE PROFILE')).toBeNull()
+      expect(container.querySelector('.media-card-overlay-private-chip')).toBeNull()
+    })
+
+    it('GAME + achievementSyncStatus="never_synced" does NOT render the chip', () => {
+      render(
+        <MediaCardOverlay
+          title='Hollow Knight'
+          year={2017}
+          mediaType={MediaType.GAME}
+          status={WatchStatus.WATCHING}
+          achievementSyncStatus='never_synced'
+        />,
+      )
+      expect(screen.queryByText('PRIVATE PROFILE')).toBeNull()
+    })
+
+    it('GAME + achievementSyncStatus="failed" does NOT render the chip', () => {
+      render(
+        <MediaCardOverlay
+          title='Hollow Knight'
+          year={2017}
+          mediaType={MediaType.GAME}
+          status={WatchStatus.WATCHING}
+          achievementSyncStatus='failed'
+        />,
+      )
+      expect(screen.queryByText('PRIVATE PROFILE')).toBeNull()
+    })
+
+    it('GAME + achievementSyncStatus=null does NOT render the chip', () => {
+      render(
+        <MediaCardOverlay
+          title='Hollow Knight'
+          year={2017}
+          mediaType={MediaType.GAME}
+          status={WatchStatus.WATCHING}
+          achievementSyncStatus={null}
+        />,
+      )
+      expect(screen.queryByText('PRIVATE PROFILE')).toBeNull()
+    })
+
+    it('non-GAME + achievementSyncStatus="private_profile" does NOT render the chip (defensive)', () => {
+      render(
+        <MediaCardOverlay
+          title='Fight Club'
+          year={1999}
+          mediaType={MediaType.MOVIE}
+          status={WatchStatus.WATCHING}
+          achievementSyncStatus='private_profile'
+        />,
+      )
+      expect(screen.queryByText('PRIVATE PROFILE')).toBeNull()
+    })
+  })
 })
