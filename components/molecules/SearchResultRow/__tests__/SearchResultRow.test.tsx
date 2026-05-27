@@ -222,7 +222,7 @@ describe('SearchResultRow', () => {
     // Regression for "Games image broken in search results": IGDB stores bare
     // image_id strings on the wire (NFR15 / Story 9.3 AC-8). Before this fix,
     // a game's poster_path ('co1xkj') was being fed to getImageUrl which
-    // produced https://image.tmdb.org/t/p/w185co1xkj — a 404.
+    // produced https://image.tmdb.org/t/p/w185co1xkj, a 404.
     const { container } = render(
       <SearchResultRow
         result={makeResult({

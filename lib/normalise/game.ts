@@ -40,6 +40,8 @@ function pickPublisherName(
 // year wins so the chronological timeline (Epic 10) sorts by canonical
 // release. y must be > 0 because JS Date.UTC(0, ...) maps year 0 -> 1900
 // (two-digit-year rule) and IGDB uses y: 0 as an "unknown year" sentinel.
+// y <= 275760 because JS Date.UTC overflows beyond that range; a far-future
+// IGDB placeholder would otherwise yield an Invalid Date and violate NFR13.
 function computeReleaseDate(source: IgdbGame): Date {
   if (
     typeof source.first_release_date === 'number' &&
@@ -52,10 +54,15 @@ function computeReleaseDate(source: IgdbGame): Date {
   const validYears = source.release_dates
     ?.map((r) => r.y)
     .filter(
-      (y): y is number => typeof y === 'number' && Number.isFinite(y) && y > 0,
+      (y): y is number =>
+        typeof y === 'number' &&
+        Number.isFinite(y) &&
+        y > 0 &&
+        y <= 275760,
     )
   if (validYears && validYears.length > 0) {
-    return new Date(Date.UTC(Math.min(...validYears), 0, 1))
+    const utc = Date.UTC(Math.min(...validYears), 0, 1)
+    if (!Number.isNaN(utc)) return new Date(utc)
   }
   return new Date(RELEASE_DATE_SENTINEL)
 }
@@ -84,19 +91,19 @@ export function normaliseIgdbGame(
   const source = IgdbGameSchema.parse(raw)
 
   // IgdbCoverSchema / IgdbScreenshotSchema accept empty-string image_id; the
-  // `|| null` and `.filter(...)` guards stop empty strings from reaching the
-  // DB (which would produce broken CDN URLs at render time via
-  // lib/api/igdb-images.ts).
+  // `.trim() || null` and `.filter(...)` guards stop empty AND whitespace-only
+  // strings from reaching the DB (which would produce broken CDN URLs at
+  // render time via lib/api/igdb-images.ts).
   const base: Prisma.MediaItemCreateInput = {
     type: MediaType.GAME,
     title: source.name,
     release_date: computeReleaseDate(source),
     overview: source.summary ?? null,
-    poster_path: source.cover?.image_id || null,
+    poster_path: source.cover?.image_id?.trim() || null,
     screenshots:
       source.screenshots
         ?.map((s) => s.image_id)
-        .filter((id) => id.length > 0) ?? [],
+        .filter((id) => id.trim().length > 0) ?? [],
     genres: source.genres?.map((g) => g.name) ?? [],
     platforms: source.platforms?.map((p) => p.name) ?? [],
     developer_name: pickDeveloperName(source.involved_companies),

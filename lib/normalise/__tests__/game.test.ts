@@ -283,6 +283,30 @@ describe('lib/normalise/game', () => {
       )
       expect(result.poster_path).toBeNull()
     })
+
+    it('returns poster_path: null when cover.image_id is whitespace-only', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(
+        makeIgdbGame({
+          cover: { id: 1, image_id: '  ' },
+        }),
+      )
+      expect(result.poster_path).toBeNull()
+    })
+
+    it('filters out whitespace-only image_ids from screenshots', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(
+        makeIgdbGame({
+          screenshots: [
+            { id: 1, image_id: 'sc1' },
+            { id: 2, image_id: '   ' },
+            { id: 3, image_id: 'sc3' },
+          ],
+        }),
+      )
+      expect(result.screenshots).toEqual(['sc1', 'sc3'])
+    })
   })
 
   describe('developer/publisher selection', () => {
@@ -389,6 +413,13 @@ describe('lib/normalise/game', () => {
       {
         label: 'first_release_date null + release_dates missing entirely',
         overrides: { first_release_date: null, release_dates: undefined },
+      },
+      {
+        label: 'first_release_date null + release_dates[].y exceeds Date.UTC range',
+        overrides: {
+          first_release_date: null,
+          release_dates: [{ id: 1, y: 1_000_000_000 }],
+        },
       },
     ])(
       'release_date is always a valid Date ($label)',
