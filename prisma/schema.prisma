@@ -197,6 +197,7 @@ model Achievement {
   icon_url       String?
   unlocked       Boolean   @default(false)
   unlocked_at    DateTime?
+  percent_global Float? // Steam global achievement percentage (0-100, nullable; null when Steam returns 403/404 from GetGlobalAchievementPercentagesForApp).
 
   @@index([game_id])
   @@unique([game_id, steam_api_name])

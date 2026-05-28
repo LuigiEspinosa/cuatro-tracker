@@ -135,6 +135,7 @@ export async function steamAchievementSyncProcessor(
             icon_url: meta?.icon ?? null,
             unlocked: ach.unlocked,
             unlocked_at: ach.unlocked_at,
+            percent_global: ach.percent_global,
           },
           update: {
             display_name: meta?.displayName ?? ach.steam_api_name,
@@ -142,6 +143,7 @@ export async function steamAchievementSyncProcessor(
             icon_url: meta?.icon ?? null,
             unlocked: ach.unlocked,
             unlocked_at: ach.unlocked_at,
+            percent_global: ach.percent_global,
           },
         })
       })

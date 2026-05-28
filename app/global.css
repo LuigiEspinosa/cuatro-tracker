@@ -3485,3 +3485,185 @@ body {
   margin: 0;
 }
 
+/* ============================================================
+   Game detail page (Story 9.5). Reuses the anime/manga detail
+   primitives (.anime-detail-rule, .anime-detail-synopsis,
+   .anime-detail-studio-chip) for visual continuity; only the
+   screenshots band, achievement list, and private-profile banner
+   are game-specific.
+   ============================================================ */
+
+.game-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.game-detail-placeholder {
+  font-family: var(--font-body), serif;
+  font-style: italic;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+  padding: 16px 0;
+}
+
+.game-detail-platform-list,
+.game-detail-genre-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Screenshots band: horizontal scroller of IGDB t_screenshot_med thumbnails,
+   each linking out to the t_1080p full-resolution view. */
+.game-detail-screenshots {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  list-style: none;
+  margin: 0;
+}
+.game-detail-screenshots li {
+  flex: 0 0 auto;
+}
+.game-detail-screenshots img {
+  display: block;
+  width: auto;
+  height: 160px;
+  border: 1px solid var(--frame-stroke-games);
+  box-shadow: var(--frame-stroke-games-glow);
+}
+
+/* Private-profile banner. The achievement list is gated OFF the page in the
+   private_profile state (AchievementList is not rendered); stale Achievement
+   rows stay in the DB and are merely hidden here, deletion-on-flip is deferred. */
+.private-profile-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.private-profile-banner-link {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream);
+  text-decoration: none;
+}
+.private-profile-banner-link:hover,
+.private-profile-banner-link:focus-visible {
+  color: var(--led-on-hold);
+}
+.game-detail-private-placeholder {
+  margin: 0;
+}
+
+/* AchievementList organism: UNLOCKED / LOCKED sub-bands with per-row rarity. */
+.achievement-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.achievement-list-empty {
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+  padding: 16px 0;
+}
+.achievement-list-summary {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream);
+}
+.achievement-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.achievement-list-section > ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.achievement-list-section-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 18px;
+  letter-spacing: 0.05em;
+  color: var(--phosphor-cream);
+  margin: 0;
+}
+.achievement-list-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+.achievement-list-row-icon,
+.achievement-list-row-icon-placeholder {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+}
+.achievement-list-row-icon-placeholder {
+  border: 1px solid var(--phosphor-cream-ghost);
+  opacity: 0.4;
+}
+.achievement-list-row[data-unlocked='false'] .achievement-list-row-icon {
+  opacity: 0.4;
+}
+.achievement-list-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.achievement-list-row-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--phosphor-cream);
+  margin: 0;
+}
+.achievement-list-row-desc {
+  font-family: var(--font-body), serif;
+  font-size: 13px;
+  color: var(--phosphor-cream-dim);
+  margin: 2px 0 0;
+}
+.achievement-list-row-date {
+  flex: 0 0 auto;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+  color: var(--phosphor-cream-dim);
+}
+.achievement-list-row-rarity {
+  flex: 0 0 auto;
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.achievement-list-row[data-rarity='rare'] .achievement-list-row-rarity {
+  color: var(--magenta);
+}
+.achievement-list-row[data-rarity='uncommon'] .achievement-list-row-rarity {
+  color: var(--led-on-hold);
+}
+.achievement-list-row[data-rarity='common'] .achievement-list-row-rarity {
+  color: var(--phosphor-cream-dim);
+}
+

@@ -116,8 +116,8 @@ describe('steamAchievementSync processor (BullMQ integration, mocked db + fetch)
             jsonResponse({
               achievementpercentages: {
                 achievements: [
+                  // ach_02 intentionally omitted so its percent_global degrades to null.
                   { name: 'ach_01', percent: 75.5 },
-                  { name: 'ach_02', percent: 30.0 },
                 ],
               },
             }),
@@ -175,7 +175,23 @@ describe('steamAchievementSync processor (BullMQ integration, mocked db + fetch)
           steam_api_name: 'ach_01',
           display_name: 'First Steps',
           unlocked: true,
+          percent_global: 75.5,
         }),
+        update: expect.objectContaining({ percent_global: 75.5 }),
+      })
+
+      // ach_02 is absent from GetGlobalAchievementPercentagesForApp, so its
+      // percent_global degrades to null on both upsert branches.
+      const secondUpsertArgs = dbMock.achievement.upsert.mock.calls[1]![0]
+      expect(secondUpsertArgs).toMatchObject({
+        where: {
+          game_id_steam_api_name: {
+            game_id: 'game-1',
+            steam_api_name: 'ach_02',
+          },
+        },
+        create: expect.objectContaining({ percent_global: null }),
+        update: expect.objectContaining({ percent_global: null }),
       })
 
       const updateCalls = dbMock.mediaItem.update.mock.calls
