@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'cdn.cloudflare.steamstatic.com' },
       // E9 games via Steam — secondary host
       { protocol: 'https', hostname: 'media.steampowered.com' },
+      // E9 Steam achievement icons (GetSchemaForGame) can also resolve to Akamai hosts
+      { protocol: 'https', hostname: 'steamcdn-a.akamaihd.net' },
+      { protocol: 'https', hostname: 'cdn.akamai.steamstatic.com' },
       // E9 games via IGDB cover-image CDN
       { protocol: 'https', hostname: 'images.igdb.com' },
     ],
