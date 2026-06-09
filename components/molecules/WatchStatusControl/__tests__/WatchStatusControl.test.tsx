@@ -31,6 +31,7 @@ describe('WatchStatusControl', () => {
         <WatchStatusControl
           mediaItemId='m1'
           currentStatus={WatchStatus.WATCHING}
+          medium='movies'
         />,
       ),
     )
@@ -46,6 +47,7 @@ describe('WatchStatusControl', () => {
         <WatchStatusControl
           mediaItemId='m1'
           currentStatus={WatchStatus.PLAN_TO_WATCH}
+          medium='movies'
         />,
       ),
     )
@@ -77,6 +79,7 @@ describe('WatchStatusControl', () => {
         <WatchStatusControl
           mediaItemId='m1'
           currentStatus={WatchStatus.WATCHING}
+          medium='movies'
         />,
       ),
     )
@@ -106,6 +109,7 @@ describe('WatchStatusControl', () => {
         <WatchStatusControl
           mediaItemId='m1'
           currentStatus={WatchStatus.WATCHING}
+          medium='movies'
         />,
       ),
     )
@@ -119,5 +123,54 @@ describe('WatchStatusControl', () => {
     // listbox closes, no fetch
     expect(fetchMock).not.toHaveBeenCalled()
     expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('invalidates the medium-scoped library + detail caches, not the movies cache', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 'e1',
+        mediaItemId: 'm1',
+        status: WatchStatus.COMPLETED,
+        userRating: null,
+        progress: 0,
+        notes: null,
+        completedAt: '2026-05-15T12:00:00.000Z',
+        startedAt: null,
+        updatedAt: '2026-05-15T12:00:00.000Z',
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const user = userEvent.setup()
+    render(
+      <QueryClientProvider client={client}>
+        <WatchStatusControl
+          mediaItemId='m1'
+          currentStatus={WatchStatus.WATCHING}
+          medium='tv'
+        />
+      </QueryClientProvider>,
+    )
+    await user.click(screen.getByRole('button', { expanded: false }))
+    const completedOption = screen
+      .getAllByRole('option')
+      .find((el) => /COMPLETED/i.test(el.textContent ?? ''))
+    await user.click(completedOption!)
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['library', 'tv'] })
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['detail', 'tv', 'm1'],
+    })
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
+      queryKey: ['library', 'movies'],
+    })
   })
 })

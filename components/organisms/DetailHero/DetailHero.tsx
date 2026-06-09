@@ -50,6 +50,7 @@ export function DetailHero({
       <WatchStatusControl
         mediaItemId={mediaItemId}
         currentStatus={currentStatus}
+        medium={medium}
       />
     ) : null)
 

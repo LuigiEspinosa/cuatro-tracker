@@ -11,6 +11,10 @@ import type { ProgressResponse } from '@/lib/types/progress'
 export type WatchStatusControlProps = {
   mediaItemId: string
   currentStatus: WatchStatus
+  // The library route segment this control is mounted under. Drives the cache
+  // invalidation keys so a status change on /tv, /anime, /manga, or /games
+  // invalidates ITS OWN library + detail caches, not the movies cache.
+  medium: 'movies' | 'tv' | 'anime' | 'manga' | 'games'
 }
 
 const STATUS_ORDER: WatchStatus[] = [
@@ -52,6 +56,7 @@ async function putStatus(body: {
 export function WatchStatusControl({
   mediaItemId,
   currentStatus,
+  medium,
 }: WatchStatusControlProps) {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<WatchStatus>(currentStatus)
@@ -86,7 +91,7 @@ export function WatchStatusControl({
     mutationFn: putStatus,
     onSuccess: (data) => {
       setStatus(data.status)
-      void queryClient.invalidateQueries({ queryKey: ['library', 'movies'] })
+      void queryClient.invalidateQueries({ queryKey: ['library', medium] })
       void queryClient.invalidateQueries({
         queryKey: ['dashboard', 'recently-added'],
       })
@@ -94,7 +99,7 @@ export function WatchStatusControl({
         queryKey: ['dashboard', 'up-next'],
       })
       void queryClient.invalidateQueries({
-        queryKey: ['detail', 'movies', mediaItemId],
+        queryKey: ['detail', medium, mediaItemId],
       })
       router.refresh()
       toast.success(`STATUS · ${labelFor(data.status)}`)
