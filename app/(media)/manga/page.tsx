@@ -1,7 +1,6 @@
 import { MediaType, WatchStatus } from '@prisma/client'
-import { findLibraryItems, type LibrarySortKey } from '@/lib/db/library'
+import { findLibraryItems, serializeLibraryItem, type LibrarySortKey } from '@/lib/db/library'
 import { LibraryGrid } from '@/components/organisms/LibraryGrid'
-import type { LibraryItem } from '@/lib/types/library'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,11 +38,6 @@ function parseStatus(raw: string | undefined): WatchStatus | null {
   return null
 }
 
-function deriveYear(releaseDate: Date): number | null {
-  const year = releaseDate.getUTCFullYear()
-  return year === 1970 ? null : year
-}
-
 export default async function MangaPage({
   searchParams,
 }: {
@@ -64,32 +58,7 @@ export default async function MangaPage({
     limit: 200,
   })
 
-  const initialItems: LibraryItem[] = entries.map((entry) => ({
-    id: entry.id,
-    mediaItemId: entry.media_item_id,
-    mediaType: entry.media_item.type,
-    status: entry.status,
-    title: entry.media_item.title,
-    posterPath: entry.media_item.poster_path,
-    year: deriveYear(entry.media_item.release_date),
-    releaseDate:
-      entry.media_item.release_date.getUTCFullYear() === 1970
-        ? null
-        : entry.media_item.release_date.toISOString(),
-    // Story 8.4 ships the minimum grid: chapter / volume progress
-    // visualisation lands in Story 8.6 (ChapterVolumeTracker molecule +
-    // UserEntry.volume_progress migration).
-    progressLabel: null,
-    progressPct: null,
-    sourceLabel: null,
-    tmdbId: entry.media_item.tmdb_id,
-    anilistId: entry.media_item.anilist_id,
-    igdbId: entry.media_item.igdb_id,
-    steamId: entry.media_item.steam_app_id,
-    achievementSyncStatus: null,
-    createdAt: entry.created_at.toISOString(),
-    updatedAt: entry.updated_at.toISOString(),
-  }))
+  const initialItems = entries.map(serializeLibraryItem)
 
   return (
     <main className='movies-page'>

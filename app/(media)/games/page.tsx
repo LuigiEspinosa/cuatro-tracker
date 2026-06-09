@@ -1,8 +1,6 @@
 import { MediaType, WatchStatus } from '@prisma/client'
-import { findLibraryItems, type LibrarySortKey } from '@/lib/db/library'
+import { findLibraryItems, serializeLibraryItem, type LibrarySortKey } from '@/lib/db/library'
 import { LibraryGrid } from '@/components/organisms/LibraryGrid'
-import { getGameImageUrl } from '@/lib/api/igdb-images'
-import type { LibraryItem } from '@/lib/types/library'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,11 +38,6 @@ function parseStatus(raw: string | undefined): WatchStatus | null {
   return null
 }
 
-function deriveYear(releaseDate: Date): number | null {
-  const year = releaseDate.getUTCFullYear()
-  return year === 1970 ? null : year
-}
-
 export default async function GamesPage({
   searchParams,
 }: {
@@ -66,45 +59,7 @@ export default async function GamesPage({
     limit: 200,
   })
 
-  const initialItems: LibraryItem[] = entries.map((entry) => {
-    const isGame = entry.media_item.type === MediaType.GAME
-    // IGDB stores bare `image_id` strings per NFR15 / Story 9.3 AC-8. The page
-    // hardcodes `MediaType.GAME` above, so the dispatch always takes the GAME
-    // branch; the conditional keeps the read-back consistent with the
-    // /api/library serializer's per-type shape.
-    const posterPath =
-      isGame && entry.media_item.poster_path
-        ? getGameImageUrl(entry.media_item.poster_path, 't_cover_big')
-        : entry.media_item.poster_path
-    return {
-      id: entry.id,
-      mediaItemId: entry.media_item_id,
-      mediaType: entry.media_item.type,
-      status: entry.status,
-      title: entry.media_item.title,
-      posterPath,
-      year: deriveYear(entry.media_item.release_date),
-      releaseDate:
-        entry.media_item.release_date.getUTCFullYear() === 1970
-          ? null
-          : entry.media_item.release_date.toISOString(),
-      // Story 9.4 ships the minimum grid: games-specific filter dimensions
-      // (Platform / Playtime range / Achievement % / Genre) defer to Story
-      // 9.4a, and achievement progress visualisation defers to Story 9.5.
-      progressLabel: null,
-      progressPct: null,
-      sourceLabel: null,
-      tmdbId: entry.media_item.tmdb_id,
-      anilistId: entry.media_item.anilist_id,
-      igdbId: entry.media_item.igdb_id,
-      steamId: entry.media_item.steam_app_id,
-      achievementSyncStatus: isGame
-        ? entry.media_item.achievement_sync_status
-        : null,
-      createdAt: entry.created_at.toISOString(),
-      updatedAt: entry.updated_at.toISOString(),
-    }
-  })
+  const initialItems = entries.map(serializeLibraryItem)
 
   return (
     <main className='movies-page'>

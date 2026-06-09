@@ -1,5 +1,7 @@
 import { type MediaItem, type Prisma, type UserEntry, MediaType, WatchStatus } from '@prisma/client'
 import { db } from '@/lib/db'
+import { getGameImageUrl } from '@/lib/api/igdb-images'
+import type { LibraryItem } from '@/lib/types/library'
 
 export type LibrarySortKey =
   | 'recently_added'
@@ -218,6 +220,95 @@ export function formatTvProgressPct(
 ): number | null {
   if (!stats || stats.total === 0) return null
   return Math.round((stats.watched / stats.total) * 100)
+}
+
+// Wire serializer shared by `/api/library` (GET) and the per-medium grid SSR
+// pages (`app/(media)/{movies,tv,anime,manga,games}/page.tsx`). Defining it
+// once guarantees the SSR `initialItems` and the client refetch response are
+// identical, so TanStack Query never flashes from a hand-rolled SSR shape to
+// the real serializer output on the first refetch (the Story 6.3 EH-4 defect).
+function deriveYear(mediaItem: MediaItem): number | null {
+  // 1970 is the normaliser's sentinel for "release date unknown".
+  const year = mediaItem.release_date.getUTCFullYear()
+  return year === 1970 ? null : year
+}
+
+function deriveReleaseDate(mediaItem: MediaItem): string | null {
+  const year = mediaItem.release_date.getUTCFullYear()
+  return year === 1970 ? null : mediaItem.release_date.toISOString()
+}
+
+function formatProgressLabel(entry: UserEntryWithMedia): string | null {
+  const { type } = entry.media_item
+  const { status, progress } = entry
+  if (type === MediaType.MOVIE) {
+    if (status === WatchStatus.COMPLETED) return 'WATCHED'
+    if (status === WatchStatus.WATCHING && progress > 0 && progress < 100) {
+      return `${progress}% WATCHED`
+    }
+    return status.replaceAll('_', ' ')
+  }
+  if (type === MediaType.TV_SHOW) {
+    return formatTvProgressLabel(status, entry.episodeStats)
+  }
+  // anime / manga / games progress formatting lands in Stories 8-9.
+  return null
+}
+
+function formatProgressPct(entry: UserEntryWithMedia): number | null {
+  const { type } = entry.media_item
+  const { status, progress } = entry
+  if (type === MediaType.MOVIE) {
+    if (status === WatchStatus.COMPLETED) return 100
+    if (status === WatchStatus.WATCHING) return Math.min(100, Math.max(0, progress))
+    return null
+  }
+  if (type === MediaType.TV_SHOW) {
+    return formatTvProgressPct(entry.episodeStats)
+  }
+  return null
+}
+
+function deriveSourceLabel(mediaItem: MediaItem): string | null {
+  if (mediaItem.tmdb_id !== null) return 'From TMDB'
+  if (mediaItem.anilist_id !== null) return 'From AniList'
+  if (mediaItem.igdb_id !== null) return 'From IGDB'
+  if (mediaItem.steam_app_id !== null) return 'From Steam'
+  return null
+}
+
+// IGDB stores bare `image_id` strings per NFR15. Construct the full CDN URL at
+// the serialisation boundary so the existing client-side `getImageUrl`
+// http-passthrough carries it through unchanged.
+function gameCoverUrl(mediaItem: MediaItem): string | null {
+  return mediaItem.poster_path
+    ? getGameImageUrl(mediaItem.poster_path, 't_cover_big')
+    : null
+}
+
+export function serializeLibraryItem(entry: UserEntryWithMedia): LibraryItem {
+  const mediaItem = entry.media_item
+  const isGame = mediaItem.type === MediaType.GAME
+  return {
+    id: entry.id,
+    mediaItemId: mediaItem.id,
+    mediaType: mediaItem.type,
+    status: entry.status,
+    title: mediaItem.title,
+    posterPath: isGame ? gameCoverUrl(mediaItem) : mediaItem.poster_path,
+    year: deriveYear(mediaItem),
+    releaseDate: deriveReleaseDate(mediaItem),
+    progressLabel: formatProgressLabel(entry),
+    progressPct: formatProgressPct(entry),
+    sourceLabel: deriveSourceLabel(mediaItem),
+    tmdbId: mediaItem.tmdb_id,
+    anilistId: mediaItem.anilist_id,
+    igdbId: mediaItem.igdb_id,
+    steamId: mediaItem.steam_app_id,
+    achievementSyncStatus: isGame ? mediaItem.achievement_sync_status : null,
+    createdAt: entry.created_at.toISOString(),
+    updatedAt: entry.updated_at.toISOString(),
+  }
 }
 
 function buildOrderBy(
