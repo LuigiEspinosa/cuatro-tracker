@@ -47,19 +47,50 @@ test.describe('Login flow', () => {
     const email = page.getByLabel('EMAIL')
     const password = page.getByLabel('PASSWORD')
     await password.fill('wrong-pass')
-    await page.getByRole('button', { name: '> LOG IN' }).click()
 
     // AC-2 calls for boot truncation with glitch-shake. The `.lc-screen-shake`
-    // class is applied on the screen wrapper during phase=error-truncating.
-    // Race-tolerant: assert it appears at some point in the 3s window.
-    await expect(page.locator('.lc-screen-shake')).toHaveCount(1, {
-      timeout: 3_000,
+    // class exists only while phase=error-truncating, a 350ms window
+    // (BootSequence TRUNCATE_TOTAL_MS) that opens only after the NextAuth +
+    // bcrypt round trip resolves. Any waiter installed from the runner AFTER
+    // the click can lose that window to runner-process latency, so arm an
+    // in-page MutationObserver BEFORE submitting. Mutation records queue
+    // losslessly, so the shake is caught even when the observer callback runs
+    // after the class is already gone (the removal record carries oldValue).
+    await page.evaluate(() => {
+      const w = window as Window & { __shakeSeen?: boolean }
+      w.__shakeSeen = false
+      const screen = document.querySelector('.lc-screen')
+      if (!screen) return
+      const observer = new MutationObserver((records) => {
+        const seen = records.some(
+          (r) =>
+            (r.oldValue ?? '').includes('lc-screen-shake') ||
+            (r.target as Element).classList.contains('lc-screen-shake'),
+        )
+        if (seen) {
+          w.__shakeSeen = true
+          observer.disconnect()
+        }
+      })
+      observer.observe(screen, {
+        attributes: true,
+        attributeFilter: ['class'],
+        attributeOldValue: true,
+      })
     })
 
+    await page.getByRole('button', { name: '> LOG IN' }).click()
+
+    // The settled error state is stable, so it can absorb a slow round trip.
     await expect(page.getByText('> ACCESS DENIED')).toBeVisible({
-      timeout: 3_000,
+      timeout: 15_000,
     })
     await expect(page.getByText('INVALID EMAIL OR PASSWORD')).toBeVisible()
+
+    const shakeSeen = await page.evaluate(
+      () => (window as Window & { __shakeSeen?: boolean }).__shakeSeen,
+    )
+    expect(shakeSeen).toBe(true)
     await expect(email).toHaveValue(ADMIN_EMAIL)
     await expect(password).toHaveValue('wrong-pass')
     await expect(password).toBeFocused()
