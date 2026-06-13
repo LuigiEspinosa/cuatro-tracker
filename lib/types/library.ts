@@ -28,6 +28,7 @@ export type LibraryItem = {
   achievementSyncStatus: string | null // GAME only; null for every other type. Plain string (not literal union) so future CHECK-constraint enum additions don't force a coordinated client release.
   createdAt: string // ISO, UserEntry.created_at
   updatedAt: string // ISO, UserEntry.updated_at
+  completedAt: string | null // ISO, UserEntry.completed_at; null until the item is completed. Drives the timeline's consumed-date sort + date column.
 }
 
 export type LibraryListResponse = {

@@ -2,6 +2,7 @@
 
 import { MediaType, WatchStatus } from '@prisma/client'
 import { PhosphorBar } from '@/components/atoms/PhosphorBar'
+import { STATUS_LABEL_BY_MEDIA_TYPE, TYPE_LABEL } from '@/lib/ui/media-display'
 
 export type MediaCardOverlayProps = {
   title: string
@@ -14,63 +15,6 @@ export type MediaCardOverlayProps = {
   // schema; default 'never_synced'). Typed as plain string so future
   // CHECK-constraint additions don't force a coordinated client release.
   achievementSyncStatus?: string | null
-}
-
-const TYPE_LABEL: Record<MediaType, string> = {
-  MOVIE: 'MOVIE',
-  TV_SHOW: 'TV',
-  TV_EPISODE: 'EPISODE',
-  ANIME: 'ANIME',
-  MANGA: 'MANGA',
-  GAME: 'GAME',
-}
-
-// Per-medium status labels honour the "games speak play" convention (Story
-// 9.4 AC-5 / Q-2). The WatchStatus enum stays intact - this is a UI-layer
-// relabel only.
-const STATUS_LABEL_BY_MEDIA_TYPE: Record<MediaType, Record<WatchStatus, string>> = {
-  MOVIE: {
-    PLAN_TO_WATCH: 'PLAN TO WATCH',
-    WATCHING: 'WATCHING',
-    COMPLETED: 'COMPLETED',
-    ON_HOLD: 'ON HOLD',
-    DROPPED: 'DROPPED',
-  },
-  TV_SHOW: {
-    PLAN_TO_WATCH: 'PLAN TO WATCH',
-    WATCHING: 'WATCHING',
-    COMPLETED: 'COMPLETED',
-    ON_HOLD: 'ON HOLD',
-    DROPPED: 'DROPPED',
-  },
-  TV_EPISODE: {
-    PLAN_TO_WATCH: 'PLAN TO WATCH',
-    WATCHING: 'WATCHING',
-    COMPLETED: 'COMPLETED',
-    ON_HOLD: 'ON HOLD',
-    DROPPED: 'DROPPED',
-  },
-  ANIME: {
-    PLAN_TO_WATCH: 'PLAN TO WATCH',
-    WATCHING: 'WATCHING',
-    COMPLETED: 'COMPLETED',
-    ON_HOLD: 'ON HOLD',
-    DROPPED: 'DROPPED',
-  },
-  MANGA: {
-    PLAN_TO_WATCH: 'PLAN TO WATCH',
-    WATCHING: 'WATCHING',
-    COMPLETED: 'COMPLETED',
-    ON_HOLD: 'ON HOLD',
-    DROPPED: 'DROPPED',
-  },
-  GAME: {
-    PLAN_TO_WATCH: 'PLAN TO PLAY',
-    WATCHING: 'PLAYING',
-    COMPLETED: 'COMPLETED',
-    ON_HOLD: 'ON HOLD',
-    DROPPED: 'DROPPED',
-  },
 }
 
 export function MediaCardOverlay({

@@ -16,9 +16,11 @@ export function detailRouteFor(item: DetailRouteInput): string | null {
       return `/anime/${item.mediaItemId}`
     case MediaType.MANGA:
       return `/manga/${item.mediaItemId}`
-    case MediaType.TV_EPISODE:
     case MediaType.GAME:
+      return `/games/${item.mediaItemId}`
+    case MediaType.TV_EPISODE:
     default:
+      // Episodes have no standalone detail route; the parent show owns it.
       return null
   }
 }

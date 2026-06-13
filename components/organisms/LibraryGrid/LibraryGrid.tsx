@@ -20,6 +20,7 @@ import { EmptyLibraryState } from '@/components/molecules/EmptyLibraryState'
 import { MediaCardOverlay } from '@/components/molecules/MediaCardOverlay'
 import { FramedCover } from '@/components/molecules/FramedCover'
 import { getImageUrl } from '@/lib/api/tmdb-images'
+import { TYPE_TO_MEDIUM } from '@/lib/ui/media-display'
 import type { LibraryItem, LibraryListResponse } from '@/lib/types/library'
 
 const MEDIUM_TO_TYPE: Record<'movies' | 'tv' | 'anime' | 'manga' | 'games', MediaType> = {
@@ -28,15 +29,6 @@ const MEDIUM_TO_TYPE: Record<'movies' | 'tv' | 'anime' | 'manga' | 'games', Medi
   anime: MediaType.ANIME,
   manga: MediaType.MANGA,
   games: MediaType.GAME,
-}
-
-const TYPE_TO_MEDIUM: Record<MediaType, 'movies' | 'tv' | 'anime' | 'manga' | 'games'> = {
-  MOVIE: 'movies',
-  TV_SHOW: 'tv',
-  TV_EPISODE: 'tv',
-  ANIME: 'anime',
-  MANGA: 'manga',
-  GAME: 'games',
 }
 
 export const MOVIE_SORT_OPTIONS: SortOption[] = [

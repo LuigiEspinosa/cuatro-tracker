@@ -1,7 +1,11 @@
 import { type MediaItem, type Prisma, type UserEntry, MediaType, WatchStatus } from '@prisma/client'
 import { db } from '@/lib/db'
 import { getGameImageUrl } from '@/lib/api/igdb-images'
-import { deriveDisplayDate, deriveDisplayYear } from '@/lib/normalise/release-date'
+import {
+  deriveDisplayDate,
+  deriveDisplayYear,
+  RELEASE_DATE_SENTINEL,
+} from '@/lib/normalise/release-date'
 import type { LibraryItem } from '@/lib/types/library'
 
 export type LibrarySortKey =
@@ -48,6 +52,26 @@ export async function findUserEntryByMediaItemId(
   return db.userEntry.findUnique({
     where: { media_item_id: mediaItemId },
     include: { media_item: true },
+  })
+}
+
+// Timeline dataset (Story 10.4): every UserEntry joined to its MediaItem, one
+// row per work. Excludes TV_EPISODE (the parent show stands in for the series on
+// the timeline) and undatable rows (release_date = RELEASE_DATE_SENTINEL, which
+// also drops NULL release_dates via SQL three-valued logic). No take cap: the
+// chronological timeline renders the whole in-scope library at once (the design
+// anti-checklist forbids pagination). Ordered release_date desc to match the
+// default sort; <TimelineView> re-sorts client-side per the active SortMode.
+export async function findTimelineEntries(): Promise<UserEntryWithMedia[]> {
+  return db.userEntry.findMany({
+    where: {
+      media_item: {
+        type: { not: MediaType.TV_EPISODE },
+        release_date: { not: RELEASE_DATE_SENTINEL },
+      },
+    },
+    include: { media_item: true },
+    orderBy: { media_item: { release_date: 'desc' } },
   })
 }
 
@@ -308,6 +332,7 @@ export function serializeLibraryItem(entry: UserEntryWithMedia): LibraryItem {
     achievementSyncStatus: isGame ? mediaItem.achievement_sync_status : null,
     createdAt: entry.created_at.toISOString(),
     updatedAt: entry.updated_at.toISOString(),
+    completedAt: entry.completed_at ? entry.completed_at.toISOString() : null,
   }
 }
 

@@ -71,6 +71,7 @@ function fixtureItem(overrides: Partial<LibraryItem> = {}): LibraryItem {
     steamId: null,
     createdAt: '2026-05-10T12:00:00.000Z',
     updatedAt: '2026-05-12T12:00:00.000Z',
+    completedAt: null,
     ...overrides,
   }
 }

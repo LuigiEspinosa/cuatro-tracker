@@ -5,7 +5,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { WatchStatus } from '@prisma/client'
-import { PhosphorLED, type PhosphorLEDStatus } from '@/components/atoms/PhosphorLED'
+import { PhosphorLED } from '@/components/atoms/PhosphorLED'
+import { WATCH_STATUS_TO_LED } from '@/lib/ui/media-display'
 import type { ProgressResponse } from '@/lib/types/progress'
 
 export type WatchStatusControlProps = {
@@ -24,14 +25,6 @@ const STATUS_ORDER: WatchStatus[] = [
   WatchStatus.ON_HOLD,
   WatchStatus.DROPPED,
 ]
-
-const STATUS_TO_LED: Record<WatchStatus, PhosphorLEDStatus> = {
-  PLAN_TO_WATCH: 'backlog',
-  WATCHING: 'in-progress',
-  COMPLETED: 'completed',
-  ON_HOLD: 'on-hold',
-  DROPPED: 'dropped',
-}
 
 function labelFor(status: WatchStatus): string {
   return status.replaceAll('_', ' ')
@@ -169,7 +162,7 @@ export function WatchStatusControl({
         onKeyDown={handleButtonKeyDown}
       >
         <PhosphorLED
-          status={STATUS_TO_LED[status]}
+          status={WATCH_STATUS_TO_LED[status]}
           size={12}
           label={labelFor(status)}
         />
@@ -210,7 +203,7 @@ export function WatchStatusControl({
                 onClick={() => selectStatus(option)}
               >
                 <PhosphorLED
-                  status={STATUS_TO_LED[option]}
+                  status={WATCH_STATUS_TO_LED[option]}
                   size={10}
                   label={labelFor(option)}
                 />

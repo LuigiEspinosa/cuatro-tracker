@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { MediaType, WatchStatus } from '@prisma/client'
+import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
+import type { UserEntryWithMedia } from '@/lib/db/library'
 
 const dbMock = vi.hoisted(() => ({
   userEntry: { findMany: vi.fn(), findUnique: vi.fn() },
@@ -243,5 +245,62 @@ describe('formatTvProgressLabel + formatTvProgressPct (Story 7.4 hoisted helpers
     expect(formatTvProgressPct({ total: 10, watched: 7, latestS: null, latestE: null })).toBe(70)
     expect(formatTvProgressPct({ total: 7, watched: 5, latestS: null, latestE: null })).toBe(71)
     expect(formatTvProgressPct({ total: 200, watched: 199, latestS: null, latestE: null })).toBe(100)
+  })
+})
+
+function movieEntry(overrides: Record<string, unknown> = {}): UserEntryWithMedia {
+  return {
+    id: 'movie-entry-1',
+    media_item_id: 'movie-1',
+    status: WatchStatus.COMPLETED,
+    user_rating: null,
+    progress: 100,
+    notes: null,
+    started_at: null,
+    completed_at: new Date('2026-05-01T00:00:00.000Z'),
+    created_at: new Date('2026-04-01T00:00:00.000Z'),
+    updated_at: new Date('2026-04-02T00:00:00.000Z'),
+    media_item: {
+      id: 'movie-1',
+      type: MediaType.MOVIE,
+      title: 'Fight Club',
+      poster_path: '/poster.jpg',
+      release_date: new Date('1999-10-15T00:00:00.000Z'),
+      tmdb_id: 550,
+      anilist_id: null,
+      igdb_id: null,
+      steam_app_id: null,
+      achievement_sync_status: null,
+    },
+    ...overrides,
+  } as unknown as UserEntryWithMedia
+}
+
+describe('findTimelineEntries (Story 10.4 AC-6)', () => {
+  it('excludes TV_EPISODE + the sentinel, joins media_item, orders release desc, no take cap', async () => {
+    dbMock.userEntry.findMany.mockResolvedValue([])
+    const { findTimelineEntries } = await import('@/lib/db/library')
+    await findTimelineEntries()
+
+    const call = dbMock.userEntry.findMany.mock.calls[0][0]
+    expect(call.where.media_item.type).toEqual({ not: MediaType.TV_EPISODE })
+    expect(call.where.media_item.release_date).toEqual({ not: RELEASE_DATE_SENTINEL })
+    expect(call.include).toEqual({ media_item: true })
+    expect(call.orderBy).toEqual({ media_item: { release_date: 'desc' } })
+    expect(call.take).toBeUndefined()
+  })
+})
+
+describe('serializeLibraryItem: completedAt (Story 10.4 AC-6)', () => {
+  it('maps a set completed_at to its ISO string', async () => {
+    const { serializeLibraryItem } = await import('@/lib/db/library')
+    expect(serializeLibraryItem(movieEntry()).completedAt).toBe(
+      '2026-05-01T00:00:00.000Z',
+    )
+  })
+
+  it('maps a null completed_at to null', async () => {
+    const { serializeLibraryItem } = await import('@/lib/db/library')
+    expect(serializeLibraryItem(movieEntry({ completed_at: null })).completedAt).toBeNull()
   })
 })

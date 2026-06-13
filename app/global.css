@@ -3667,3 +3667,226 @@ body {
   color: var(--phosphor-cream-dim);
 }
 
+/* ============================================================
+   Timeline (Story 10.4) - flagship chronological scan.
+   Document scroll (window + Lenis), one sticky StickyYearBand
+   driven by an IntersectionObserver, dense typographic rows.
+   No inner scroll container: the .syb molecule (position: sticky;
+   top: 0) pins against the viewport while .tl-body flows below.
+   ============================================================ */
+.tl-view {
+  position: relative;
+}
+
+.tl-body {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 48px;
+}
+
+/* Near-zero-height per-group marker the IntersectionObserver watches to compute
+   the active year. 1px (not 0) keeps it reliably observable. */
+.tl-year-sentinel {
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.tl-row-li {
+  list-style: none;
+}
+
+/* The row is the focusable link. */
+.tl-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 32px;
+  min-height: 88px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(122, 116, 104, 0.4);
+  content-visibility: auto;
+  contain-intrinsic-size: 0 88px;
+}
+.tl-row.row-even {
+  background: var(--ground-row-even);
+}
+.tl-row.row-odd {
+  background: var(--ground-row-odd);
+}
+/* NFR26: no hover background change, the focus ring carries the affordance. */
+.tl-row:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 12px rgba(63, 169, 255, 0.45);
+}
+
+/* Constrained to 44px so FramedCover collapses to its dense framed-thumb form
+   (the chrome detail above 48px is dropped by the component's container query). */
+.tl-thumb {
+  flex: 0 0 44px;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tl-thumb-fallback {
+  width: 44px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--plum-dim);
+  border: 1px solid var(--phosphor-cream-ghost);
+  font-family: var(--font-bitmap);
+  font-size: 22px;
+  color: var(--phosphor-cream-ghost);
+}
+
+.tl-title-block {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tl-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 21px;
+  line-height: 1.1;
+  letter-spacing: -0.005em;
+  color: var(--phosphor-cream);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-desc {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--phosphor-cream-ghost);
+  margin: 2px 0 0;
+  max-width: 640px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tl-row .led {
+  flex: 0 0 auto;
+}
+
+.tl-date {
+  flex: 0 0 128px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--phosphor-cream-dim);
+  font-variant-numeric: tabular-nums;
+}
+.tl-date.is-null {
+  color: var(--phosphor-cream-ghost);
+}
+
+.tl-empty {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 32px;
+}
+
+/* Skeleton rows (loading.tsx + the page Suspense fallback). */
+.tl-body-skeleton {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 48px;
+}
+.tl-skel-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 32px;
+  min-height: 88px;
+  border-bottom: 1px solid rgba(122, 116, 104, 0.2);
+}
+.tl-skel-box {
+  display: block;
+  background: rgba(239, 230, 212, 0.07);
+  position: relative;
+  overflow: hidden;
+}
+.tl-skel-thumb {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 64px;
+}
+.tl-skel-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tl-skel-title {
+  height: 18px;
+  width: 60%;
+}
+.tl-skel-meta {
+  height: 11px;
+  width: 38%;
+}
+.tl-skel-led {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.tl-skel-date {
+  flex: 0 0 96px;
+  width: 96px;
+  height: 12px;
+}
+.tl-skel-box::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(239, 230, 212, 0.08) 50%,
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: tl-shimmer 2.2s ease-in-out infinite;
+}
+@keyframes tl-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tl-skel-box::after {
+    animation: none;
+  }
+}
+

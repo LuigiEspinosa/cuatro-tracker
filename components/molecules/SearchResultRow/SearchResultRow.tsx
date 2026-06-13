@@ -8,10 +8,11 @@ import {
   useEffect,
 } from 'react'
 import { CRTPixelButton } from '@/components/atoms/CRTPixelButton'
-import { PhosphorLED, type PhosphorLEDStatus } from '@/components/atoms/PhosphorLED'
+import { PhosphorLED } from '@/components/atoms/PhosphorLED'
 import { FramedCover } from '@/components/molecules/FramedCover'
 import { getGameImageUrl } from '@/lib/api/igdb-images'
 import { getImageUrl } from '@/lib/api/tmdb-images'
+import { WATCH_STATUS_TO_LED } from '@/lib/ui/media-display'
 import type { UnifiedSearchResult } from '@/lib/search/federation'
 
 type WatchStatus = 'PLAN_TO_WATCH' | 'WATCHING' | 'COMPLETED' | 'ON_HOLD' | 'DROPPED'
@@ -35,14 +36,6 @@ const COVER_MEDIUM: Record<
   anime: 'anime',
   manga: 'manga',
   game: 'games',
-}
-
-const WATCH_STATUS_TO_LED: Record<WatchStatus, PhosphorLEDStatus> = {
-  PLAN_TO_WATCH: 'backlog',
-  WATCHING: 'in-progress',
-  COMPLETED: 'completed',
-  ON_HOLD: 'on-hold',
-  DROPPED: 'dropped',
 }
 
 function collectSourceChips(result: UnifiedSearchResult): string[] {

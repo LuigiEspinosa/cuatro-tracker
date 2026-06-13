@@ -3,6 +3,7 @@
 import Lenis from 'lenis'
 import { usePathname } from 'next/navigation'
 import { useEffect, type ReactNode } from 'react'
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion'
 
 const SCROLL_HEAVY_PREFIXES = ['/timeline', '/library'] as const
 
@@ -17,7 +18,10 @@ function isScrollHeavy(pathname: string | null): boolean {
 
 export function LenisProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const active = isScrollHeavy(pathname)
+  const reduced = useReducedMotion()
+  // Smooth scroll is a motion effect: under prefers-reduced-motion, skip Lenis
+  // and leave native scrolling in place (NFR / timeline AC-4).
+  const active = isScrollHeavy(pathname) && !reduced
 
   useEffect(() => {
     if (!active) return
