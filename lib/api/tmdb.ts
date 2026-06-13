@@ -103,7 +103,8 @@ export const TmdbEpisodeSchema = z.object({
   still_path: z.string().nullable().optional(),
   // ! TMDB returns null vote_average for unaired episodes embedded in a season
   // fetch near a release boundary. Nullable so one unaired episode can't crash
-  // the whole getTvSeason parse (EH-4). Mirrors TmdbEpisodeSummarySchema.
+  // the whole getTvSeason parse (EH-4). TmdbEpisodeSummarySchema tolerates the
+  // same null on its forward-looking surface.
   vote_average: z.number().nullable(),
   runtime: z.number().nullable().optional(),
   production_code: z.string().nullable().optional(),
@@ -140,7 +141,9 @@ export const TmdbEpisodeSummarySchema = z.object({
   season_number: z.number(),
   runtime: z.number().nullable().optional(),
   still_path: z.string().nullable().optional(),
-  vote_average: z.number().optional(),
+  // ! Same EH-4 class as TmdbEpisodeSchema: next_episode_to_air is unaired by
+  // definition, so an explicit null must not fail the whole getTvShow parse.
+  vote_average: z.number().nullable().optional(),
   production_code: z.string().nullable().optional(),
   episode_type: z.string().optional(),
 })

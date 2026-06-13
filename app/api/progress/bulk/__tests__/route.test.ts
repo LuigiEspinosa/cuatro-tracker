@@ -22,6 +22,7 @@ const txMock = vi.hoisted(() => ({
 
 const dbMock = vi.hoisted(() => ({
   mediaItem: { findMany: vi.fn() },
+  userEntry: { findMany: vi.fn() },
   $transaction: vi.fn(),
 }))
 
@@ -53,6 +54,8 @@ beforeEach(() => {
   dbMock.$transaction.mockImplementation(
     async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock),
   )
+  // No pre-existing UserEntries unless a test seeds them.
+  dbMock.userEntry.findMany.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -148,6 +151,37 @@ describe('POST /api/progress/bulk', () => {
     // ECH-T20: COMPLETED bulk mark stamps completed_at on create and update.
     expect(firstCall.create.completed_at).toBeInstanceOf(Date)
     expect(firstCall.update.completed_at).toBeInstanceOf(Date)
+  })
+
+  it('preserves an existing completed_at on a COMPLETED re-mark (idempotent bulk)', async () => {
+    const original = new Date('2026-04-01T20:00:00.000Z')
+    dbMock.mediaItem.findMany.mockResolvedValue([
+      { id: 'ep-1' },
+      { id: 'ep-2' },
+    ])
+    // ep-1 was completed individually before the bulk mark; ep-2 has an entry
+    // but never completed.
+    dbMock.userEntry.findMany.mockResolvedValue([
+      { media_item_id: 'ep-1', completed_at: original },
+      { media_item_id: 'ep-2', completed_at: null },
+    ])
+    txMock.userEntry.upsert.mockResolvedValue({})
+    const { POST } = await import('@/app/api/progress/bulk/route')
+
+    await POST(
+      postRequest({
+        parentId: 'show-1',
+        scope: 'show',
+        status: WatchStatus.COMPLETED,
+      }),
+    )
+
+    const first = txMock.userEntry.upsert.mock.calls[0][0]
+    const second = txMock.userEntry.upsert.mock.calls[1][0]
+    // ep-1 keeps its original watch date; ep-2 gets the fresh batch stamp.
+    expect(first.update.completed_at).toBe(original)
+    expect(second.update.completed_at).toBeInstanceOf(Date)
+    expect(second.update.completed_at).not.toBe(original)
   })
 
   it('clears completed_at when the bulk target status is not COMPLETED (ECH-T20)', async () => {

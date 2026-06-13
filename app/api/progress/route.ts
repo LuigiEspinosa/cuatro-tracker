@@ -248,6 +248,10 @@ async function handler(req: NextRequest): Promise<NextResponse> {
   // into COMPLETED, clear it on the transition out. An explicit completed_at in
   // the body wins (applied above); the anime / manga auto-advance branches set
   // it idempotently and are preserved (the data.completed_at guard skips them).
+  // Explicit-wins is deliberately absolute: { status: COMPLETED, completed_at:
+  // null } persists as "completed, date unknown", a state bulk imports can
+  // legitimately produce (ratified at the 2026-06-12 code review). The timeline
+  // sorts null completed_at deterministically, so the corner is safe downstream.
   // * Failure mode: without this, TvDetailControls / EpisodeDetailToggle post
   //   { mediaItemId, status } only, so episodes complete with a null timestamp
   //   and the future "recently watched" sort has nothing to order by.

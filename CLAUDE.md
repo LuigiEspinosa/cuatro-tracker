@@ -75,7 +75,7 @@ e2e/                   # Playwright tests
 
 ## Testing Conventions
 
-- **Framework:** Vitest with `environment: 'node'` and `globals: true`. `describe`/`it`/`expect` are global, no imports needed.
+- **Framework:** Vitest with `environment: 'node'` and `globals: true` (runtime only). Suites still import `describe`/`it`/`expect` explicitly from `'vitest'`: tsconfig does not load the global types, so `pnpm typecheck` fails without the import. Matches every existing suite (Story 10.2 D9).
 - **Colocation:** Tests live in `__tests__/` directories next to their source files.
 - **Path alias:** `@/` is wired in `vitest.config.ts` and resolves from repo root.
 - **Integration tests with real services:** Redis-dependent tests (BullMQ) use real Redis. DB tests use a real Postgres instance.

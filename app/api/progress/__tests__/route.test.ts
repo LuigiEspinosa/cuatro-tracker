@@ -327,6 +327,53 @@ describe('PUT /api/progress', () => {
     expect(call.data.completed_at).toBeNull()
   })
 
+  it('preserves an existing completed_at on an idempotent re-COMPLETED (ECH-T20)', async () => {
+    const original = new Date('2026-05-15T10:00:00.000Z')
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      fixtureEntry({ status: WatchStatus.COMPLETED, completed_at: original }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(
+      fixtureEntry({ status: WatchStatus.COMPLETED, completed_at: original }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'media-1', status: WatchStatus.COMPLETED }),
+    )
+    expect(res.status).toBe(200)
+    // The guard must leave completed_at out of the update entirely so the
+    // original watch date survives a re-mark.
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.completed_at).toBeUndefined()
+  })
+
+  it('lazy-create straight to COMPLETED stamps completed_at server-side (ECH-T20)', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(null)
+    dbMock.mediaItem.findUnique.mockResolvedValue({
+      id: 'ep-1',
+      type: MediaType.TV_EPISODE,
+    })
+    dbMock.userEntry.upsert.mockResolvedValue({
+      id: 'new-entry-1',
+      media_item_id: 'ep-1',
+      status: WatchStatus.COMPLETED,
+      user_rating: null,
+      progress: 0,
+      notes: null,
+      started_at: null,
+      completed_at: new Date('2026-06-12T12:00:00Z'),
+      created_at: new Date('2026-06-12T12:00:00Z'),
+      updated_at: new Date('2026-06-12T12:00:00Z'),
+    })
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'ep-1', status: WatchStatus.COMPLETED }),
+    )
+    expect(res.status).toBe(201)
+    const call = dbMock.userEntry.upsert.mock.calls[0][0]
+    expect(call.create.completed_at).toBeInstanceOf(Date)
+    expect(call.update.completed_at).toBeInstanceOf(Date)
+  })
+
   it('rejects user_rating in body (dropped from schema)', async () => {
     const { PUT } = await import('@/app/api/progress/route')
     const res = await PUT(

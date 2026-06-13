@@ -57,6 +57,12 @@ describe('preferredAnilistTitle', () => {
     expect(result).toBe('Real Title')
   })
 
+  it('returns the surviving field trimmed (padding never persists)', () => {
+    expect(preferredAnilistTitle(title({ romaji: '  Berserk  ' }), 1)).toBe(
+      'Berserk',
+    )
+  })
+
   it('substitutes an identifiable placeholder when every field is null', () => {
     expect(preferredAnilistTitle(title(), 12345)).toBe('[Untitled #12345]')
   })

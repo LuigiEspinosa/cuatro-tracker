@@ -511,6 +511,26 @@ describe('lib/api/tmdb', () => {
       expect(result.next_episode_to_air).toBeNull()
     })
 
+    it('parses next_episode_to_air with an explicit null vote_average (EH-4 class)', async () => {
+      mockFetchOk({
+        ...validTv,
+        credits: { cast: [], crew: [] },
+        next_episode_to_air: {
+          id: 99001,
+          name: 'The Long Night',
+          air_date: '2026-07-01',
+          episode_number: 1,
+          season_number: 9,
+          vote_average: null,
+        },
+      })
+      const { getTv } = await import('@/lib/api/tmdb')
+
+      const result = await getTv(1399)
+
+      expect(result.next_episode_to_air?.vote_average).toBeNull()
+    })
+
     it('parses last_episode_to_air as null for shows that have not aired yet', async () => {
       mockFetchOk({
         ...validTv,

@@ -88,4 +88,12 @@ describe('parseReleaseDate', () => {
       RELEASE_DATE_SENTINEL.getTime(),
     )
   })
+
+  it('falls back to the sentinel for a regex-valid but calendar-invalid date', () => {
+    // '2020-13-45' clears the shape gate but Date() yields Invalid Date; the
+    // NaN guard inside the branch must fall through to the sentinel.
+    expect(parseReleaseDate('2020-13-45').getTime()).toBe(
+      RELEASE_DATE_SENTINEL.getTime(),
+    )
+  })
 })

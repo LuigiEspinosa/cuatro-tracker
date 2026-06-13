@@ -19,11 +19,17 @@ import type { AnilistMedia } from '@/lib/api/anilist'
 // * Roads not taken: throwing on an all-null title. Rejecting the row would
 //   drop a real (if poorly-tagged) AniList entry from the library; a labelled
 //   placeholder keeps it trackable and makes the gap visible in the UI.
-function firstNonBlank(
+// Exported for the normalisers' original_title field, which needs the same
+// blank-skipping (a present-but-whitespace native must persist as null, not '').
+// The survivor is returned trimmed: padded AniList fields would otherwise leak
+// whitespace into stored titles, sort keys, and merge-similarity inputs.
+export function firstNonBlank(
   ...values: Array<string | null | undefined>
 ): string | null {
   for (const value of values) {
-    if (value != null && value.trim().length > 0) return value
+    if (value == null) continue
+    const trimmed = value.trim()
+    if (trimmed.length > 0) return trimmed
   }
   return null
 }

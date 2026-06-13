@@ -66,9 +66,12 @@ async function handler(req: NextRequest): Promise<NextResponse> {
   const { parentId, scope, seasonNumber, status } = parsed.data
 
   // ECH-T20: completed_at is a server-side invariant of the COMPLETED status.
-  // A bulk mark to COMPLETED stamps one shared timestamp for the batch; any
-  // other target status clears it. This route never accepts completed_at from
-  // the client, so the invariant has to be enforced here.
+  // This route never accepts completed_at from the client, so the invariant is
+  // enforced here: any non-COMPLETED target clears it, and a COMPLETED mark
+  // stamps one shared batch timestamp ONLY where no completion timestamp exists
+  // yet. Episodes completed individually keep their original watch dates
+  // (mirrors the single route's entry.completed_at === null guard), so an
+  // idempotent re-mark never rewrites consumed-timeline history.
   const completedAt = status === WatchStatus.COMPLETED ? new Date() : null
 
   const where: Prisma.MediaItemWhereInput = {
@@ -89,6 +92,21 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     return jsonResponse({ updated: 0 }, 200)
   }
 
+  // Existing completion timestamps, read up front so the upsert loop can
+  // preserve them on a COMPLETED re-mark. Skipped entirely for non-COMPLETED
+  // targets, which always clear.
+  const existingCompletedAt =
+    status === WatchStatus.COMPLETED
+      ? new Map(
+          (
+            await db.userEntry.findMany({
+              where: { media_item_id: { in: episodes.map((e) => e.id) } },
+              select: { media_item_id: true, completed_at: true },
+            })
+          ).map((entry) => [entry.media_item_id, entry.completed_at]),
+        )
+      : new Map<string, Date | null>()
+
   // 30s timeout mirrors Story 7.2a's transaction discipline. The callback form
   // is required to pass options; the array form rejects `timeout`. Sequential
   // upserts inside the callback are acceptable for the realistic worst case
@@ -96,6 +114,10 @@ async function handler(req: NextRequest): Promise<NextResponse> {
   await db.$transaction(
     async (tx) => {
       for (const episode of episodes) {
+        const preservedCompletedAt =
+          status === WatchStatus.COMPLETED
+            ? (existingCompletedAt.get(episode.id) ?? completedAt)
+            : null
         await tx.userEntry.upsert({
           where: { media_item_id: episode.id },
           create: {
@@ -104,7 +126,7 @@ async function handler(req: NextRequest): Promise<NextResponse> {
             progress: 0,
             completed_at: completedAt,
           },
-          update: { status, completed_at: completedAt },
+          update: { status, completed_at: preservedCompletedAt },
         })
       }
     },

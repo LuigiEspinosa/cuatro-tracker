@@ -4,7 +4,10 @@ import {
   partialDateToDate,
   type AnilistMedia,
 } from '@/lib/api/anilist'
-import { preferredAnilistTitle } from '@/lib/normalise/anilist-title'
+import {
+  firstNonBlank,
+  preferredAnilistTitle,
+} from '@/lib/normalise/anilist-title'
 import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
 
 // AniList covers are full CDN URLs (e.g. https://s4.anilist.co/...); the
@@ -59,7 +62,7 @@ export function normaliseAnilistAnime(
   return {
     type: MediaType.ANIME,
     title: preferredAnilistTitle(source.title, source.id),
-    original_title: source.title.native ?? null,
+    original_title: firstNonBlank(source.title.native),
     release_date: releaseDate,
     end_date: endDate,
     overview: source.description ?? null,

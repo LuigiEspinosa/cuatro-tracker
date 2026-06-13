@@ -60,7 +60,11 @@ test.describe('Login flow', () => {
       const w = window as Window & { __shakeSeen?: boolean }
       w.__shakeSeen = false
       const screen = document.querySelector('.lc-screen')
-      if (!screen) return
+      if (!screen) {
+        // Fail at arming time: a silent return here would surface later as a
+        // misleading "shake never seen" assertion instead of selector drift.
+        throw new Error('.lc-screen not mounted; cannot arm the shake observer')
+      }
       const observer = new MutationObserver((records) => {
         const seen = records.some(
           (r) =>

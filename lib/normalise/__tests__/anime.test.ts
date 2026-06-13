@@ -175,6 +175,21 @@ describe('lib/normalise/anime', () => {
       )
       expect(result.title).toBe('Native X')
     })
+
+    it('writes null original_title when native is blank (same hygiene as title)', async () => {
+      const { normaliseAnilistAnime } = await import('@/lib/normalise/anime')
+      const result = normaliseAnilistAnime(
+        makeAnime({
+          title: {
+            romaji: 'Romaji X',
+            english: null,
+            native: '   ',
+            userPreferred: null,
+          },
+        }),
+      )
+      expect(result.original_title).toBeNull()
+    })
   })
 
   describe('partial-date handling (NFR13 + NFR14)', () => {

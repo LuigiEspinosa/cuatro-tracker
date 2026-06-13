@@ -208,6 +208,21 @@ describe('lib/normalise/manga', () => {
       )
       expect(result.title).toBe('ベルセルク')
     })
+
+    it('writes null original_title when native is blank (same hygiene as title)', async () => {
+      const { normaliseAnilistManga } = await import('@/lib/normalise/manga')
+      const result = normaliseAnilistManga(
+        makeManga({
+          title: {
+            romaji: 'Romaji X',
+            english: null,
+            native: '\t ',
+            userPreferred: null,
+          },
+        }),
+      )
+      expect(result.original_title).toBeNull()
+    })
   })
 
   describe('partial-date handling (NFR13 + NFR14)', () => {
