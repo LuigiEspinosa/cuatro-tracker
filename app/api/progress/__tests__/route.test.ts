@@ -292,6 +292,41 @@ describe('PUT /api/progress', () => {
     expect((call.data.completed_at as Date).toISOString()).toBe(completedAt)
   })
 
+  it('stamps completed_at server-side when status flips to COMPLETED without an explicit timestamp (ECH-T20)', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(fixtureEntry())
+    dbMock.userEntry.update.mockResolvedValue(
+      fixtureEntry({ status: WatchStatus.COMPLETED }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'media-1', status: WatchStatus.COMPLETED }),
+    )
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.status).toBe(WatchStatus.COMPLETED)
+    expect(call.data.completed_at).toBeInstanceOf(Date)
+  })
+
+  it('clears completed_at when status leaves COMPLETED without an explicit timestamp (ECH-T20)', async () => {
+    dbMock.userEntry.findUnique.mockResolvedValue(
+      fixtureEntry({
+        status: WatchStatus.COMPLETED,
+        completed_at: new Date('2026-05-15T10:00:00.000Z'),
+      }),
+    )
+    dbMock.userEntry.update.mockResolvedValue(
+      fixtureEntry({ status: WatchStatus.WATCHING }),
+    )
+    const { PUT } = await import('@/app/api/progress/route')
+    const res = await PUT(
+      putRequest({ mediaItemId: 'media-1', status: WatchStatus.WATCHING }),
+    )
+    expect(res.status).toBe(200)
+    const call = dbMock.userEntry.update.mock.calls[0][0]
+    expect(call.data.status).toBe(WatchStatus.WATCHING)
+    expect(call.data.completed_at).toBeNull()
+  })
+
   it('rejects user_rating in body (dropped from schema)', async () => {
     const { PUT } = await import('@/app/api/progress/route')
     const res = await PUT(

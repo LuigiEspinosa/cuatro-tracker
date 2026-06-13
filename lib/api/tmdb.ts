@@ -101,7 +101,10 @@ export const TmdbEpisodeSchema = z.object({
   episode_number: z.number(),
   season_number: z.number(),
   still_path: z.string().nullable().optional(),
-  vote_average: z.number(),
+  // ! TMDB returns null vote_average for unaired episodes embedded in a season
+  // fetch near a release boundary. Nullable so one unaired episode can't crash
+  // the whole getTvSeason parse (EH-4). Mirrors TmdbEpisodeSummarySchema.
+  vote_average: z.number().nullable(),
   runtime: z.number().nullable().optional(),
   production_code: z.string().nullable().optional(),
   episode_type: z.string().optional(),

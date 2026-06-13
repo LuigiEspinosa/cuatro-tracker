@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { findUserEntryByMediaItemId } from '@/lib/db/library'
 import { getGame, IgdbApiError, type IgdbGame } from '@/lib/api/igdb'
 import { getGameImageUrl } from '@/lib/api/igdb-images'
+import { deriveDisplayYear } from '@/lib/normalise/release-date'
 import { logger } from '@/lib/logger'
 import { BackToLibraryLink } from '@/components/molecules/BackToLibraryLink'
 import { DetailHero } from '@/components/organisms/DetailHero'
@@ -21,11 +22,6 @@ import type { MetadataItem } from '@/components/molecules/MetadataRow'
 export const dynamic = 'force-dynamic'
 
 type PageParams = Promise<{ id: string }>
-
-function deriveYear(d: Date): number | null {
-  const y = d.getUTCFullYear()
-  return y === 1970 ? null : y
-}
 
 export async function generateMetadata({
   params,
@@ -152,7 +148,7 @@ export default async function GameDetailPage({
     percent_global: a.percent_global,
   }))
 
-  const year = deriveYear(entry.media_item.release_date)
+  const year = deriveDisplayYear(entry.media_item.release_date)
   const platforms = entry.media_item.platforms
   const genres = entry.media_item.genres
   const screenshots = entry.media_item.screenshots.filter(

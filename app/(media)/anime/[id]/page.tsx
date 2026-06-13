@@ -14,6 +14,7 @@ import {
   normaliseRelations,
   type NormalisedRelationBuckets,
 } from '@/lib/normalise/anilist-relations'
+import { deriveDisplayYear } from '@/lib/normalise/release-date'
 import { logger } from '@/lib/logger'
 import { BackToLibraryLink } from '@/components/molecules/BackToLibraryLink'
 import { DetailHero } from '@/components/organisms/DetailHero'
@@ -28,11 +29,6 @@ import { AnimeDetailControls } from './AnimeDetailControls'
 export const dynamic = 'force-dynamic'
 
 type PageParams = Promise<{ id: string }>
-
-function deriveYear(d: Date): number | null {
-  const y = d.getUTCFullYear()
-  return y === 1970 ? null : y
-}
 
 // AniList descriptions ship raw HTML (`<br>`, `<i>`, `<a>`, ...) even when the
 // query asks for `asHtml: false` — the field's "no HTML" flag normalises line
@@ -149,7 +145,7 @@ export default async function AnimeDetailPage({
     resolveRelations(anilistId),
   ])
 
-  const year = deriveYear(entry.media_item.release_date)
+  const year = deriveDisplayYear(entry.media_item.release_date)
   const metadata: MetadataItem[] = []
   if (media?.format) {
     metadata.push({ value: media.format.replaceAll('_', ' ') })

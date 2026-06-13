@@ -65,6 +65,12 @@ async function handler(req: NextRequest): Promise<NextResponse> {
 
   const { parentId, scope, seasonNumber, status } = parsed.data
 
+  // ECH-T20: completed_at is a server-side invariant of the COMPLETED status.
+  // A bulk mark to COMPLETED stamps one shared timestamp for the batch; any
+  // other target status clears it. This route never accepts completed_at from
+  // the client, so the invariant has to be enforced here.
+  const completedAt = status === WatchStatus.COMPLETED ? new Date() : null
+
   const where: Prisma.MediaItemWhereInput = {
     parent_id: parentId,
     type: MediaType.TV_EPISODE,
@@ -92,8 +98,13 @@ async function handler(req: NextRequest): Promise<NextResponse> {
       for (const episode of episodes) {
         await tx.userEntry.upsert({
           where: { media_item_id: episode.id },
-          create: { media_item_id: episode.id, status, progress: 0 },
-          update: { status },
+          create: {
+            media_item_id: episode.id,
+            status,
+            progress: 0,
+            completed_at: completedAt,
+          },
+          update: { status, completed_at: completedAt },
         })
       }
     },

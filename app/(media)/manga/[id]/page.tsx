@@ -13,6 +13,7 @@ import {
   normaliseRelations,
   type NormalisedRelationBuckets,
 } from '@/lib/normalise/anilist-relations'
+import { deriveDisplayYear } from '@/lib/normalise/release-date'
 import { logger } from '@/lib/logger'
 import { BackToLibraryLink } from '@/components/molecules/BackToLibraryLink'
 import { DetailHero } from '@/components/organisms/DetailHero'
@@ -25,11 +26,6 @@ import { MangaDetailControls } from './MangaDetailControls'
 export const dynamic = 'force-dynamic'
 
 type PageParams = Promise<{ id: string }>
-
-function deriveYear(d: Date): number | null {
-  const y = d.getUTCFullYear()
-  return y === 1970 ? null : y
-}
 
 export async function generateMetadata({
   params,
@@ -138,7 +134,7 @@ export default async function MangaDetailPage({
     resolveRelations(anilistId),
   ])
 
-  const year = deriveYear(entry.media_item.release_date)
+  const year = deriveDisplayYear(entry.media_item.release_date)
   const upstreamStatus = media?.status ?? entry.media_item.status ?? null
 
   const metadata: MetadataItem[] = []

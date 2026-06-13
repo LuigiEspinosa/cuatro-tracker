@@ -134,11 +134,38 @@ describe('POST /api/progress/bulk', () => {
     )
     expect(txMock.userEntry.upsert).toHaveBeenCalledTimes(3)
     const firstCall = txMock.userEntry.upsert.mock.calls[0][0]
-    expect(firstCall).toEqual({
-      where: { media_item_id: 'ep-s2e1' },
-      create: { media_item_id: 'ep-s2e1', status: WatchStatus.COMPLETED, progress: 0 },
-      update: { status: WatchStatus.COMPLETED },
-    })
+    expect(firstCall.where).toEqual({ media_item_id: 'ep-s2e1' })
+    expect(firstCall.create).toEqual(
+      expect.objectContaining({
+        media_item_id: 'ep-s2e1',
+        status: WatchStatus.COMPLETED,
+        progress: 0,
+      }),
+    )
+    expect(firstCall.update).toEqual(
+      expect.objectContaining({ status: WatchStatus.COMPLETED }),
+    )
+    // ECH-T20: COMPLETED bulk mark stamps completed_at on create and update.
+    expect(firstCall.create.completed_at).toBeInstanceOf(Date)
+    expect(firstCall.update.completed_at).toBeInstanceOf(Date)
+  })
+
+  it('clears completed_at when the bulk target status is not COMPLETED (ECH-T20)', async () => {
+    dbMock.mediaItem.findMany.mockResolvedValue([{ id: 'ep-1' }])
+    txMock.userEntry.upsert.mockResolvedValue({})
+    const { POST } = await import('@/app/api/progress/bulk/route')
+
+    await POST(
+      postRequest({
+        parentId: 'show-1',
+        scope: 'show',
+        status: WatchStatus.PLAN_TO_WATCH,
+      }),
+    )
+
+    const call = txMock.userEntry.upsert.mock.calls[0][0]
+    expect(call.create.completed_at).toBeNull()
+    expect(call.update.completed_at).toBeNull()
   })
 
   it('upserts all aired episodes for scope=show (no season_number filter)', async () => {

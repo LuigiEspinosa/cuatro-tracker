@@ -6,6 +6,7 @@ import {
 } from '@/lib/api/anilist'
 import { searchGames, type IgdbGame } from '@/lib/api/igdb'
 import { logger } from '@/lib/logger'
+import { preferredAnilistTitle } from '@/lib/normalise/anilist-title'
 
 export type SearchType = 'movie' | 'tv' | 'anime' | 'manga' | 'game'
 
@@ -91,12 +92,8 @@ const tmdbAdapter: AdapterCapability = {
 }
 
 // AniList covers serve as full https URLs from s4.anilist.co; the unified
-// poster_path field stores them verbatim. Story 8.4's render helper will
-// branch on startsWith('http') to skip TMDB-style URL construction.
-function preferredAnilistTitle(t: AnilistMedia['title']): string {
-  return t.userPreferred ?? t.romaji ?? t.english ?? t.native ?? ''
-}
-
+// poster_path field stores them verbatim. Story 8.4's render helper branches
+// on startsWith('http') to skip TMDB-style URL construction.
 function pickAnilistCover(c: AnilistMedia['coverImage']): string | null {
   return c?.extraLarge ?? c?.large ?? c?.medium ?? null
 }
@@ -107,7 +104,7 @@ function adaptAnilistResult(
 ): UnifiedSearchResult {
   return {
     type,
-    title: preferredAnilistTitle(raw.title),
+    title: preferredAnilistTitle(raw.title, raw.id),
     release_year: raw.startDate.year ?? undefined,
     poster_path: pickAnilistCover(raw.coverImage),
     overview: raw.description ?? null,

@@ -4,20 +4,8 @@ import {
   partialDateToDate,
   type AnilistMedia,
 } from '@/lib/api/anilist'
+import { preferredAnilistTitle } from '@/lib/normalise/anilist-title'
 import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
-
-// Story 8.2 AC: title fallback chain is romaji -> english -> native.
-// userPreferred is AniList's pre-computed convenience field that already
-// honours the viewer's locale; we honour it first so a future "Display titles
-// as: English" setting (Phase 11+) does not require a normaliser change.
-// Falls back to the spec'd chain otherwise. Final '' fallback covers the
-// pathological case where AniList returns every title field null, which
-// shouldn't happen but keeps the type non-nullable per the schema.
-function preferredTitle(title: AnilistMedia['title']): string {
-  return (
-    title.userPreferred ?? title.romaji ?? title.english ?? title.native ?? ''
-  )
-}
 
 // AniList covers are full CDN URLs (e.g. https://s4.anilist.co/...); the
 // unified MediaItem.poster_path stores them verbatim. Render-time code
@@ -70,7 +58,7 @@ export function normaliseAnilistAnime(
 
   return {
     type: MediaType.ANIME,
-    title: preferredTitle(source.title),
+    title: preferredAnilistTitle(source.title, source.id),
     original_title: source.title.native ?? null,
     release_date: releaseDate,
     end_date: endDate,

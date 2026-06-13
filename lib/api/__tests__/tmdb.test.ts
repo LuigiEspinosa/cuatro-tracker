@@ -653,6 +653,22 @@ describe('lib/api/tmdb', () => {
         fieldPath: 'episodes',
       })
     })
+
+    it('parses a season whose embedded unaired episode has null vote_average (EH-4)', async () => {
+      const seasonWithUnaired = {
+        ...validSeason,
+        episodes: [
+          { ...validSeason.episodes[0], air_date: null, vote_average: null },
+        ],
+      }
+      mockFetchOk(seasonWithUnaired)
+      const { getTvSeason } = await import('@/lib/api/tmdb')
+
+      const result = await getTvSeason(1399, 1)
+
+      expect(result.episodes).toHaveLength(1)
+      expect(result.episodes[0].vote_average).toBeNull()
+    })
   })
 
   describe('getTvEpisode', () => {

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { MediaType, WatchStatus } from '@prisma/client'
 import { db } from '@/lib/db'
 import { getTvEpisode, getImageUrl } from '@/lib/api/tmdb'
+import { isReleaseDateUnknown } from '@/lib/normalise/release-date'
 import { logger } from '@/lib/logger'
 import { EpisodeDetailToggle } from './EpisodeDetailToggle'
 
@@ -24,7 +25,7 @@ function formatAirDate(d: Date | null, unaired: boolean): {
   label: string
   prefix: string | null
 } {
-  if (!d || d.getUTCFullYear() === 1970) {
+  if (!d || isReleaseDateUnknown(d)) {
     return { label: 'TBA', prefix: unaired ? 'AIRS' : null }
   }
   return {

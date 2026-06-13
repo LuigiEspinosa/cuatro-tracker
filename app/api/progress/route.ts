@@ -123,9 +123,14 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     const lazyStatus =
       (data.status as WatchStatus | undefined) ?? WatchStatus.PLAN_TO_WATCH
     const lazyProgress = (data.progress as number | undefined) ?? 0
+    // ECH-T20: a lazy-create straight to COMPLETED (e.g. first-ever toggle of
+    // a TV episode) stamps completed_at server-side when the client did not
+    // send one, so the COMPLETED-implies-completed_at invariant holds here too.
     const lazyCompletedAt =
       completed_at === undefined
-        ? undefined
+        ? lazyStatus === WatchStatus.COMPLETED
+          ? new Date()
+          : undefined
         : completed_at === null
           ? null
           : new Date(completed_at)
@@ -235,6 +240,24 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     ) {
       data.status = WatchStatus.WATCHING
       if (!fieldsApplied.includes('status')) fieldsApplied.push('status')
+    }
+  }
+
+  // ECH-T20: completed_at is a server-side invariant of the COMPLETED status,
+  // not a field the client must remember to send. Stamp it on the transition
+  // into COMPLETED, clear it on the transition out. An explicit completed_at in
+  // the body wins (applied above); the anime / manga auto-advance branches set
+  // it idempotently and are preserved (the data.completed_at guard skips them).
+  // * Failure mode: without this, TvDetailControls / EpisodeDetailToggle post
+  //   { mediaItemId, status } only, so episodes complete with a null timestamp
+  //   and the future "recently watched" sort has nothing to order by.
+  if (completed_at === undefined && data.status !== undefined) {
+    if (data.status === WatchStatus.COMPLETED) {
+      if (entry.completed_at === null && data.completed_at === undefined) {
+        data.completed_at = new Date()
+      }
+    } else if (entry.completed_at !== null) {
+      data.completed_at = null
     }
   }
 

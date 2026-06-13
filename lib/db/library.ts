@@ -1,6 +1,7 @@
 import { type MediaItem, type Prisma, type UserEntry, MediaType, WatchStatus } from '@prisma/client'
 import { db } from '@/lib/db'
 import { getGameImageUrl } from '@/lib/api/igdb-images'
+import { deriveDisplayDate, deriveDisplayYear } from '@/lib/normalise/release-date'
 import type { LibraryItem } from '@/lib/types/library'
 
 export type LibrarySortKey =
@@ -227,15 +228,14 @@ export function formatTvProgressPct(
 // once guarantees the SSR `initialItems` and the client refetch response are
 // identical, so TanStack Query never flashes from a hand-rolled SSR shape to
 // the real serializer output on the first refetch (the Story 6.3 EH-4 defect).
+// Sentinel detection lives in lib/normalise/release-date.ts so the grid
+// serializer, the detail pages, and the timeline (Story 10.2) all agree.
 function deriveYear(mediaItem: MediaItem): number | null {
-  // 1970 is the normaliser's sentinel for "release date unknown".
-  const year = mediaItem.release_date.getUTCFullYear()
-  return year === 1970 ? null : year
+  return deriveDisplayYear(mediaItem.release_date)
 }
 
 function deriveReleaseDate(mediaItem: MediaItem): string | null {
-  const year = mediaItem.release_date.getUTCFullYear()
-  return year === 1970 ? null : mediaItem.release_date.toISOString()
+  return deriveDisplayDate(mediaItem.release_date)
 }
 
 function formatProgressLabel(entry: UserEntryWithMedia): string | null {

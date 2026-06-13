@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { findUserEntryByMediaItemId } from '@/lib/db/library'
 import { getTv, getWatchProviders, getImageUrl } from '@/lib/api/tmdb'
 import { env } from '@/lib/env'
+import { deriveDisplayDate, deriveDisplayYear } from '@/lib/normalise/release-date'
 import { logger } from '@/lib/logger'
 import { BackToLibraryLink } from '@/components/molecules/BackToLibraryLink'
 import { DetailHero } from '@/components/organisms/DetailHero'
@@ -18,11 +19,6 @@ import { TvDetailControls } from './TvDetailControls'
 export const dynamic = 'force-dynamic'
 
 type PageParams = Promise<{ id: string }>
-
-function deriveYear(d: Date): number | null {
-  const y = d.getUTCFullYear()
-  return y === 1970 ? null : y
-}
 
 function computeDefaultExpandedSeason(
   seasons: SeasonGroup[],
@@ -104,11 +100,7 @@ export default async function TvDetailPage({
       seasonNumber: sNum,
       episodeNumber: ep.episode_number ?? 0,
       title: ep.title,
-      airDate: ep.release_date
-        ? ep.release_date.getUTCFullYear() === 1970
-          ? null
-          : ep.release_date.toISOString()
-        : null,
+      airDate: deriveDisplayDate(ep.release_date),
       runtime: ep.runtime,
       unaired: ep.unaired,
       status: ep.user_entry?.status ?? null,
@@ -128,7 +120,7 @@ export default async function TvDetailPage({
   const defaultExpandedSeason = computeDefaultExpandedSeason(seasons)
 
   // Hero metadata.
-  const year = deriveYear(entry.media_item.release_date)
+  const year = deriveDisplayYear(entry.media_item.release_date)
   const cast = tvDetail.credits.cast.slice(0, 12).map((c) => ({
     name: c.name,
     role: c.character ?? '',

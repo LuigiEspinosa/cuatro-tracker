@@ -5,16 +5,8 @@ import {
   type AnilistMedia,
   type AnilistStaffEdge,
 } from '@/lib/api/anilist'
+import { preferredAnilistTitle } from '@/lib/normalise/anilist-title'
 import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
-
-// Story 8.2 AC: title fallback chain is romaji -> english -> native.
-// Same shape as the anime normaliser; kept inline (rather than shared) so each
-// medium's normaliser remains a self-contained read.
-function preferredTitle(title: AnilistMedia['title']): string {
-  return (
-    title.userPreferred ?? title.romaji ?? title.english ?? title.native ?? ''
-  )
-}
 
 function pickCover(coverImage?: AnilistMedia['coverImage']): string | null {
   return (
@@ -68,7 +60,7 @@ export function normaliseAnilistManga(
 
   return {
     type: MediaType.MANGA,
-    title: preferredTitle(source.title),
+    title: preferredAnilistTitle(source.title, source.id),
     original_title: source.title.native ?? null,
     release_date: releaseDate,
     end_date: endDate,
