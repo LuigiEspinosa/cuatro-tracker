@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
 import {
+  eraTokenForYear,
   groupByYear,
   sortTimeline,
   type SortMode,
@@ -341,5 +342,32 @@ describe('purity', () => {
     }
     expect(ids(fixture)).toEqual(beforeIds)
     expect(fixture).toEqual(before)
+  })
+})
+
+describe('eraTokenForYear', () => {
+  it('maps each decade boundary to the adjacent era token', () => {
+    expect(eraTokenForYear(1979)).toBe('--ground-pre-1980')
+    expect(eraTokenForYear(1980)).toBe('--ground-1980s')
+    expect(eraTokenForYear(1989)).toBe('--ground-1980s')
+    expect(eraTokenForYear(1990)).toBe('--ground-1990s')
+    expect(eraTokenForYear(1999)).toBe('--ground-1990s')
+    expect(eraTokenForYear(2000)).toBe('--ground-2000s')
+    expect(eraTokenForYear(2009)).toBe('--ground-2000s')
+    expect(eraTokenForYear(2010)).toBe('--ground-2010s')
+    expect(eraTokenForYear(2019)).toBe('--ground-2010s')
+    expect(eraTokenForYear(2020)).toBe('--ground-2020s')
+  })
+
+  it('floors every pre-1980 year into the open-ended pre-1980 era', () => {
+    expect(eraTokenForYear(1900)).toBe('--ground-pre-1980')
+    expect(eraTokenForYear(1965)).toBe('--ground-pre-1980')
+    expect(eraTokenForYear(1970)).toBe('--ground-pre-1980')
+  })
+
+  it('maps 2020 and later to --ground-2020s (the base ground)', () => {
+    expect(eraTokenForYear(2020)).toBe('--ground-2020s')
+    expect(eraTokenForYear(2023)).toBe('--ground-2020s')
+    expect(eraTokenForYear(2099)).toBe('--ground-2020s')
   })
 })

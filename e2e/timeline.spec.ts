@@ -69,4 +69,31 @@ test.describe('/timeline (Story 10.4)', () => {
       expect(laterYear).not.toBe(firstYear)
     }).toPass({ timeout: 3_000 })
   })
+
+  test('AC-2 (gated): scrolling across a decade boundary ramps the era ground tint', async ({
+    page,
+  }) => {
+    test.skip(
+      !process.env.TIMELINE_E2E_SEEDED,
+      'Requires the populated-library seed helper (unlanded, see deferred-work.md).',
+    )
+
+    await login(page)
+    await page.goto('/timeline')
+
+    // Read the RESOLVED ground color off <body> (which paints
+    // background: var(--ground-base)), not the raw --ground-base string. The
+    // driver writes a var() reference first and resolved hexes per scroll tick,
+    // so asserting on the custom property would pass on that var-to-hex format
+    // flip alone. The computed color only changes when the tint crosses an era.
+    const groundColor = () =>
+      page.evaluate(() => getComputedStyle(document.body).backgroundColor.trim())
+
+    const before = await groundColor()
+    await page.mouse.wheel(0, 20_000)
+    await expect(async () => {
+      const after = await groundColor()
+      expect(after).not.toBe(before)
+    }).toPass({ timeout: 3_000 })
+  })
 })

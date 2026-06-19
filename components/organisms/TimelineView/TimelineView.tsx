@@ -8,6 +8,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useShallow } from 'zustand/react/shallow'
 import { EmptyStateCard } from '@/components/molecules/EmptyStateCard'
+import { EraGroundTint } from '@/components/molecules/EraGroundTint'
 import { StickyYearBand } from '@/components/molecules/StickyYearBand'
 import { TimelineRow } from '@/components/organisms/TimelineRow'
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion'
@@ -141,6 +142,12 @@ export function TimelineView({ initialItems }: TimelineViewProps) {
           {displayYear !== null ? (
             <StickyYearBand year={displayYear} size={80} reducedMotionOverride={reduced} />
           ) : null}
+          <EraGroundTint
+            groups={groups}
+            activeYear={displayYear}
+            containerRef={rootRef}
+            reducedMotionOverride={reduced}
+          />
           <ul className='tl-body'>
             {sections.map((section) => (
               <Fragment key={section.year ?? 'undated'}>

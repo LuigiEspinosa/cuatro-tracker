@@ -89,3 +89,26 @@ export function groupByYear<T extends TimelineEntry>(
   }
   return groups
 }
+
+// * Era ground-tint mapping (Story 10.5). Six era bands separated by five decade
+// * boundaries (1980 / 1990 / 2000 / 2010 / 2020); pre-1980 is the open-ended
+// * floor and the 2020s band equals --ground-base. Returns a token NAME, never a
+// * hex: the six --ground-* values live in app/tokens.css and the tint driver
+// * resolves them at runtime, so the palette stays single-sourced. Ported
+// * verbatim from the Story 10.1 design bundle eraForYear thresholds.
+export type EraToken =
+  | '--ground-pre-1980'
+  | '--ground-1980s'
+  | '--ground-1990s'
+  | '--ground-2000s'
+  | '--ground-2010s'
+  | '--ground-2020s'
+
+export function eraTokenForYear(year: number): EraToken {
+  if (year < 1980) return '--ground-pre-1980'
+  if (year < 1990) return '--ground-1980s'
+  if (year < 2000) return '--ground-1990s'
+  if (year < 2010) return '--ground-2000s'
+  if (year < 2020) return '--ground-2010s'
+  return '--ground-2020s'
+}
