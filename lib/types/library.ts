@@ -15,6 +15,7 @@ export type LibraryItem = {
   mediaType: MediaType
   status: WatchStatus
   title: string
+  originalTitle: string | null // MediaItem.original_title; drives the timeline title-search second match field
   posterPath: string | null // TMDB-style path; client constructs the full URL
   year: number | null // derived from MediaItem.release_date
   releaseDate: string | null // ISO; null when MediaItem.release_date is sentinel-1970

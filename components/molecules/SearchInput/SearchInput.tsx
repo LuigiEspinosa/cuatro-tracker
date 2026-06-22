@@ -16,6 +16,9 @@ export type SearchInputProps = {
   placeholder?: string
   debounceMs?: number
   reducedMotionOverride?: boolean
+  // Renders the field non-interactive (Story 10.6: the timeline strip greys
+  // every control when the library is empty). Defaults to enabled.
+  disabled?: boolean
 }
 
 export type SearchInputHandle = {
@@ -30,6 +33,7 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
       placeholder = 'Title, year, keyword…',
       debounceMs = 175,
       reducedMotionOverride,
+      disabled,
     },
     ref,
   ) {
@@ -109,6 +113,7 @@ export const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
             placeholder={placeholder}
             autoComplete='off'
             spellCheck={false}
+            disabled={disabled}
             aria-label='Search'
             onChange={(e) => setDraft(e.target.value)}
             onFocus={() => setFocused(true)}

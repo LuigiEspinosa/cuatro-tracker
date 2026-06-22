@@ -264,6 +264,7 @@ function movieEntry(overrides: Record<string, unknown> = {}): UserEntryWithMedia
       id: 'movie-1',
       type: MediaType.MOVIE,
       title: 'Fight Club',
+      original_title: 'El Club de la Pelea',
       poster_path: '/poster.jpg',
       release_date: new Date('1999-10-15T00:00:00.000Z'),
       tmdb_id: 550,
@@ -302,5 +303,37 @@ describe('serializeLibraryItem: completedAt (Story 10.4 AC-6)', () => {
   it('maps a null completed_at to null', async () => {
     const { serializeLibraryItem } = await import('@/lib/db/library')
     expect(serializeLibraryItem(movieEntry({ completed_at: null })).completedAt).toBeNull()
+  })
+})
+
+describe('serializeLibraryItem: originalTitle (Story 10.6 AC-4)', () => {
+  it('maps MediaItem.original_title through to the wire model', async () => {
+    const { serializeLibraryItem } = await import('@/lib/db/library')
+    expect(serializeLibraryItem(movieEntry()).originalTitle).toBe(
+      'El Club de la Pelea',
+    )
+  })
+
+  it('maps a null original_title to null', async () => {
+    const { serializeLibraryItem } = await import('@/lib/db/library')
+    expect(
+      serializeLibraryItem(
+        movieEntry({
+          media_item: {
+            id: 'movie-1',
+            type: MediaType.MOVIE,
+            title: 'Fight Club',
+            original_title: null,
+            poster_path: '/poster.jpg',
+            release_date: new Date('1999-10-15T00:00:00.000Z'),
+            tmdb_id: 550,
+            anilist_id: null,
+            igdb_id: null,
+            steam_app_id: null,
+            achievement_sync_status: null,
+          },
+        }),
+      ).originalTitle,
+    ).toBeNull()
   })
 })

@@ -97,3 +97,46 @@ test.describe('/timeline (Story 10.4)', () => {
     }).toPass({ timeout: 3_000 })
   })
 })
+
+test.describe('/timeline filter strip (Story 10.6)', () => {
+  test('AC-6 (gated): filter to MOVIES + TV, sort consumed asc, then RESET restores the full library', async ({
+    page,
+  }) => {
+    test.skip(
+      !process.env.TIMELINE_E2E_SEEDED,
+      'Requires the populated-library seed helper (unlanded, see deferred-work.md).',
+    )
+
+    await login(page)
+    await page.goto('/timeline')
+
+    const rows = page.locator('a.tl-row')
+    const total = await rows.count()
+    expect(total).toBeGreaterThan(0)
+
+    // Deselect everything except MOVIES + TV via the media-type chips.
+    for (const label of ['ANIME', 'MANGA', 'GAMES']) {
+      await page.getByRole('button', { name: `Active filter: ${label}` }).click()
+    }
+
+    // Only movie + tv rows survive the scope.
+    await expect(page.locator('a.tl-row[data-medium="anime"]')).toHaveCount(0)
+    await expect(page.locator('a.tl-row[data-medium="manga"]')).toHaveCount(0)
+    await expect(page.locator('a.tl-row[data-medium="games"]')).toHaveCount(0)
+    const scoped = await rows.count()
+    expect(scoped).toBeGreaterThan(0)
+    expect(scoped).toBeLessThan(total)
+
+    // Switch to CONSUMED ascending; the visible (non-dash) date column must be
+    // non-descending. Null-consumed rows sink to the end and read as a dash.
+    await page.getByRole('radio', { name: 'CONSUMED ↑' }).click()
+    const dates = (await page.locator('.tl-date').allTextContents())
+      .map((text) => text.trim())
+      .filter((text) => text !== '-')
+    expect(dates).toEqual([...dates].sort())
+
+    // RESET clears the chips back to all-active and restores the full library.
+    await page.getByRole('button', { name: '> RESET' }).click()
+    await expect(rows).toHaveCount(total)
+  })
+})

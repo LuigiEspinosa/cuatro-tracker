@@ -51,6 +51,9 @@ export type TimelineSnapshot = {
   mediaTypes: Set<MediaType>
   statuses: Set<WatchStatus>
   franchiseMode: boolean
+  // Case-insensitive title search (Story 10.6). Matches MediaItem.title and
+  // original_title in <TimelineView>; serialized as ?q= so deep links restore it.
+  titleQuery: string
 }
 
 function isSortMode(value: string): value is SortMode {
@@ -99,6 +102,13 @@ export function serializeTimelineState(
   if (snapshot.franchiseMode) {
     params.set('franchise', '1')
   }
+  // Emit the trimmed query, gated on the trimmed length, so a whitespace-only
+  // box stays out of the URL and q=matrix and q=  matrix  collapse to one
+  // canonical URL. Mirrors the other default omissions.
+  const trimmedQuery = snapshot.titleQuery.trim()
+  if (trimmedQuery.length > 0) {
+    params.set('q', trimmedQuery)
+  }
   return params
 }
 
@@ -110,6 +120,7 @@ export function parseTimelineParams(params: URLSearchParams): TimelineSnapshot {
     mediaTypes: parseTokens(params.get('types'), ALL_MEDIA_TYPES),
     statuses: parseTokens(params.get('statuses'), ALL_WATCH_STATUSES),
     franchiseMode: params.get('franchise') === '1',
+    titleQuery: (params.get('q') ?? '').trim(),
   }
 }
 
@@ -119,6 +130,7 @@ function defaultSnapshot(): TimelineSnapshot {
     mediaTypes: new Set(ALL_MEDIA_TYPES),
     statuses: new Set(ALL_WATCH_STATUSES),
     franchiseMode: false,
+    titleQuery: '',
   }
 }
 
@@ -127,6 +139,7 @@ type TimelineStore = TimelineSnapshot & {
   toggleMediaType: (type: MediaType) => void
   toggleStatus: (status: WatchStatus) => void
   setFranchiseMode: (on: boolean) => void
+  setTitleQuery: (q: string) => void
   reset: () => void
   hydrateFromParams: (params: URLSearchParams) => void
 }
@@ -152,6 +165,7 @@ export const useTimelineStore = create<TimelineStore>((set) => ({
       return { statuses: next }
     }),
   setFranchiseMode: (on) => set({ franchiseMode: on }),
+  setTitleQuery: (q) => set({ titleQuery: q }),
   reset: () => set(defaultSnapshot()),
   hydrateFromParams: (params) => set(parseTimelineParams(params)),
 }))

@@ -64,6 +64,7 @@ const sampleItem = (overrides: Partial<LibraryItem> = {}): LibraryItem => ({
   mediaType: MediaType.MOVIE,
   status: WatchStatus.WATCHING,
   title: 'Sample Movie',
+  originalTitle: null,
   posterPath: '/poster.jpg',
   year: 2024,
   releaseDate: '2024-01-01T00:00:00.000Z',

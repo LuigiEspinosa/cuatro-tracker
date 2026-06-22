@@ -58,6 +58,7 @@ function fixtureItem(overrides: Partial<LibraryItem> = {}): LibraryItem {
     mediaType: MediaType.MOVIE,
     status: WatchStatus.WATCHING,
     title: 'Fight Club',
+    originalTitle: null,
     posterPath: '/poster.jpg',
     year: 1999,
     releaseDate: '1999-10-15T00:00:00.000Z',

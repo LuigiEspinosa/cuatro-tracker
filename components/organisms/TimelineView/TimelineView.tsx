@@ -10,6 +10,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { EmptyStateCard } from '@/components/molecules/EmptyStateCard'
 import { EraGroundTint } from '@/components/molecules/EraGroundTint'
 import { StickyYearBand } from '@/components/molecules/StickyYearBand'
+import { TimelineFilterStrip } from '@/components/organisms/TimelineFilterStrip'
 import { TimelineRow } from '@/components/organisms/TimelineRow'
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion'
 import { useTimelineUrlSync } from '@/lib/hooks'
@@ -49,20 +50,37 @@ export function TimelineView({ initialItems }: TimelineViewProps) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [activeYear, setActiveYear] = useState<number | null>(null)
 
-  const { sortMode, mediaTypes, statuses } = useTimelineStore(
+  const { sortMode, mediaTypes, statuses, titleQuery } = useTimelineStore(
     useShallow((s) => ({
       sortMode: s.sortMode,
       mediaTypes: s.mediaTypes,
       statuses: s.statuses,
+      titleQuery: s.titleQuery,
     })),
   )
 
+  // Project the wire items to view-models once per dataset. The projection does
+  // not depend on the filter inputs, so a debounced keystroke re-runs only the
+  // filter/sort/group below, not the whole per-item transform.
+  const vms = useMemo(() => initialItems.map(toTimelineVM), [initialItems])
+
   const groups = useMemo(() => {
-    const filtered = initialItems
-      .map(toTimelineVM)
-      .filter((row) => mediaTypes.has(row.mediaType) && statuses.has(row.status))
+    // Title search runs before sort + group (AC-4), so the year groupings shrink
+    // as the query narrows. Case-insensitive substring over title and the
+    // original-language title; an empty query matches everything.
+    const q = titleQuery.trim().toLowerCase()
+    const filtered = vms.filter((row) => {
+      if (!mediaTypes.has(row.mediaType)) return false
+      if (!statuses.has(row.status)) return false
+      if (q.length > 0) {
+        const inTitle = row.title.toLowerCase().includes(q)
+        const inOriginal = (row.originalTitle ?? '').toLowerCase().includes(q)
+        if (!inTitle && !inOriginal) return false
+      }
+      return true
+    })
     return groupByYear(sortTimeline(filtered, sortMode), sortMode)
-  }, [initialItems, mediaTypes, statuses, sortMode])
+  }, [vms, mediaTypes, statuses, sortMode, titleQuery])
 
   // Flatten to (group, row, runningIndex) so the alternating tint is continuous
   // across year-group boundaries.
@@ -125,9 +143,18 @@ export function TimelineView({ initialItems }: TimelineViewProps) {
 
   const displayYear = activeYear ?? (groups.length > 0 ? groups[0].year : null)
 
+  // D8 three-way render. The strip is always the first child so it stays present
+  // (and forms the sticky stack with the year band) even when filters empty the
+  // body. Truly-empty library keeps the LIBRARY EMPTY card; a non-empty library
+  // filtered/searched to zero shows NO MATCHES (RESET stays reachable in the
+  // strip) without the band or tint, which leaves --ground-base at its flat
+  // default and cannot strand the era tint (Story 10.5 reset-on-rerun intent).
+  const isEmptyLibrary = initialItems.length === 0
+
   return (
     <div className='tl-view' ref={rootRef}>
-      {groups.length === 0 ? (
+      <TimelineFilterStrip disabled={isEmptyLibrary} />
+      {isEmptyLibrary ? (
         <div className='tl-empty'>
           <EmptyStateCard
             variant='hero'
@@ -136,6 +163,13 @@ export function TimelineView({ initialItems }: TimelineViewProps) {
             ctaLabel='ADD AN ITEM'
             onCta={() => router.push('/search')}
           />
+        </div>
+      ) : groups.length === 0 ? (
+        <div className='tl-no-matches' role='status'>
+          <h2 className='tl-no-matches-title'>NO MATCHES</h2>
+          <p className='tl-no-matches-hint'>
+            No items match the active filters. Adjust or reset the strip above.
+          </p>
         </div>
       ) : (
         <>

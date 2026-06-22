@@ -28,6 +28,15 @@ vi.mock('@/components/organisms/TimelineRow', () => ({
   ),
 }))
 
+// The strip has its own suite; stub it so its store subscription and controls
+// do not muddy the view's grouping/empty-state assertions. It still records the
+// disabled flag the view passes (empty library -> disabled).
+vi.mock('@/components/organisms/TimelineFilterStrip', () => ({
+  TimelineFilterStrip: ({ disabled }: { disabled?: boolean }) => (
+    <div data-testid='filter-strip' data-disabled={disabled ? 'true' : 'false'} />
+  ),
+}))
+
 import { TimelineView } from '../TimelineView'
 import { useTimelineStore } from '@/store/timeline'
 
@@ -38,6 +47,7 @@ function libItem(overrides: Partial<LibraryItem> = {}): LibraryItem {
     mediaType: MediaType.MOVIE,
     status: WatchStatus.COMPLETED,
     title: 'Untitled',
+    originalTitle: null,
     posterPath: null,
     year: 2000,
     releaseDate: '2000-01-01T00:00:00.000Z',
@@ -104,11 +114,50 @@ describe('TimelineView', () => {
     expect(screen.queryByTestId('year-band')).toBeNull()
   })
 
-  it('shows the empty state when filters exclude every item', () => {
+  it('shows NO MATCHES (not the LIBRARY EMPTY card) when filters exclude every item (D8)', () => {
     nav.params = new URLSearchParams('types=manga')
     render(<TimelineView initialItems={MIXED} />)
-    expect(screen.getByRole('button', { name: /ADD AN ITEM/ })).toBeInTheDocument()
+    expect(screen.getByText('NO MATCHES')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ADD AN ITEM/ })).toBeNull()
     expect(screen.queryByTestId('tl-row')).toBeNull()
+    // The strip stays active (not disabled) so RESET remains reachable.
+    expect(screen.getByTestId('filter-strip').getAttribute('data-disabled')).toBe('false')
+  })
+
+  it('filters by the title query hydrated from the URL, after sort + group (AC-4)', () => {
+    nav.params = new URLSearchParams('q=2007')
+    render(<TimelineView initialItems={MIXED} />)
+    const titles = screen.getAllByTestId('tl-row').map((el) => el.textContent)
+    // Both 2007 titles survive, in release-desc order (June before January).
+    expect(titles).toEqual(['Movie 2007', 'Game 2007'])
+  })
+
+  it('matches the original title as well as the display title (AC-4)', () => {
+    const items: LibraryItem[] = [
+      libItem({
+        id: 'z',
+        title: 'Spirited Away',
+        originalTitle: 'Sen to Chihiro',
+        year: 2001,
+        releaseDate: '2001-07-20T00:00:00.000Z',
+      }),
+      libItem({
+        id: 'y',
+        title: 'Other Film',
+        originalTitle: null,
+        year: 2001,
+        releaseDate: '2001-01-01T00:00:00.000Z',
+      }),
+    ]
+    nav.params = new URLSearchParams('q=chihiro')
+    render(<TimelineView initialItems={items} />)
+    const titles = screen.getAllByTestId('tl-row').map((el) => el.textContent)
+    expect(titles).toEqual(['Spirited Away'])
+  })
+
+  it('marks the strip disabled for a truly empty library', () => {
+    render(<TimelineView initialItems={[]} />)
+    expect(screen.getByTestId('filter-strip').getAttribute('data-disabled')).toBe('true')
   })
 
   it('navigates to /search from the empty-state CTA', () => {
