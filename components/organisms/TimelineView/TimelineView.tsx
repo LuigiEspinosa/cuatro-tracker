@@ -15,7 +15,7 @@ import { TimelineRow } from '@/components/organisms/TimelineRow'
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion'
 import { useTimelineUrlSync } from '@/lib/hooks'
 import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
-import { groupByYear, sortTimeline } from '@/lib/timeline'
+import { groupByFranchise, groupByYear, sortTimeline } from '@/lib/timeline'
 import { useTimelineStore } from '@/store/timeline'
 import type { LibraryItem } from '@/lib/types/library'
 
@@ -30,6 +30,7 @@ type TimelineVM = LibraryItem & {
   release_date: Date
   completed_at: Date | null
   created_at: Date
+  franchise_id: string | null
 }
 
 function toTimelineVM(item: LibraryItem): TimelineVM {
@@ -40,6 +41,8 @@ function toTimelineVM(item: LibraryItem): TimelineVM {
     release_date: item.releaseDate ? new Date(item.releaseDate) : RELEASE_DATE_SENTINEL,
     completed_at: item.completedAt ? new Date(item.completedAt) : null,
     created_at: new Date(item.createdAt),
+    // snake_case grouping key for groupByFranchise, mirrors the date fields above.
+    franchise_id: item.franchiseId,
   }
 }
 
@@ -50,12 +53,13 @@ export function TimelineView({ initialItems }: TimelineViewProps) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [activeYear, setActiveYear] = useState<number | null>(null)
 
-  const { sortMode, mediaTypes, statuses, titleQuery } = useTimelineStore(
+  const { sortMode, mediaTypes, statuses, titleQuery, franchiseMode } = useTimelineStore(
     useShallow((s) => ({
       sortMode: s.sortMode,
       mediaTypes: s.mediaTypes,
       statuses: s.statuses,
       titleQuery: s.titleQuery,
+      franchiseMode: s.franchiseMode,
     })),
   )
 
@@ -79,8 +83,14 @@ export function TimelineView({ initialItems }: TimelineViewProps) {
       }
       return true
     })
-    return groupByYear(sortTimeline(filtered, sortMode), sortMode)
-  }, [vms, mediaTypes, statuses, sortMode, titleQuery])
+    // AC-2 pipeline order: sort, then collapse franchises (when on), then group
+    // by year. Collapsing before year-grouping anchors a franchise's summary row
+    // to its earliest entry's year. groupByFranchise is sort-stable, so the
+    // single sort above still holds and groupByYear needs no re-sort.
+    const sorted = sortTimeline(filtered, sortMode)
+    const collapsed = franchiseMode ? groupByFranchise(sorted) : sorted
+    return groupByYear(collapsed, sortMode)
+  }, [vms, mediaTypes, statuses, sortMode, titleQuery, franchiseMode])
 
   // Flatten to (group, row, runningIndex) so the alternating tint is continuous
   // across year-group boundaries.

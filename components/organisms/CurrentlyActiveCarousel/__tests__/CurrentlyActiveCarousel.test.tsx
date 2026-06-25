@@ -59,6 +59,7 @@ function fixtureItem(overrides: Partial<LibraryItem> = {}): LibraryItem {
     status: WatchStatus.WATCHING,
     title: 'Fight Club',
     originalTitle: null,
+    franchiseId: null,
     posterPath: '/poster.jpg',
     year: 1999,
     releaseDate: '1999-10-15T00:00:00.000Z',

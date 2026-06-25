@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
 import {
   eraTokenForYear,
+  groupByFranchise,
   groupByYear,
   sortTimeline,
   type SortMode,
@@ -17,7 +18,7 @@ const entry = (
   release_date: Date,
   completed_at: Date | null,
   created_at: Date,
-): TimelineEntry => ({ id, release_date, completed_at, created_at })
+): TimelineEntry => ({ id, release_date, completed_at, created_at, franchise_id: null })
 
 const sentinel = new Date(RELEASE_DATE_SENTINEL)
 
@@ -321,6 +322,123 @@ describe('groupByYear', () => {
 
   it('returns an empty array for empty input', () => {
     expect(groupByYear([], 'consumed_desc')).toEqual([])
+  })
+})
+
+describe('groupByFranchise', () => {
+  const fe = (
+    id: string,
+    release_date: Date,
+    franchise_id: string | null,
+  ): TimelineEntry => ({
+    id,
+    release_date,
+    completed_at: null,
+    created_at: utc(2024, 1, 1),
+    franchise_id,
+  })
+
+  it('collapses a 3-entry franchise into one synthetic anchored to the earliest release (AC-2)', () => {
+    const mix = [
+      fe('f-2015', utc(2015, 6, 1), 'saga'),
+      fe('f-2010', utc(2010, 6, 1), 'saga'),
+      fe('f-2012', utc(2012, 6, 1), 'saga'),
+    ]
+    const collapsed = groupByFranchise(sortTimeline(mix, 'release_asc'))
+    expect(collapsed).toHaveLength(1)
+    const synthetic = collapsed[0]
+    // Anchored to the earliest member: it carries the 2010 entry's id + date.
+    expect(synthetic?.id).toBe('f-2010')
+    expect(synthetic?.release_date).toEqual(utc(2010, 6, 1))
+    // Children are all three members, sorted by release date ascending.
+    expect(synthetic?.entries?.map((e) => e.id)).toEqual([
+      'f-2010',
+      'f-2012',
+      'f-2015',
+    ])
+  })
+
+  it('lands the collapsed franchise in the earliest year group via the full pipeline (AC-2)', () => {
+    const mix = [
+      fe('f-2015', utc(2015, 6, 1), 'saga'),
+      fe('f-2010', utc(2010, 6, 1), 'saga'),
+      fe('f-2012', utc(2012, 6, 1), 'saga'),
+    ]
+    const mode: SortMode = 'release_asc'
+    const groups = groupByYear(groupByFranchise(sortTimeline(mix, mode)), mode)
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.year).toBe(2010)
+    expect(ids(groups[0]?.entries ?? [])).toEqual(['f-2010'])
+    expect(groups[0]?.entries[0]?.entries?.map((e) => e.id)).toEqual([
+      'f-2010',
+      'f-2012',
+      'f-2015',
+    ])
+  })
+
+  it('passes franchise_id null entries through unchanged (AC-1)', () => {
+    const sorted = sortTimeline(
+      [fe('a', utc(2001, 1, 1), null), fe('b', utc(2002, 1, 1), null)],
+      'release_asc',
+    )
+    const collapsed = groupByFranchise(sorted)
+    expect(collapsed).toEqual(sorted)
+    expect(collapsed.every((e) => e.entries === undefined)).toBe(true)
+  })
+
+  it('treats a blank franchise_id as ungrouped, never collapsing it (review patch)', () => {
+    // An empty-string id is "no franchise", same as null: two blank-id rows
+    // must stay separate, not collapse into a label-less synthetic.
+    const sorted = sortTimeline(
+      [fe('a', utc(2001, 1, 1), ''), fe('b', utc(2002, 1, 1), '')],
+      'release_asc',
+    )
+    const collapsed = groupByFranchise(sorted)
+    expect(collapsed).toEqual(sorted)
+    expect(collapsed.every((e) => e.entries === undefined)).toBe(true)
+  })
+
+  it('passes a single-member franchise through as a normal row (D7)', () => {
+    const collapsed = groupByFranchise(
+      sortTimeline(
+        [fe('solo', utc(2005, 1, 1), 'lonely'), fe('x', utc(2006, 1, 1), null)],
+        'release_asc',
+      ),
+    )
+    expect(collapsed.map((e) => e.id)).toEqual(['solo', 'x'])
+    expect(collapsed.every((e) => e.entries === undefined)).toBe(true)
+  })
+
+  it('keeps year groups un-fragmented under release_desc, the default-sort trap (D1)', () => {
+    // Franchise 'f' spans 2010 + 2015; standalones sit at 2012 and a later 2010.
+    const mix = [
+      fe('f-2010', utc(2010, 3, 1), 'f'),
+      fe('f-2015', utc(2015, 3, 1), 'f'),
+      fe('s-2012', utc(2012, 3, 1), null),
+      fe('s-2010', utc(2010, 9, 1), null),
+    ]
+    const mode: SortMode = 'release_desc'
+    const groups = groupByYear(groupByFranchise(sortTimeline(mix, mode)), mode)
+    // The anchor-slot rule keeps the synthetic at the 2010 slot, so 2010 stays
+    // a single group. The naive first-seen-slot strands it at 2015 and claims
+    // 2010, splitting the year in two.
+    expect(groups.map((g) => g.year)).toEqual([2012, 2010])
+    const y2010 = groups.find((g) => g.year === 2010)
+    const synthetic = y2010?.entries.find((e) => e.entries !== undefined)
+    expect(synthetic?.id).toBe('f-2010')
+    expect(synthetic?.entries?.map((e) => e.id)).toEqual(['f-2010', 'f-2015'])
+  })
+
+  it('does not mutate the input array or its rows (purity)', () => {
+    const sorted = sortTimeline(
+      [fe('f-2015', utc(2015, 6, 1), 'saga'), fe('f-2010', utc(2010, 6, 1), 'saga')],
+      'release_asc',
+    )
+    const snapshot = sorted.map((e) => ({ ...e }))
+    groupByFranchise(sorted)
+    groupByFranchise(sorted)
+    expect(sorted).toEqual(snapshot)
+    expect(sorted.every((e) => e.entries === undefined)).toBe(true)
   })
 })
 

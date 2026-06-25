@@ -4164,3 +4164,78 @@ body {
   }
 }
 
+/* ============================================================
+   Timeline franchise row (Story 10.7) - franchise-mode summary.
+   The summary is a <button> carrying .tl-row + .tl-franchise-summary,
+   so it inherits the row flex posture, alternating tint, and the
+   :focus-visible ring; this block only resets the button chrome and
+   styles the franchise tag, the count chip, the chevron, and the
+   child indent. No shadows, no hover background (NFR26).
+   ============================================================ */
+.tl-franchise-summary {
+  width: 100%;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+  font: inherit;
+  text-align: left;
+}
+
+/* Small-caps FRANCHISE: NAME tag above the title (sits where .tl-meta would). */
+.tl-franchise-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* N ENTRIES count chip, immediately right of the title block. */
+.tl-count-chip {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-ghost);
+  border: 1px solid var(--phosphor-cream-ghost);
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+/* Inline chevron in the left slot a FramedCover occupies on a normal row;
+   points right when collapsed, rotates down on expand. CSS-only rotation. */
+.tl-chevron {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tl-chevron::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 7px solid var(--phosphor-cream-dim);
+  transform: rotate(0deg);
+  transform-origin: center;
+}
+.tl-chevron[data-expanded='true']::before {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tl-chevron::before {
+    transition: transform 150ms ease;
+  }
+}
+
+/* Franchise children render as standard rows at a 24px left indent (D5):
+   the base row pads 32px, so +24px lands the child content at 56px. */
+.tl-row-li.is-franchise-child .tl-row {
+  padding-left: 56px;
+}
+

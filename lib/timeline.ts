@@ -18,6 +18,13 @@ export type TimelineEntry = {
   completed_at: Date | null
   // UserEntry.created_at (NOT MediaItem.created_at)
   created_at: Date
+  // MediaItem.franchise_id, the franchise-mode grouping key (and, until a
+  // normalized Franchise table lands, the display label). null = ungrouped.
+  franchise_id: string | null
+  // ! Present ONLY on a synthetic franchise summary row (groupByFranchise);
+  // ! it carries that franchise's child rows for expand-on-click. Same word as
+  // ! YearGroup.entries (a year's rows) but a different shape, do not conflate.
+  entries?: TimelineEntry[]
 }
 
 export type YearGroup<T extends TimelineEntry = TimelineEntry> = {
@@ -88,6 +95,57 @@ export function groupByYear<T extends TimelineEntry>(
     }
   }
   return groups
+}
+
+// * Collapses entries sharing a franchise_id into one synthetic summary row
+// * whose children ride in `entries`. Input MUST already be sorted by
+// * sortTimeline with the active mode. The synthetic inherits the ANCHOR member
+// * (earliest release_date, id tie-break) and is emitted AT the anchor's array
+// * slot, so dropping the other members leaves the list sorted and groupByYear
+// * chunks it correctly with no second sort. Pure: never mutates the input rows.
+// * Failure mode: emitting the synthetic at the first-seen member's slot strands
+// * it under release_desc (the default sort), where first-seen is the newest
+// * member but the synthetic's date is the oldest, so groupByYear mis-buckets it
+// * and a franchise's year can surface twice.
+// * Roads not taken: collapse-then-resort is also correct but adds a redundant
+// * sort and reorders the AC's stated sortTimeline to groupByFranchise to
+// * groupByYear pipeline.
+export function groupByFranchise<T extends TimelineEntry>(entries: T[]): T[] {
+  // Bucket array indices by franchise_id. A null or blank id never groups.
+  const groups = new Map<string, number[]>()
+  entries.forEach((entry, index) => {
+    if (!entry.franchise_id) return
+    const list = groups.get(entry.franchise_id)
+    if (list === undefined) groups.set(entry.franchise_id, [index])
+    else list.push(index)
+  })
+
+  // For each franchise with two or more members, precompute the synthetic to
+  // drop at the anchor slot and mark the rest for removal. A single-member
+  // franchise passes through untouched (a one-row franchise is visual noise).
+  const syntheticAt = new Map<number, T>()
+  const dropped = new Set<number>()
+  for (const indices of groups.values()) {
+    if (indices.length < 2) continue
+    const members = indices.map((index) => entries[index])
+    const children = [...members].sort((a, b) => {
+      const diff = a.release_date.getTime() - b.release_date.getTime()
+      return diff !== 0 ? diff : byId(a, b)
+    })
+    const anchor = children[0]
+    const anchorIndex = indices[members.indexOf(anchor)]
+    syntheticAt.set(anchorIndex, { ...anchor, entries: children })
+    for (const index of indices) if (index !== anchorIndex) dropped.add(index)
+  }
+
+  // Rebuild in the original (already-sorted) order: swap the anchor for the
+  // synthetic, skip the dropped members, pass everything else through.
+  const out: T[] = []
+  entries.forEach((entry, index) => {
+    if (dropped.has(index)) return
+    out.push(syntheticAt.get(index) ?? entry)
+  })
+  return out
 }
 
 // * Era ground-tint mapping (Story 10.5). Six era bands separated by five decade

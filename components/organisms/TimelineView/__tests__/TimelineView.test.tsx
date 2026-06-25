@@ -48,6 +48,7 @@ function libItem(overrides: Partial<LibraryItem> = {}): LibraryItem {
     status: WatchStatus.COMPLETED,
     title: 'Untitled',
     originalTitle: null,
+    franchiseId: null,
     posterPath: null,
     year: 2000,
     releaseDate: '2000-01-01T00:00:00.000Z',
@@ -71,6 +72,12 @@ const MIXED: LibraryItem[] = [
   libItem({ id: 'b', mediaType: MediaType.GAME, title: 'Game 2007', year: 2007, releaseDate: '2007-01-20T00:00:00.000Z' }),
   libItem({ id: 'c', mediaType: MediaType.MOVIE, title: 'Movie 2007', year: 2007, releaseDate: '2007-06-10T00:00:00.000Z' }),
   libItem({ id: 'd', mediaType: MediaType.TV_SHOW, title: 'TV 2020', year: 2020, releaseDate: '2020-03-03T00:00:00.000Z' }),
+]
+
+const SAGA: LibraryItem[] = [
+  libItem({ id: 's1', title: 'Saga I', franchiseId: 'saga', year: 2010, releaseDate: '2010-01-01T00:00:00.000Z' }),
+  libItem({ id: 's2', title: 'Saga II', franchiseId: 'saga', year: 2012, releaseDate: '2012-01-01T00:00:00.000Z' }),
+  libItem({ id: 's3', title: 'Saga III', franchiseId: 'saga', year: 2015, releaseDate: '2015-01-01T00:00:00.000Z' }),
 ]
 
 beforeEach(() => {
@@ -164,5 +171,18 @@ describe('TimelineView', () => {
     render(<TimelineView initialItems={[]} />)
     fireEvent.click(screen.getByRole('button', { name: /ADD AN ITEM/ }))
     expect(nav.push).toHaveBeenCalledWith('/search')
+  })
+
+  it('leaves same-franchise entries as separate rows when franchise mode is off', () => {
+    render(<TimelineView initialItems={SAGA} />)
+    expect(screen.getAllByTestId('tl-row')).toHaveLength(3)
+  })
+
+  it('collapses same-franchise entries into one row when franchise mode is on (AC-2)', () => {
+    nav.params = new URLSearchParams('franchise=1')
+    render(<TimelineView initialItems={SAGA} />)
+    // The three works share a franchiseId, so they collapse to one summary row.
+    // The TimelineRow mock renders only top-level rows, not expanded children.
+    expect(screen.getAllByTestId('tl-row')).toHaveLength(1)
   })
 })

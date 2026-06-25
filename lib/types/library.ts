@@ -16,6 +16,7 @@ export type LibraryItem = {
   status: WatchStatus
   title: string
   originalTitle: string | null // MediaItem.original_title; drives the timeline title-search second match field
+  franchiseId: string | null // MediaItem.franchise_id; the timeline's franchise-mode grouping key AND display label until a normalized Franchise table lands
   posterPath: string | null // TMDB-style path; client constructs the full URL
   year: number | null // derived from MediaItem.release_date
   releaseDate: string | null // ISO; null when MediaItem.release_date is sentinel-1970

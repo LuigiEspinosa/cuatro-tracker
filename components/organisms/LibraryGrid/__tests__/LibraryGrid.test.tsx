@@ -65,6 +65,7 @@ const sampleItem = (overrides: Partial<LibraryItem> = {}): LibraryItem => ({
   status: WatchStatus.WATCHING,
   title: 'Sample Movie',
   originalTitle: null,
+  franchiseId: null,
   posterPath: '/poster.jpg',
   year: 2024,
   releaseDate: '2024-01-01T00:00:00.000Z',

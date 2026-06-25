@@ -320,6 +320,7 @@ export function serializeLibraryItem(entry: UserEntryWithMedia): LibraryItem {
     status: entry.status,
     title: mediaItem.title,
     originalTitle: mediaItem.original_title,
+    franchiseId: mediaItem.franchise_id,
     posterPath: isGame ? gameCoverUrl(mediaItem) : mediaItem.poster_path,
     year: deriveYear(mediaItem),
     releaseDate: deriveReleaseDate(mediaItem),

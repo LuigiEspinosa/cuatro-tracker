@@ -1,3 +1,11 @@
+'use client'
+
+// Client organism: the franchise summary row owns its expand/collapse state via
+// useState. Normal rows still carry no handlers (navigation rides a plain
+// next/link), but keeping the one stateful variant in this file avoids a second
+// component for what the AC frames as TimelineRow chrome.
+
+import { useState } from 'react'
 import Link from 'next/link'
 import type { MediaType, WatchStatus } from '@prisma/client'
 import { PhosphorLED } from '@/components/atoms/PhosphorLED'
@@ -15,10 +23,11 @@ import {
 /* One chronological row: framed thumb, display-serif title, small-caps meta,
  * optional 2-line description, status LED, and a right-aligned date column whose
  * field tracks the active sort mode. Structurally a denser sibling of
- * SearchResultRow. No "use client": it carries no hooks or handlers (navigation
- * rides a plain next/link), so it stays a server-capable component rendered
- * inside the client <TimelineView>. NFR26: no per-row entrance or hover
- * animation, the focus ring is the only affordance.
+ * SearchResultRow. A franchise-mode summary row (item.entries set) renders a
+ * distinct chrome instead: no cover, a small-caps FRANCHISE tag, a count chip,
+ * and a chevron that expands the collapsed children in place. NFR26: no per-row
+ * entrance or hover animation, the focus ring is the only affordance, and the
+ * chevron rotation is a CSS transition, never a motion library.
  */
 
 export type TimelineRowItem = {
@@ -35,6 +44,11 @@ export type TimelineRowItem = {
   release_date: Date
   completed_at: Date | null
   created_at: Date
+  // Franchise-mode fields. franchise_id is the grouping key and (until a
+  // normalized Franchise table lands) the display label. entries is present
+  // ONLY on a synthetic summary row and carries the collapsed children.
+  franchise_id?: string | null
+  entries?: TimelineRowItem[]
 }
 
 export type TimelineRowProps = {
@@ -43,6 +57,8 @@ export type TimelineRowProps = {
   // Running index across the whole timeline, drives the alternating row tint so
   // it stays continuous across year-group boundaries.
   index: number
+  // Set on the indented child rows a franchise summary expands into.
+  isFranchiseChild?: boolean
 }
 
 function dateForSort(item: TimelineRowItem, sortMode: SortMode): Date | null {
@@ -65,7 +81,63 @@ export function formatTimelineDate(date: Date | null): string {
   return date.toISOString().slice(0, 10)
 }
 
-export function TimelineRow({ item, sortMode, index }: TimelineRowProps) {
+export function TimelineRow({
+  item,
+  sortMode,
+  index,
+  isFranchiseChild,
+}: TimelineRowProps) {
+  // Hook runs unconditionally (rules-of-hooks); only the summary branch reads it.
+  const [expanded, setExpanded] = useState(false)
+  const rowClass = `tl-row ${index % 2 === 0 ? 'row-even' : 'row-odd'}`
+
+  // Franchise summary variant (two or more collapsed members). A <button>, not
+  // an <a>: a synthetic franchise has no detail page. No FramedCover.
+  if (item.entries && item.entries.length > 0) {
+    const label = item.franchise_id ?? ''
+    const count = item.entries.length
+    const dateText = formatTimelineDate(dateForSort(item, sortMode))
+    return (
+      <>
+        <li className='tl-row-li'>
+          <button
+            type='button'
+            className={`${rowClass} tl-franchise-summary`}
+            data-franchise-summary=''
+            aria-expanded={expanded}
+            aria-label={`${label} franchise, ${count} entries, ${expanded ? 'collapse' : 'expand'}`}
+            onClick={() => setExpanded((open) => !open)}
+          >
+            <span
+              className='tl-chevron'
+              data-expanded={expanded ? 'true' : 'false'}
+              aria-hidden='true'
+            />
+            <span className='tl-title-block'>
+              <span className='tl-franchise-tag'>FRANCHISE: {label}</span>
+              <span className='tl-title'>{label}</span>
+            </span>
+            <span className='tl-count-chip'>{count} ENTRIES</span>
+            <span className={dateText === '-' ? 'tl-date is-null' : 'tl-date'}>
+              {dateText}
+            </span>
+          </button>
+        </li>
+        {expanded
+          ? item.entries.map((child, childIndex) => (
+              <TimelineRow
+                key={child.id}
+                item={child}
+                sortMode={sortMode}
+                index={index + 1 + childIndex}
+                isFranchiseChild
+              />
+            ))
+          : null}
+      </>
+    )
+  }
+
   const medium = TYPE_TO_MEDIUM[item.mediaType]
   const posterUrl = getImageUrl(item.posterPath, 'w185')
   const typeLabel = TYPE_LABEL[item.mediaType]
@@ -76,7 +148,9 @@ export function TimelineRow({ item, sortMode, index }: TimelineRowProps) {
     mediaType: item.mediaType,
     mediaItemId: item.mediaItemId,
   })
-  const rowClass = `tl-row ${index % 2 === 0 ? 'row-even' : 'row-odd'}`
+  const liClass = isFranchiseChild ? 'tl-row-li is-franchise-child' : 'tl-row-li'
+  // Presence marker for the e2e + collapse assertion; omitted on non-children.
+  const childMarker = isFranchiseChild ? '' : undefined
 
   const inner = (
     <>
@@ -101,7 +175,7 @@ export function TimelineRow({ item, sortMode, index }: TimelineRowProps) {
 
   if (href === null) {
     return (
-      <li className='tl-row-li'>
+      <li className={liClass} data-franchise-child={childMarker}>
         <div className={rowClass} data-medium={medium}>
           {inner}
         </div>
@@ -110,7 +184,7 @@ export function TimelineRow({ item, sortMode, index }: TimelineRowProps) {
   }
 
   return (
-    <li className='tl-row-li'>
+    <li className={liClass} data-franchise-child={childMarker}>
       <Link
         href={href}
         className={rowClass}

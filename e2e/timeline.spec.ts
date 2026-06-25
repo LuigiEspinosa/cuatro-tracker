@@ -140,3 +140,38 @@ test.describe('/timeline filter strip (Story 10.6)', () => {
     await expect(rows).toHaveCount(total)
   })
 })
+
+test.describe('/timeline franchise mode (Story 10.7)', () => {
+  test('AC-5 (gated): toggle franchise mode collapses a 30-entry Marvel franchise to one expandable row', async ({
+    page,
+  }) => {
+    test.skip(
+      !process.env.TIMELINE_E2E_SEEDED,
+      'Requires the populated-library seed helper with a 30-entry franchise (unlanded, see deferred-work.md).',
+    )
+
+    await login(page)
+    await page.goto('/timeline')
+
+    // Toggle franchise mode on. The strip toggle's accessible name is FRANCHISE.
+    await page.getByRole('button', { name: /FRANCHISE/ }).click()
+
+    // The 30 same-franchise_id Marvel entries collapse to a single summary row.
+    const summaries = page.locator('[data-franchise-summary]')
+    await expect(summaries).toHaveCount(1)
+    expect(await page.locator('[data-franchise-child]').count()).toBe(0)
+
+    // Expand: 30 child rows render below, in release order.
+    await summaries.first().click()
+    const children = page.locator('[data-franchise-child]')
+    await expect(children).toHaveCount(30)
+    const dates = (await children.locator('.tl-date').allTextContents())
+      .map((text) => text.trim())
+      .filter((text) => text !== '-')
+    expect(dates).toEqual([...dates].sort())
+
+    // Collapse: children are removed from the DOM (AC-4), not merely hidden.
+    await summaries.first().click()
+    await expect(children).toHaveCount(0)
+  })
+})

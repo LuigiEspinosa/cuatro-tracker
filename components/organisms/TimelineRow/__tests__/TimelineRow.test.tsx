@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { MediaType, WatchStatus } from '@prisma/client'
 import { TimelineRow, formatTimelineDate, type TimelineRowItem } from '../TimelineRow'
 import type { SortMode } from '@/lib/timeline'
@@ -118,5 +118,66 @@ describe('TimelineRow', () => {
   it('formatTimelineDate returns YYYY-MM-DD in UTC, or a dash for null', () => {
     expect(formatTimelineDate(new Date('2001-02-03T23:30:00Z'))).toBe('2001-02-03')
     expect(formatTimelineDate(null)).toBe('-')
+  })
+})
+
+describe('TimelineRow franchise summary (Story 10.7)', () => {
+  beforeEach(() => cleanup())
+
+  function makeFranchise(childCount = 3): TimelineRowItem {
+    const children = Array.from({ length: childCount }, (_unused, i) =>
+      makeItem({
+        id: `child-${i}`,
+        mediaItemId: `media-${i}`,
+        title: `Chapter ${i + 1}`,
+        franchise_id: 'mcu',
+      }),
+    )
+    return makeItem({
+      id: 'franchise-anchor',
+      title: 'mcu',
+      franchise_id: 'mcu',
+      entries: children,
+    })
+  }
+
+  it('renders the FRANCHISE tag, the N ENTRIES chip, and a chevron on a button (AC-3)', () => {
+    const { container } = renderRow(makeFranchise(3))
+    expect(screen.getByText('FRANCHISE: mcu')).toBeInTheDocument()
+    expect(screen.getByText('3 ENTRIES')).toBeInTheDocument()
+    expect(container.querySelector('.tl-chevron')).not.toBeNull()
+    // A synthetic franchise has no detail page: a <button>, never an <a>.
+    expect(container.querySelector('[data-franchise-summary]')?.tagName).toBe('BUTTON')
+    expect(container.querySelector('a.tl-row')).toBeNull()
+  })
+
+  it('renders no child rows until the chevron is clicked', () => {
+    const { container } = renderRow(makeFranchise(3))
+    expect(container.querySelectorAll('[data-franchise-child]')).toHaveLength(0)
+  })
+
+  it('expands to N child rows on click and collapses them out of the DOM (AC-3, AC-4)', () => {
+    const { container } = renderRow(makeFranchise(3))
+    const summary = screen.getByRole('button', { name: /mcu franchise/ })
+    expect(summary.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(summary)
+    expect(summary.getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelectorAll('[data-franchise-child]')).toHaveLength(3)
+
+    fireEvent.click(summary)
+    expect(summary.getAttribute('aria-expanded')).toBe('false')
+    // AC-4: children are removed from the DOM, not display:none hidden.
+    expect(container.querySelectorAll('[data-franchise-child]')).toHaveLength(0)
+  })
+
+  it('renders the children in provided order, each linking to its detail page (D5)', () => {
+    const { container } = renderRow(makeFranchise(3))
+    fireEvent.click(screen.getByRole('button', { name: /mcu franchise/ }))
+    const childTitles = Array.from(
+      container.querySelectorAll('[data-franchise-child] .tl-title'),
+    ).map((el) => el.textContent)
+    expect(childTitles).toEqual(['Chapter 1', 'Chapter 2', 'Chapter 3'])
+    expect(container.querySelectorAll('[data-franchise-child] a.tl-row')).toHaveLength(3)
   })
 })
