@@ -72,6 +72,28 @@ describe('TimelineFilterStrip', () => {
     expect(movies.getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('blocks turning off the last visible media chip from the default set (TV_EPISODE guard)', () => {
+    // Regression: the store default carries the chip-less TV_EPISODE member, so a
+    // mediaTypes.size guard let all five visible chips toggle off, stranding the
+    // timeline on {TV_EPISODE} (excluded by findTimelineEntries) with every chip
+    // reading off. The guard must count active VISIBLE chips instead.
+    render(<TimelineFilterStrip />)
+    const chips = within(mediaGroup()).getAllByRole('button')
+    expect(chips).toHaveLength(5)
+
+    // Click every visible chip off in order; the fifth toggle must be blocked.
+    for (const chip of chips) fireEvent.click(chip)
+
+    const state = useTimelineStore.getState()
+    const visibleActive = (
+      ['MOVIE', 'TV_SHOW', 'ANIME', 'MANGA', 'GAME'] as const
+    ).filter((type) => state.mediaTypes.has(type))
+    // Exactly one visible chip stays active, so the timeline never empties.
+    expect(visibleActive).toEqual(['GAME'])
+    const games = within(mediaGroup()).getByRole('button', { name: /GAMES/ })
+    expect(games.getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('does not let the last active status chip toggle off (D10 guard)', () => {
     useTimelineStore
       .getState()

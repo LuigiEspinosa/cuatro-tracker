@@ -318,12 +318,18 @@ export function TimelineFilterStrip({ disabled = false }: TimelineFilterStripPro
   // * timeline with no rows and no obvious cause. D10 keeps the last active chip
   // * locked on. The guard lives here, not in toggleMediaType/toggleStatus, so
   // * the store keeps its blind-toggle contract (and the Story 10.3 tests).
+  // ! Count active VISIBLE chips, not mediaTypes.size: TV_EPISODE is a permanent
+  // ! chip-less member of the store default, so a size-based guard lets the fifth
+  // ! visible chip toggle off at size 2 and strands the timeline on {TV_EPISODE}.
+  const activeMediaChipCount = MEDIA_CHIPS.filter((chip) =>
+    mediaTypes.has(chip.type),
+  ).length
   const mediaChips: ChipDescriptor[] = MEDIA_CHIPS.map((chip) => ({
     key: chip.type,
     label: chip.label,
     active: mediaTypes.has(chip.type),
     onToggle: () => {
-      if (mediaTypes.has(chip.type) && mediaTypes.size === 1) return
+      if (mediaTypes.has(chip.type) && activeMediaChipCount === 1) return
       toggleMediaType(chip.type)
     },
   }))
