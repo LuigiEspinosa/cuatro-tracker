@@ -4239,3 +4239,137 @@ body {
   padding-left: 56px;
 }
 
+/* ============================================================
+   Admin chrome (Story 11.3). Shared by every /admin/* route via
+   app/admin/layout.tsx. Sources: 00-design-system.md 0.5 (scanline recipe)
+   and 06-admin-merge.md 2 (the admin ground is the one distinguishing cue).
+   ============================================================ */
+
+.adm-ground {
+  position: relative;
+  /* Fills the viewport below MainNav (regular flow, scrolls away) so the
+   * scanline reads as the page ground and not a band behind the content.
+   * 64px = MainNav height, the same figure `.gs` pins above. */
+  min-height: calc(100vh - 64px);
+  /* Keeps the z-index pin below local. Without a stacking context here, the
+   * content wrapper's z-index would compete in the root context against
+   * MainNav and anything Stories 11.4 / 11.5 mount. */
+  isolation: isolate;
+  background: var(--ground-admin);
+}
+
+/* * The scanline is a ground effect, never an overlay. Design-system 0.9 bans
+ * scanlines behind running paragraphs and 06-admin-merge.md 8 restates it for
+ * this surface, so `::before` paints under the content (z-index 0) and
+ * `.adm-content` lifts above it (z-index 1). At 3% black the inverted reading
+ * looks identical today and would only betray itself once Story 11.4 mounts
+ * dense diff text beneath it. Geometry per design-system 0.5: 1px lines at 3%
+ * opacity every 4px (inside its 1-2px / 2-3% / 3-4px envelope). Deliberately
+ * NOT `.crt-screen-wrap::before`, which is the login bezel at 18% + a vignette. */
+.adm-ground::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 3px,
+    rgba(0, 0, 0, 0.03) 3px 4px
+  );
+  pointer-events: none;
+}
+
+.adm-content {
+  position: relative;
+  z-index: 1;
+}
+
+.adm-dash {
+  display: block;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 48px 64px;
+}
+
+.adm-dash-title {
+  margin: 0 0 24px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--phosphor-cream-dim);
+  text-transform: uppercase;
+}
+
+.adm-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+/* CRT-pixel visual language borrowed from `.cpb`: flat, no radius, phosphor
+ * border, invert on hover. The element stays a link because the tile navigates;
+ * `.cpb` is a <button> + onClick and would force a client island onto the RSC. */
+.adm-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px;
+  background: transparent;
+  border: 2px solid var(--phosphor-cream);
+  color: var(--phosphor-cream);
+  text-decoration: none;
+  transition:
+    background 100ms linear,
+    color 100ms linear;
+}
+
+.adm-tile:hover {
+  background: var(--phosphor-cream);
+  color: var(--ground-admin);
+}
+
+/* Keyboard focus keeps the NFR43 neon ring on top of the invert so it stays
+ * distinguishable from a hover. */
+.adm-tile:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 2px;
+  background: var(--phosphor-cream);
+  color: var(--ground-admin);
+}
+
+.adm-tile-label {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: inherit;
+}
+
+.adm-tile-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  color: var(--phosphor-cream-dim);
+  text-transform: uppercase;
+}
+
+/* Dim plum rather than the inverted ground keeps the label/subtitle hierarchy
+ * readable once the tile flips to a cream background. */
+.adm-tile:hover .adm-tile-sub,
+.adm-tile:focus-visible .adm-tile-sub {
+  color: var(--plum-dim);
+}
+
+@media (max-width: 720px) {
+  .adm-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adm-dash {
+    padding: 24px 20px 48px;
+  }
+}
+
