@@ -178,18 +178,12 @@ async function handler(req: NextRequest): Promise<NextResponse> {
           data: { parent_id: targetId },
         })
 
-        // Step 3 (AC-5.4): stamp the suggestion resolved. Ordered before the
-        // source delete because MergeSuggestion.source is onDelete: Cascade, so
-        // deleting the source MediaItem next removes this row (and any sibling
-        // suggestion referencing the same duplicate) automatically. The stamp
-        // still runs so the audit intent holds for the window it lives.
-        await tx.mergeSuggestion.update({
-          where: { id: suggestionId },
-          data: { resolved: true, resolved_at: new Date() },
-        })
-
-        // Step 4 (AC-5.3): delete the source MediaItem. Cascades the resolved
-        // suggestion row away per the note above.
+        // Step 3 (AC-5.3 + AC-5.4): delete the source MediaItem.
+        // MergeSuggestion.source is onDelete: Cascade, so this removes the
+        // accepted suggestion row (and any sibling suggestion referencing the
+        // same duplicate) automatically. No explicit resolved / resolved_at
+        // stamp: the row is cascade-removed a step later, so stamping it would
+        // be dead work (there is no merge-history table for it to persist into).
         await tx.mediaItem.delete({ where: { id: sourceId } })
       },
       { timeout: 30_000 },
@@ -205,18 +199,30 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     return jsonResponse({ error: 'merge_failed' }, 500)
   }
 
-  const next = await db.mergeSuggestion.findFirst({
-    where: { resolved: false },
-    orderBy: { confidence: 'desc' },
-    select: { id: true },
-  })
+  // The merge has already committed. Computing the next pending id is a
+  // convenience for the client (which owns its own queue), so a failure here
+  // must not report the committed merge as failed: fall back to null.
+  let nextId: string | null = null
+  try {
+    const next = await db.mergeSuggestion.findFirst({
+      where: { resolved: false },
+      orderBy: { confidence: 'desc' },
+      select: { id: true },
+    })
+    nextId = next?.id ?? null
+  } catch (err) {
+    logger.warn(
+      { event: 'admin.merge.next_lookup_failed', suggestionId, err },
+      'merge committed but next-suggestion lookup failed',
+    )
+  }
 
   logger.info(
-    { event: 'admin.merge.ok', suggestionId, sourceId, targetId, next: next?.id ?? null },
+    { event: 'admin.merge.ok', suggestionId, sourceId, targetId, next: nextId },
     'merge suggestion accepted',
   )
 
-  return jsonResponse({ resolvedId: suggestionId, next: next?.id ?? null }, 200)
+  return jsonResponse({ resolvedId: suggestionId, next: nextId }, 200)
 }
 
 export const POST = withRequest<NextRequest, NextResponse>(handler)

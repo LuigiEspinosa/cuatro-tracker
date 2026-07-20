@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { logger } from '@/lib/logger'
@@ -67,23 +68,55 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     return jsonResponse({ error: 'not_found' }, 404)
   }
 
-  await db.mergeSuggestion.update({
-    where: { id: suggestionId },
-    data: { resolved: true, dismissed: true, resolved_at: new Date() },
-  })
+  try {
+    await db.mergeSuggestion.update({
+      where: { id: suggestionId },
+      data: { resolved: true, dismissed: true, resolved_at: new Date() },
+    })
+  } catch (err) {
+    // P2025: the row vanished between the existence check and the update (e.g. a
+    // concurrent accept cascaded a sibling away). Report the clean 404 the guard
+    // above intended rather than an unstructured 500.
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === 'P2025'
+    ) {
+      logger.warn(
+        { event: 'admin.merge.dismiss.not_found', suggestionId },
+        'dismiss target vanished between check and update',
+      )
+      return jsonResponse({ error: 'not_found' }, 404)
+    }
+    logger.error(
+      { event: 'admin.merge.dismiss.failed', suggestionId, err },
+      'dismiss update failed',
+    )
+    return jsonResponse({ error: 'dismiss_failed' }, 500)
+  }
 
-  const next = await db.mergeSuggestion.findFirst({
-    where: { resolved: false },
-    orderBy: { confidence: 'desc' },
-    select: { id: true },
-  })
+  // The dismiss has already committed; a failure computing the next id must not
+  // report it as failed. Fall back to null (the client owns its queue).
+  let nextId: string | null = null
+  try {
+    const next = await db.mergeSuggestion.findFirst({
+      where: { resolved: false },
+      orderBy: { confidence: 'desc' },
+      select: { id: true },
+    })
+    nextId = next?.id ?? null
+  } catch (err) {
+    logger.warn(
+      { event: 'admin.merge.dismiss.next_lookup_failed', suggestionId, err },
+      'dismiss committed but next-suggestion lookup failed',
+    )
+  }
 
   logger.info(
-    { event: 'admin.merge.dismiss.ok', suggestionId, next: next?.id ?? null },
+    { event: 'admin.merge.dismiss.ok', suggestionId, next: nextId },
     'merge suggestion dismissed',
   )
 
-  return jsonResponse({ resolvedId: suggestionId, next: next?.id ?? null }, 200)
+  return jsonResponse({ resolvedId: suggestionId, next: nextId }, 200)
 }
 
 export const POST = withRequest<NextRequest, NextResponse>(handler)

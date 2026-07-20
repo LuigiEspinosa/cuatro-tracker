@@ -268,7 +268,7 @@ export function MergeReviewClient({ suggestions }: MergeReviewClientProps) {
           {'NEXT >'}
         </button>
         <span className='merge-nav-pos'>
-          {pos} / {total} · CONFIDENCE
+          {pos} / {total} · CONFIDENCE ↓
         </span>
       </div>
 

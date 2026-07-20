@@ -12,7 +12,11 @@ export function MergeErrorState() {
         {'> COULD NOT LOAD MERGE QUEUE'}
       </BitmapText>
       <p className='merge-state-sub'>Refresh the page or check the worker.</p>
-      <CRTPixelButton fullWidth={false} onClick={() => window.location.reload()}>
+      <CRTPixelButton
+        fullWidth={false}
+        className='merge-retry-btn'
+        onClick={() => window.location.reload()}
+      >
         {'> RETRY'}
       </CRTPixelButton>
     </div>

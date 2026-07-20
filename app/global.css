@@ -4828,6 +4828,13 @@ body {
   text-align: center;
   min-height: 420px;
 }
+/* AC-8: the RETRY control carries the same --neon-blue focus ring as Prev /
+   Next / CANCEL / MERGE (the base .cpb:focus-visible clears the outline). */
+.cpb.merge-retry-btn:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 3px;
+  box-shadow: 0 0 12px rgba(63, 169, 255, 0.45);
+}
 .merge-state-sub {
   font-family: var(--font-body);
   font-size: 15px;

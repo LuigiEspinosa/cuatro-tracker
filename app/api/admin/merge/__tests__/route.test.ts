@@ -200,12 +200,11 @@ describe('POST /api/admin/merge', () => {
         where: { parent_id: 'src_1' },
         data: { parent_id: 'tgt_1' },
       })
-      // Suggestion resolved with a timestamp.
-      const resolveCall = txMock.mergeSuggestion.update.mock.calls[0][0]
-      expect(resolveCall.where).toEqual({ id: 'sug_1' })
-      expect(resolveCall.data.resolved).toBe(true)
-      expect(resolveCall.data.resolved_at).toBeInstanceOf(Date)
-      // Source MediaItem deleted.
+      // No explicit resolved / resolved_at stamp: the source-delete cascade
+      // (MergeSuggestion.source is onDelete: Cascade) removes the row, so a
+      // stamp would be dead work.
+      expect(txMock.mergeSuggestion.update).not.toHaveBeenCalled()
+      // Source MediaItem deleted (cascades the suggestion row away).
       expect(txMock.mediaItem.delete).toHaveBeenCalledWith({
         where: { id: 'src_1' },
       })
