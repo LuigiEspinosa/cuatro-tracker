@@ -4373,3 +4373,564 @@ body {
   }
 }
 
+/* ============================================================
+   Merge tool (Story 11.4). The /admin/merge review surface, mounted inside the
+   .adm-ground scanline chrome. Recreates the bundle's admin-styles.css visual
+   output (06-admin-merge) with the real design tokens: no border-radius, no
+   drop shadow, a --ground-card lift, alternating --ground-row-* diff tint, the
+   6-band rainbow (--rb-*) reused from .tl-strip, --text-shadow-hero on the
+   numeral, a static diff, and reduced-motion guards. Bespoke .merge-* classes
+   per the Story 11.3 precedent, not new atom components.
+   ============================================================ */
+
+.merge-page {
+  display: block;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 20px 32px 48px;
+}
+
+.merge-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-ghost);
+  margin: 0 0 4px;
+}
+
+/* Skip-to-content link: off-screen until focused, then drops into view. Jumps
+   to #merge-main past the root-layout MainNav (AC-8). */
+.merge-skip {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translate(-50%, -200%);
+  z-index: 60;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ground-base);
+  background: var(--phosphor-cream);
+  padding: 8px 16px;
+  text-decoration: none;
+}
+.merge-skip:focus {
+  transform: translate(-50%, 0);
+}
+
+/* Zone A: navigation strip */
+.merge-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(239, 230, 212, 0.1);
+  margin-bottom: 24px;
+}
+.merge-nav-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+}
+.merge-nav-pos {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--phosphor-cream);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.merge-nav-btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  background: transparent;
+  border: 1px solid rgba(239, 230, 212, 0.1);
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.merge-nav-btn:hover:not(:disabled) {
+  color: var(--phosphor-cream);
+  border-color: var(--phosphor-cream-dim);
+}
+.merge-nav-btn:disabled {
+  color: var(--phosphor-cream-ghost);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.merge-nav-btn:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 2px;
+  box-shadow: 0 0 12px rgba(63, 169, 255, 0.45);
+}
+
+/* Zone B: dual-pane comparison */
+.merge-compare {
+  display: grid;
+  grid-template-columns: 1fr 160px 1fr;
+  gap: 0;
+  align-items: stretch;
+  margin-bottom: 28px;
+}
+
+.merge-pane {
+  background: var(--ground-card);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.merge-pane-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 6px;
+}
+.merge-pane-role {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.merge-pane-role.is-source {
+  color: var(--magenta);
+}
+.merge-pane-role.is-target {
+  color: var(--led-completed);
+}
+.merge-pane-note {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-ghost);
+}
+.merge-pane-rule {
+  height: 3px;
+  margin-bottom: 4px;
+  background: linear-gradient(
+    to right,
+    var(--rb-green) 0 16.67%,
+    var(--rb-yellow) 16.67% 33.33%,
+    var(--rb-orange) 33.33% 50%,
+    var(--rb-pink) 50% 66.67%,
+    var(--rb-purple) 66.67% 83.33%,
+    var(--rb-blue) 83.33% 100%
+  );
+}
+.merge-pane-body {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.merge-cover {
+  width: 128px;
+}
+.merge-cover-fallback {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--plum-dim);
+  color: var(--phosphor-cream-ghost);
+  font-family: var(--font-display);
+  font-size: 28px;
+}
+/* Game covers are 3:4, not 2:3; the fallback matches so the grid does not jump. */
+.merge-cover[data-medium='games'] .merge-cover-fallback {
+  aspect-ratio: 3 / 4;
+}
+.merge-pane-text {
+  min-width: 0;
+}
+.merge-pane-title {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 28px;
+  line-height: 1.05;
+  color: var(--phosphor-cream);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.merge-pane-original {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--phosphor-cream-dim);
+  margin: 2px 0 0;
+}
+.merge-pane-source {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  font-variant-numeric: tabular-nums;
+  margin: 10px 0 0;
+}
+.merge-pane-overview {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--phosphor-cream);
+  margin: 10px 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.merge-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 14px 0 0;
+}
+.merge-meta dt {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-ghost);
+  align-self: baseline;
+}
+.merge-meta dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--phosphor-cream);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Center similarity numeral */
+.merge-similarity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 8px;
+}
+.merge-similarity-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+}
+.merge-similarity-num {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 68px;
+  line-height: 0.9;
+  color: var(--phosphor-cream);
+  text-shadow: var(--text-shadow-hero);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.merge-similarity-sub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-ghost);
+}
+
+/* Zone B (cont.): field diff */
+.merge-diff {
+  margin-bottom: 28px;
+}
+.merge-diff-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.merge-diff-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+}
+.merge-diff-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-ghost);
+  font-variant-numeric: tabular-nums;
+}
+.merge-diff-rule {
+  flex: 1;
+  height: 3px;
+  background: linear-gradient(
+    to right,
+    var(--rb-green) 0 16.67%,
+    var(--rb-yellow) 16.67% 33.33%,
+    var(--rb-orange) 33.33% 50%,
+    var(--rb-pink) 50% 66.67%,
+    var(--rb-purple) 66.67% 83.33%,
+    var(--rb-blue) 83.33% 100%
+  );
+}
+.merge-diff-list {
+  display: flex;
+  flex-direction: column;
+}
+.merge-diff-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 1fr;
+  gap: 24px;
+  align-items: baseline;
+  padding: 10px 16px;
+}
+.merge-diff-row.row-even {
+  background: var(--ground-row-even);
+}
+.merge-diff-row.row-odd {
+  background: var(--ground-row-odd);
+}
+.merge-diff-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-ghost);
+}
+.merge-diff-val {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--phosphor-cream);
+}
+.merge-diff-span2 {
+  grid-column: 2 / span 2;
+}
+/* Differing source value: ghosted-red strikethrough, NOT chromatic aberration
+   (AC-4). */
+.merge-diff-val.is-removed {
+  color: var(--magenta);
+  opacity: 0.72;
+  text-decoration: line-through;
+  text-decoration-color: rgba(214, 53, 124, 0.6);
+}
+.merge-diff-val.is-match {
+  color: var(--phosphor-cream);
+}
+.merge-diff-tag {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-ghost);
+  margin-bottom: 3px;
+}
+
+/* Zone C: action band */
+.merge-action-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0 0;
+  border-top: 1px solid rgba(239, 230, 212, 0.1);
+  margin-top: 4px;
+}
+.merge-action-cancel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--phosphor-cream-dim);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 8px 4px;
+}
+.merge-action-cancel:hover:not(:disabled) {
+  color: var(--phosphor-cream);
+}
+.merge-action-cancel:disabled {
+  color: var(--phosphor-cream-ghost);
+  cursor: not-allowed;
+}
+.merge-action-cancel:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 2px;
+}
+.merge-action-merge {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+/* The MERGE button reuses the CRTPixelButton atom (.cpb); this override tints it
+   destructive (magenta) and pins the NFR43 neon focus ring, which .cpb itself
+   clears. The rainbow underline below is the destructive cue (no confirm modal,
+   AC-8). */
+.cpb.merge-merge-btn {
+  margin-top: 0;
+  border-color: var(--magenta);
+  min-width: 200px;
+}
+.cpb.merge-merge-btn:hover:not([disabled]),
+.cpb.merge-merge-btn:focus-visible {
+  background: var(--magenta);
+  color: var(--phosphor-cream);
+  border-color: var(--magenta);
+}
+.cpb.merge-merge-btn:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 3px;
+  box-shadow: 0 0 12px rgba(63, 169, 255, 0.45);
+}
+.merge-underline {
+  height: 4px;
+  margin-top: 4px;
+  background: linear-gradient(
+    to right,
+    var(--rb-green) 0 16.67%,
+    var(--rb-yellow) 16.67% 33.33%,
+    var(--rb-orange) 33.33% 50%,
+    var(--rb-pink) 50% 66.67%,
+    var(--rb-purple) 66.67% 83.33%,
+    var(--rb-blue) 83.33% 100%
+  );
+}
+.merge-action-error {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--magenta);
+  margin: 12px 0 0;
+}
+
+/* Empty / error states */
+.merge-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 80px 32px;
+  text-align: center;
+  min-height: 420px;
+}
+.merge-state-sub {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-style: italic;
+  color: var(--phosphor-cream-dim);
+  margin: 0;
+  max-width: 460px;
+}
+
+/* Loading skeleton (AC-7): phosphor-ghost boxes, shimmer suppressed under
+   reduced motion. */
+.skel-box {
+  background: rgba(239, 230, 212, 0.07);
+  position: relative;
+  overflow: hidden;
+  display: block;
+}
+.skel-box::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(239, 230, 212, 0.07) 50%,
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: merge-skel-shimmer 2.2s ease-in-out infinite;
+}
+@keyframes merge-skel-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.merge-skel-rule {
+  width: 100%;
+  height: 3px;
+  margin-bottom: 12px;
+}
+.merge-skel-cover {
+  width: 128px;
+  aspect-ratio: 2 / 3;
+}
+.merge-skel-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.merge-skel-line-lg {
+  height: 26px;
+  width: 80%;
+}
+.merge-skel-line-md {
+  height: 14px;
+  width: 92%;
+}
+.merge-skel-line-sm {
+  height: 12px;
+  width: 50%;
+}
+.merge-skel-num {
+  width: 96px;
+  height: 60px;
+}
+
+@media (max-width: 720px) {
+  .merge-page {
+    padding: 16px 16px 40px;
+  }
+  .merge-compare {
+    grid-template-columns: 1fr;
+  }
+  .merge-pane-body {
+    grid-template-columns: 96px 1fr;
+    gap: 14px;
+  }
+  .merge-cover,
+  .merge-cover-fallback,
+  .merge-skel-cover {
+    width: 96px;
+  }
+  .merge-similarity {
+    flex-direction: row;
+    gap: 16px;
+    padding: 20px 0;
+  }
+  .merge-similarity-num {
+    font-size: 52px;
+  }
+  .merge-diff-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 10px 12px;
+  }
+}
+
+/* Reduced motion (AC-8): the numeral glow and MERGE underline are already
+   static; here we only suppress the skeleton shimmer. */
+@media (prefers-reduced-motion: reduce) {
+  .skel-box::after {
+    animation: none;
+    display: none;
+  }
+}
+

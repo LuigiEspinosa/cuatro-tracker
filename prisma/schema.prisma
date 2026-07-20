@@ -211,5 +211,10 @@ model MergeSuggestion {
   target     MediaItem @relation("MergeTarget", fields: [target_id], references: [id], onDelete: Cascade)
   confidence Float // 0-1 similarity score
   resolved   Boolean   @default(false)
+  // Story 11.4: a dismissed suggestion is one an admin marked "not a duplicate".
+  // Both resolved and dismissed are set on a dismiss so the same pair never
+  // resurfaces; resolved alone (dismissed false) marks an accepted merge.
+  dismissed   Boolean   @default(false)
+  resolved_at DateTime? // stamped when the merge is accepted or the pair dismissed
   created_at DateTime  @default(now())
 }
