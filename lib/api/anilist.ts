@@ -512,6 +512,17 @@ const GET_MEDIA_QUERY = `
   }
 `
 
+// Story 11.5 (OI #3): MAL exports carry MyAnimeList ids, not AniList ids, so
+// the bulk-import job resolves them via `idMal` rather than `id`. No relations
+// fragment: the import normalisers do not build the relations panel.
+const GET_MEDIA_BY_MAL_QUERY = `
+  query GetMediaByMal($idMal: Int!, $type: MediaType!) {
+    Media(idMal: $idMal, type: $type) {
+      ${MEDIA_FIELDS}
+    }
+  }
+`
+
 const GET_RELATIONS_QUERY = `
   query GetRelations($id: Int!) {
     Media(id: $id) {
@@ -561,6 +572,29 @@ export function getMedia(
     // to 404 instead of the 502 upstream_failed path. ECH-8-3-8.
     if (result.Media === null) {
       throw new AnilistNotFoundError(id, format)
+    }
+    return result.Media
+  })
+}
+
+// Story 11.5 (OI #3): resolve a MAL id to an AniList Media for bulk import.
+// Mirrors getMedia: wrapped in withLimit, throws AnilistNotFoundError when the
+// idMal-type tuple does not resolve (Media: null). The returned Media carries
+// AniList's own `id`, which the normalisers store as `anilist_id`, so the
+// import upsert keys on the canonical AniList id, not the MAL id.
+export function getMediaByMalId(
+  malId: number,
+  format: AnilistMediaType,
+): Promise<AnilistMedia> {
+  return withLimit(async () => {
+    const result = await anilistFetch(
+      GET_MEDIA_BY_MAL_QUERY,
+      { idMal: malId, type: format },
+      AnilistGetMediaSchema,
+      `media/mal/${format.toLowerCase()}/${malId}`,
+    )
+    if (result.Media === null) {
+      throw new AnilistNotFoundError(malId, format)
     }
     return result.Media
   })

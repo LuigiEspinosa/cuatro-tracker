@@ -4941,3 +4941,377 @@ body {
   }
 }
 
+/* ============================================================================
+   Story 11.5: /admin/import wizard + SSE status. Bespoke .imp-* chrome mounted
+   inside the .adm-ground scanline substrate (from app/admin/layout.tsx),
+   reusing existing tokens + atoms only (no new token, no design bundle: OI #11,
+   following the 11.3 / 11.4 bespoke precedent).
+   ========================================================================== */
+.imp-page {
+  display: block;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 48px 64px;
+}
+
+/* Skip link jumps past the root-layout MainNav to #imp-main (AC-9). */
+.imp-skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--phosphor-cream);
+  background: var(--ground-base);
+  padding: 8px 12px;
+  z-index: 5;
+}
+.imp-skip:focus {
+  left: 16px;
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 2px;
+}
+
+.imp-eyebrow {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--phosphor-cream-dim);
+  text-transform: uppercase;
+}
+
+.imp-title {
+  margin: 0 0 28px;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--phosphor-cream);
+  text-transform: uppercase;
+}
+
+.imp-wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Step chips */
+.imp-steps {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.imp-step-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--phosphor-cream-ghost);
+  color: var(--phosphor-cream-ghost);
+}
+.imp-step-chip[data-done='true'] {
+  color: var(--phosphor-cream-dim);
+  border-color: var(--phosphor-cream-dim);
+}
+.imp-step-chip[data-active='true'] {
+  color: var(--phosphor-cream);
+  border-color: var(--phosphor-cream);
+}
+.imp-step-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid currentColor;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.imp-step-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.imp-panel {
+  border: 1px solid var(--phosphor-cream-ghost);
+  padding: 24px;
+}
+
+/* Step 1: format radios */
+.imp-formats {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.imp-legend {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--phosphor-cream-dim);
+  text-transform: uppercase;
+  padding: 0 0 8px;
+}
+.imp-format-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--phosphor-cream-ghost);
+  cursor: pointer;
+}
+.imp-format-opt:hover {
+  border-color: var(--phosphor-cream-dim);
+}
+.imp-format-opt:focus-within {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 2px;
+}
+.imp-radio {
+  margin-top: 3px;
+  accent-color: var(--phosphor-cream);
+}
+.imp-format-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.imp-format-label {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--phosphor-cream);
+}
+.imp-format-hint {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--phosphor-cream-dim);
+}
+
+/* Step 2: drop zone */
+.imp-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 24px;
+  border: 2px dashed var(--phosphor-cream-ghost);
+  text-align: center;
+  cursor: pointer;
+}
+.imp-drop:hover {
+  border-color: var(--phosphor-cream-dim);
+}
+.imp-drop:focus-within {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 2px;
+}
+/* Keep the native input reachable by keyboard + focusable but visually
+   collapsed; the drop zone is the visible control. */
+.imp-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.imp-advisory {
+  margin: 12px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--rb-orange);
+}
+.imp-preview-line {
+  margin: 12px 0 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--phosphor-cream);
+}
+
+/* Step 3: review */
+.imp-review {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.imp-review-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--phosphor-cream-ghost);
+}
+.imp-review-row dt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--phosphor-cream-dim);
+  text-transform: uppercase;
+}
+.imp-review-row dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--phosphor-cream);
+}
+.imp-samples {
+  margin: 16px 0 0;
+  padding: 0 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.imp-sample {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--phosphor-cream-dim);
+}
+
+/* Nav band */
+.imp-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.imp-nav .cpb:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 3px;
+}
+
+/* Status page: progress */
+.imp-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px 0;
+}
+.imp-progress-count {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  color: var(--phosphor-cream);
+}
+.imp-streaming {
+  margin: 0;
+  min-height: 20px;
+}
+/* Subtle live pulse on the streaming line; static under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .imp-streaming {
+    animation: imp-streaming-pulse 1.6s ease-in-out infinite;
+  }
+}
+@keyframes imp-streaming-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Status page: summary + CTA */
+.imp-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px 0;
+}
+.imp-summary-line {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--phosphor-cream);
+}
+.imp-summary-note {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--rb-orange);
+}
+.imp-cta,
+.imp-retry {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 12px 20px;
+  border: 2px solid var(--phosphor-cream);
+  color: var(--phosphor-cream);
+  transition:
+    background 100ms linear,
+    color 100ms linear;
+}
+.imp-cta:hover,
+.imp-retry:hover {
+  background: var(--phosphor-cream);
+  color: var(--ground-admin);
+}
+.imp-cta:focus-visible,
+.imp-retry:focus-visible {
+  outline: 2px solid var(--neon-blue);
+  outline-offset: 3px;
+}
+
+/* Status page: error banner */
+.imp-status-error {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--magenta);
+  border-top: 3px solid var(--magenta);
+}
+.imp-error-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--magenta);
+}
+.imp-error-reason {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--phosphor-cream-dim);
+}
+
+@media (max-width: 720px) {
+  .imp-page {
+    padding: 16px 16px 40px;
+  }
+  .imp-steps {
+    flex-direction: column;
+  }
+  .imp-review-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+

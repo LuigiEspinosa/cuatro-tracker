@@ -9,6 +9,7 @@ import {
   STEAM_ACHIEVEMENT_SYNC_QUEUE,
   steamAchievementSyncProcessor,
 } from '@/lib/jobs/steamAchievementSync'
+import { BULK_IMPORT_QUEUE, bulkImportProcessor } from '@/lib/jobs/bulkImport'
 
 // Module-level Queue singletons via the globalThis pattern (mirrors
 // lib/redis.ts and lib/db.ts). Survives dev hot-reload without leaking
@@ -34,15 +35,23 @@ function makeRegistry(): {
   const steamAchievementSync = new Queue(STEAM_ACHIEVEMENT_SYNC_QUEUE, {
     connection: redis,
   })
+  // Story 11.5: enqueued on demand by POST /api/admin/import, not scheduled, so
+  // it registers here (worker.ts binds every registry queue) but is absent from
+  // CRONS below.
+  const bulkImport = new Queue(BULK_IMPORT_QUEUE, {
+    connection: redis,
+  })
 
   return {
     queues: [
       { name: IGDB_TOKEN_REFRESH_QUEUE, queue: igdbTokenRefresh },
       { name: STEAM_ACHIEVEMENT_SYNC_QUEUE, queue: steamAchievementSync },
+      { name: BULK_IMPORT_QUEUE, queue: bulkImport },
     ],
     processors: {
       [IGDB_TOKEN_REFRESH_QUEUE]: igdbTokenRefreshProcessor,
       [STEAM_ACHIEVEMENT_SYNC_QUEUE]: steamAchievementSyncProcessor,
+      [BULK_IMPORT_QUEUE]: bulkImportProcessor,
     },
   }
 }

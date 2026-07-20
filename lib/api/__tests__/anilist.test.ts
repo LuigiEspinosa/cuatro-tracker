@@ -321,6 +321,48 @@ describe('getMedia', () => {
   })
 })
 
+describe('getMediaByMalId', () => {
+  it('resolves a MAL id to the AniList Media via the idMal query (Story 11.5)', async () => {
+    const fetchSpy = vi.fn(
+      (_url: string, _init?: RequestInit) =>
+        new Response(JSON.stringify({ data: { Media: makeMedia() } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+    const { getMediaByMalId } = await import('@/lib/api/anilist')
+    const media = await getMediaByMalId(52991, 'ANIME')
+
+    // Returns AniList's own id, which the normaliser stores as anilist_id.
+    expect(media.id).toBe(170942)
+    const [, init] = fetchSpy.mock.calls[0] ?? []
+    if (!init) throw new Error('fetch was not called with an init')
+    const body = JSON.parse(String(init.body))
+    expect(body.variables).toEqual({ idMal: 52991, type: 'ANIME' })
+    expect(body.query).toContain('idMal: $idMal')
+  })
+
+  it('throws AnilistNotFoundError when the idMal-type tuple does not resolve', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Response(JSON.stringify({ data: { Media: null } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    )
+    const { getMediaByMalId, AnilistNotFoundError } = await import(
+      '@/lib/api/anilist'
+    )
+    await expect(getMediaByMalId(999999, 'MANGA')).rejects.toBeInstanceOf(
+      AnilistNotFoundError,
+    )
+  })
+})
+
 describe('getMediaRelations', () => {
   it('buckets relation edges into sequel / prequel / sideStory / parent / adaptation', async () => {
     const relationNode = (id: number, type: 'ANIME' | 'MANGA' = 'ANIME') => ({
