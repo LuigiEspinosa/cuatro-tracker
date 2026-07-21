@@ -10,6 +10,10 @@ import {
   steamAchievementSyncProcessor,
 } from '@/lib/jobs/steamAchievementSync'
 import { BULK_IMPORT_QUEUE, bulkImportProcessor } from '@/lib/jobs/bulkImport'
+import {
+  SIMILARITY_SCAN_QUEUE,
+  similarityScanProcessor,
+} from '@/lib/jobs/similarityScan'
 
 // Module-level Queue singletons via the globalThis pattern (mirrors
 // lib/redis.ts and lib/db.ts). Survives dev hot-reload without leaking
@@ -41,17 +45,25 @@ function makeRegistry(): {
   const bulkImport = new Queue(BULK_IMPORT_QUEUE, {
     connection: redis,
   })
+  // Story 11.6: enqueued on demand at the tail of a successful bulk import and
+  // after an accepted merge, not scheduled, so it registers here (worker.ts
+  // binds every registry queue) but is absent from CRONS below.
+  const similarityScan = new Queue(SIMILARITY_SCAN_QUEUE, {
+    connection: redis,
+  })
 
   return {
     queues: [
       { name: IGDB_TOKEN_REFRESH_QUEUE, queue: igdbTokenRefresh },
       { name: STEAM_ACHIEVEMENT_SYNC_QUEUE, queue: steamAchievementSync },
       { name: BULK_IMPORT_QUEUE, queue: bulkImport },
+      { name: SIMILARITY_SCAN_QUEUE, queue: similarityScan },
     ],
     processors: {
       [IGDB_TOKEN_REFRESH_QUEUE]: igdbTokenRefreshProcessor,
       [STEAM_ACHIEVEMENT_SYNC_QUEUE]: steamAchievementSyncProcessor,
       [BULK_IMPORT_QUEUE]: bulkImportProcessor,
+      [SIMILARITY_SCAN_QUEUE]: similarityScanProcessor,
     },
   }
 }

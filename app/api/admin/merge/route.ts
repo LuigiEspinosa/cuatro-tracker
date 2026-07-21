@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { logger } from '@/lib/logger'
 import { withRequest } from '@/lib/request-context'
+import { queues } from '@/lib/jobs/queues'
+import { SIMILARITY_SCAN_QUEUE } from '@/lib/jobs/similarityScan'
 
 export const dynamic = 'force-dynamic'
 
@@ -214,6 +216,29 @@ async function handler(req: NextRequest): Promise<NextResponse> {
     logger.warn(
       { event: 'admin.merge.next_lookup_failed', suggestionId, err },
       'merge committed but next-suggestion lookup failed',
+    )
+  }
+
+  // Re-derive duplicates against the surviving item. Deleting the source
+  // cascade-removed every OTHER pending suggestion that referenced it (both FKs
+  // are onDelete: Cascade), so a still-valid C~source pair has to come back as
+  // C~target or it is lost. Best-effort for the same reason as the lookup above:
+  // the merge is already committed, so a queue failure must not report a 500.
+  try {
+    const entry = queues.find((q) => q.name === SIMILARITY_SCAN_QUEUE)
+    if (!entry) throw new Error('similarityScan queue is not registered')
+    // namedRole 'target': targetId is the SURVIVOR. Naming it source would put
+    // it on the side accepting deletes, so re-deriving C~source as C~target
+    // would instead propose destroying the row this merge just preserved.
+    await entry.queue.add(
+      'scan',
+      { mediaItemIds: [targetId], namedRole: 'target' },
+      { jobId: `${SIMILARITY_SCAN_QUEUE}:merge:${suggestionId}` },
+    )
+  } catch (err) {
+    logger.warn(
+      { event: 'admin.merge.scan_enqueue_failed', suggestionId, targetId, err },
+      'merge committed but similarity scan enqueue failed',
     )
   }
 

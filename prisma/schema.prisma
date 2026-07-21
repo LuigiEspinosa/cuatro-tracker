@@ -217,4 +217,14 @@ model MergeSuggestion {
   dismissed   Boolean   @default(false)
   resolved_at DateTime? // stamped when the merge is accepted or the pair dismissed
   created_at DateTime  @default(now())
+
+  // Story 11.6: the DB-level backstop against the scan job writing the same pair
+  // twice. It forbids a duplicate (A, B) but NOT the mirrored (B, A), so the
+  // either-orientation lookup in similarityScanProcessor stays the behavioural
+  // guarantee. Be precise about what this does NOT cover: two concurrent scans
+  // emitting (X, Y) and (Y, X) both pass that lookup and both insert, because
+  // the index sees two different keys. An orientation-independent index on
+  // (LEAST(source_id, target_id), GREATEST(...)) would close it and is logged as
+  // deferred work; today this constraint only catches a same-orientation repeat.
+  @@unique([source_id, target_id])
 }

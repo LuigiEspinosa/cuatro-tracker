@@ -12,6 +12,7 @@ import { getMediaByMalId } from '@/lib/api/anilist'
 import { normaliseAnilistAnime } from '@/lib/normalise/anime'
 import { normaliseAnilistManga } from '@/lib/normalise/manga'
 import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
+import { SIMILARITY_SCAN_QUEUE } from '@/lib/jobs/similarityScan'
 import { ImportFormatSchema, parseImport, type ImportRow } from '@/lib/import/formats'
 import {
   toDispatch,
@@ -64,14 +65,17 @@ function steamLastPlayed(rtime: number | null): Date | null {
   return Number.isNaN(candidate.getTime()) ? null : candidate
 }
 
-type CreateOutcome = 'imported' | 'duplicate'
+// The created MediaItem id rides out of a successful import so the processor can
+// hand the batch to the similarity scan. Episode children are deliberately not
+// collected: they are TV_EPISODE rows, which the scan excludes on both sides.
+type CreateOutcome = { outcome: 'imported'; id: string } | { outcome: 'duplicate' }
 
 async function createNormalised(
   normalised: Prisma.MediaItemCreateInput | NormalisedShowWithEpisodes,
   patch: ImportUserEntryPatch,
-): Promise<void> {
+): Promise<string> {
   if ('episodes' in normalised) {
-    await db.$transaction(
+    return db.$transaction(
       async (tx) => {
         const show = await tx.mediaItem.create({
           data: { ...normalised.show, user_entry: { create: patch } },
@@ -85,14 +89,16 @@ async function createNormalised(
             })),
           })
         }
+        return show.id
       },
       { timeout: 30_000 },
     )
-    return
   }
-  await db.mediaItem.create({
+  const created = await db.mediaItem.create({
     data: { ...normalised, user_entry: { create: patch } },
+    select: { id: true },
   })
+  return created.id
 }
 
 // Ensure a MediaItem that already carries this source id has a UserEntry; the
@@ -133,13 +139,13 @@ async function importRow(row: ImportRow): Promise<CreateOutcome> {
       })
       if (existing) {
         await ensureEntry(existing.id, patch)
-        return 'duplicate'
+        return { outcome: 'duplicate' }
       }
       const playtime =
         row.format === 'STEAM_EXPORT' && row.playtimeForever >= 0
           ? row.playtimeForever
           : null
-      await db.mediaItem.create({
+      const created = await db.mediaItem.create({
         data: {
           type: MediaType.GAME,
           title: rowTitle(row),
@@ -152,8 +158,9 @@ async function importRow(row: ImportRow): Promise<CreateOutcome> {
               : null,
           user_entry: { create: patch },
         },
+        select: { id: true },
       })
-      return 'imported'
+      return { outcome: 'imported', id: created.id }
     }
 
     if (dispatch.source === 'tmdb') {
@@ -163,13 +170,13 @@ async function importRow(row: ImportRow): Promise<CreateOutcome> {
       })
       if (existing) {
         await ensureEntry(existing.id, patch)
-        return 'duplicate'
+        return { outcome: 'duplicate' }
       }
       const dispatcher = getDispatcher('tmdb', dispatch.type)
       if (!dispatcher) throw new Error(`no tmdb dispatcher for ${dispatch.type}`)
       const raw = await dispatcher.fetch(dispatch.sourceId)
-      await createNormalised(dispatcher.normalise(raw), patch)
-      return 'imported'
+      const id = await createNormalised(dispatcher.normalise(raw), patch)
+      return { outcome: 'imported', id }
     }
 
     // anilist-mal: MAL ids have no MediaItem column, so the AniList fetch must
@@ -186,14 +193,14 @@ async function importRow(row: ImportRow): Promise<CreateOutcome> {
     })
     if (existing) {
       await ensureEntry(existing.id, patch)
-      return 'duplicate'
+      return { outcome: 'duplicate' }
     }
     const normalised =
       dispatch.type === MediaType.ANIME
         ? normaliseAnilistAnime(media)
         : normaliseAnilistManga(media)
-    await createNormalised(normalised, patch)
-    return 'imported'
+    const id = await createNormalised(normalised, patch)
+    return { outcome: 'imported', id }
   } catch (err) {
     // A unique-source-id collision means the row already exists (concurrent
     // create or a retry): count it as a duplicate, not a failure.
@@ -201,9 +208,67 @@ async function importRow(row: ImportRow): Promise<CreateOutcome> {
       err instanceof Prisma.PrismaClientKnownRequestError &&
       err.code === 'P2002'
     ) {
-      return 'duplicate'
+      return { outcome: 'duplicate' }
     }
     throw err
+  }
+}
+
+/* Hand the rows this run created to the deferred duplicate scan (Story 11.6).
+ *
+ * * Failure mode: the import has already committed and already published its
+ *   terminal `complete` frame, so a Redis or queue error here must never be
+ *   re-read as an import failure. It is logged at warn and swallowed; the cost
+ *   is that those rows go unscanned until the next import or accepted merge.
+ * * Roads not taken: a BullMQ `onCompleted` listener, which the epic assumed
+ *   exists. worker.ts builds one generic Worker per registry queue with no
+ *   per-queue listeners, so a real hook would mean restructuring the worker
+ *   entrypoint for a single job. The processor tail runs only on success (the
+ *   failure path throws before reaching it), which is the same guarantee.
+ */
+async function enqueueSimilarityScan(
+  mediaItemIds: string[],
+  importJobId: string,
+): Promise<void> {
+  if (mediaItemIds.length === 0) return
+  try {
+    // ! Lazy import, deliberately. lib/jobs/queues.ts imports THIS module for
+    // ! its processor, so a top-level import back into queues would close the
+    // ! cycle and resolve to undefined at worker boot. Inside an async function
+    // ! the import runs long after both modules have finished evaluating.
+    const { queues } = await import('@/lib/jobs/queues')
+    const entry = queues.find((q) => q.name === SIMILARITY_SCAN_QUEUE)
+    if (!entry) throw new Error('similarityScan queue is not registered')
+    // ! Three colon-separated parts, not two. BullMQ rejects any custom job id
+    // ! containing a colon unless it splits into exactly three (Job.validateOptions,
+    // ! kept that way for repeatable-job compatibility), so the obvious
+    // ! `queue:{id}` shape throws and this whole enqueue lands in the catch
+    // ! below, silently. The sibling merge enqueue has the same constraint.
+    await entry.queue.add(
+      'scan',
+      { mediaItemIds, namedRole: 'source' },
+      { jobId: `${SIMILARITY_SCAN_QUEUE}:import:${importJobId}` },
+    )
+    logger.info(
+      {
+        event: 'job.scan.enqueued',
+        queue: BULK_IMPORT_QUEUE,
+        jobId: importJobId,
+        mediaItems: mediaItemIds.length,
+      },
+      'similarity scan enqueued',
+    )
+  } catch (err) {
+    logger.warn(
+      {
+        event: 'job.scan.enqueue_failed',
+        queue: BULK_IMPORT_QUEUE,
+        jobId: importJobId,
+        mediaItems: mediaItemIds.length,
+        err,
+      },
+      'bulk import committed but similarity scan enqueue failed',
+    )
   }
 }
 
@@ -226,13 +291,18 @@ export async function bulkImportProcessor(job: Job): Promise<BulkImportResult> {
       total: rows.length,
     }
 
+    const newMediaItemIds: string[] = []
+
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!
       const currentTitle = rowTitle(row)
       try {
-        const outcome = await importRow(row)
-        if (outcome === 'duplicate') result.duplicates += 1
-        else result.imported += 1
+        const created = await importRow(row)
+        if (created.outcome === 'duplicate') result.duplicates += 1
+        else {
+          result.imported += 1
+          newMediaItemIds.push(created.id)
+        }
       } catch (err) {
         result.failed += 1
         logger.error(
@@ -271,6 +341,9 @@ export async function bulkImportProcessor(job: Job): Promise<BulkImportResult> {
       { event: 'job.import.complete', queue: BULK_IMPORT_QUEUE, jobId, ...result },
       'bulk import complete',
     )
+
+    await enqueueSimilarityScan(newMediaItemIds, jobId)
+
     return result
   } catch (err) {
     const reason = err instanceof Error ? err.message : 'import failed'

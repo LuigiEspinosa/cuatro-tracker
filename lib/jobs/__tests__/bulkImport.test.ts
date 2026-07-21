@@ -36,6 +36,16 @@ const dbMock = vi.hoisted(() => ({
 
 vi.mock('@/lib/db', () => ({ db: dbMock }))
 
+// The processor tail hands the created ids to the similarity scan through a lazy
+// `await import` of the queue registry (Story 11.6). Mocking the registry keeps
+// the suite off the real queue: the unmocked module would build BullMQ Queue
+// singletons and leave jobs behind on the dev Redis.
+const queueAddMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/jobs/queues', () => ({
+  queues: [{ name: 'similarityScan', queue: { add: queueAddMock } }],
+}))
+
 const loggerMock = vi.hoisted(() => ({
   fatal: vi.fn(),
   error: vi.fn(),
@@ -170,7 +180,9 @@ describe('bulkImportProcessor (BullMQ integration, real Redis, mocked db)', () =
     'imports new Steam rows, publishes progress + complete, and deletes the file key',
     async () => {
       dbMock.mediaItem.findUnique.mockResolvedValue(null)
-      dbMock.mediaItem.create.mockResolvedValue({})
+      dbMock.mediaItem.create
+        .mockResolvedValueOnce({ id: 'mi_alpha' })
+        .mockResolvedValueOnce({ id: 'mi_beta' })
 
       const file = steamExport([
         { appid: 900000001, name: 'Alpha', playtime_forever: 1200 },
@@ -222,6 +234,16 @@ describe('bulkImportProcessor (BullMQ integration, real Redis, mocked db)', () =
 
       // The uploaded file is consumed (deleted), not left in Redis.
       expect(await redis.get(fileKey)).toBeNull()
+
+      // The created ids are handed to the deferred duplicate scan, keyed on the
+      // import job id so a BullMQ retry cannot enqueue a second scan.
+      // Three colon parts: BullMQ rejects a two-part custom id outright, which
+      // the real-Queue assertion in similarityScan.test.ts pins.
+      expect(queueAddMock).toHaveBeenCalledWith(
+        'scan',
+        { mediaItemIds: ['mi_alpha', 'mi_beta'], namedRole: 'source' },
+        { jobId: 'similarityScan:import:test-import-new' },
+      )
     },
     25_000,
   )
@@ -242,6 +264,8 @@ describe('bulkImportProcessor (BullMQ integration, real Redis, mocked db)', () =
       // Existing MediaItem + existing UserEntry: no create on either.
       expect(dbMock.mediaItem.create).not.toHaveBeenCalled()
       expect(dbMock.userEntry.create).not.toHaveBeenCalled()
+      // A run that created nothing has nothing to scan.
+      expect(queueAddMock).not.toHaveBeenCalled()
     },
     25_000,
   )

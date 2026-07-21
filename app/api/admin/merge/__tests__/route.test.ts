@@ -41,6 +41,15 @@ const dbMock = vi.hoisted(() => ({
 
 vi.mock('@/lib/db', () => ({ db: dbMock }))
 
+// The route imports the queue registry to enqueue the post-merge rescan (Story
+// 11.6). Mocking it keeps the suite off real Redis: building the registry for
+// real would open BullMQ connections at module load.
+const queueAddMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/jobs/queues', () => ({
+  queues: [{ name: 'similarityScan', queue: { add: queueAddMock } }],
+}))
+
 const validEnv: Record<string, string> = {
   NEXTAUTH_SECRET: 'a'.repeat(32),
   NEXTAUTH_URL: 'http://localhost:3000',
@@ -297,6 +306,48 @@ describe('POST /api/admin/merge', () => {
       expect(txMock.mediaItem.delete).toHaveBeenCalledWith({
         where: { id: 'src_1' },
       })
+    })
+  })
+
+  describe('post-merge similarity scan', () => {
+    it('enqueues a rescan for the surviving target after the merge commits', async () => {
+      dbMock.mergeSuggestion.findUnique.mockResolvedValue(newSuggestion())
+      dbMock.mergeSuggestion.findFirst.mockResolvedValue(null)
+      txMock.userEntry.findUnique.mockResolvedValueOnce(null)
+
+      const { POST } = await import('@/app/api/admin/merge/route')
+      const res = await POST(postRequest(validBody))
+
+      expect(res.status).toBe(200)
+      // namedRole 'target': tgt_1 is the survivor, so it must land on the side
+      // an accepted suggestion KEEPS. Naming it source would make the rescan
+      // propose deleting the row this merge just preserved.
+      expect(queueAddMock).toHaveBeenCalledWith(
+        'scan',
+        { mediaItemIds: ['tgt_1'], namedRole: 'target' },
+        { jobId: 'similarityScan:merge:sug_1' },
+      )
+    })
+
+    it('still returns 200 when the enqueue throws', async () => {
+      dbMock.mergeSuggestion.findUnique.mockResolvedValue(newSuggestion())
+      dbMock.mergeSuggestion.findFirst.mockResolvedValue(null)
+      txMock.userEntry.findUnique.mockResolvedValueOnce(null)
+      queueAddMock.mockRejectedValue(new Error('redis down'))
+
+      const { POST } = await import('@/app/api/admin/merge/route')
+      const res = await POST(postRequest(validBody))
+
+      // The merge already committed, so a queue failure must not downgrade it.
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ resolvedId: 'sug_1', next: null })
+      expect(txMock.mediaItem.delete).toHaveBeenCalledWith({
+        where: { id: 'src_1' },
+      })
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'admin.merge.scan_enqueue_failed' }),
+        expect.any(String),
+      )
     })
   })
 })
