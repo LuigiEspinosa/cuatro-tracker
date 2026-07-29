@@ -1,5 +1,11 @@
 services:
   caddy:
+    # * On a shared box (e.g. the Hostinger VPS where cs-tracker's Caddy already
+    # * owns 80/443) this service must NOT start, or it collides on those ports.
+    # * The "edge" profile keeps it OUT of the default `docker compose up`; opt
+    # * back in with `docker compose --profile edge up -d` on a dedicated box
+    # * where this project owns the TLS edge.
+    profiles: ["edge"]
     build:
       context: .
       dockerfile: docker/Dockerfile.caddy
