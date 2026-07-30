@@ -57,7 +57,7 @@ const parsed = EnvSchema.safeParse(process.env)
 // ! does not need real secrets present. Runtime never sets it, so the server
 // ! still validates on first import (a wrong/missing NEXTAUTH_SECRET must fail
 // ! loudly, not silently). See docker/Dockerfile and docs/operations.md.
-if (!parsed.success && !process.env.SKIP_ENV_VALIDATION) {
+if (!parsed.success && process.env.SKIP_ENV_VALIDATION !== '1') {
   const summary = parsed.error.issues
     .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
     .join('\n')

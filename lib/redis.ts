@@ -8,7 +8,11 @@ function makeClient(): Redis {
   const client = new Redis(env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: true,
-    lazyConnect: env.NODE_ENV === 'test',
+    // ! Skip the eager connect during `next build`: with SKIP_ENV_VALIDATION the
+    // ! env fallback leaves REDIS_URL undefined, so an eager client would thrash
+    // ! against localhost. Runtime never sets the flag, so this is build-only.
+    lazyConnect:
+      env.NODE_ENV === 'test' || process.env.SKIP_ENV_VALIDATION === '1',
   })
 
   client.on('connect', () =>
