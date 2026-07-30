@@ -20,7 +20,10 @@ const redactPaths = [
 
 function baseOptions(): LoggerOptions {
   return {
-    level: env.LOG_LEVEL,
+    // ?? 'info' guards the build: with SKIP_ENV_VALIDATION the Zod default is
+    // not applied, so env.LOG_LEVEL is undefined and pino would throw. At
+    // runtime the schema default ('info') makes this a no-op.
+    level: env.LOG_LEVEL ?? 'info',
     redact: { paths: redactPaths, censor: '[REDACTED]' },
     mixin() {
       const requestId = getRequestId()
