@@ -97,9 +97,8 @@ describe('POST /api/admin/import', () => {
   })
 
   it('returns 413 when the file exceeds MAX_IMPORT_BYTES', async () => {
-    const { POST, MAX_IMPORT_BYTES } = await import(
-      '@/app/api/admin/import/route'
-    )
+    const { POST } = await import('@/app/api/admin/import/route')
+    const { MAX_IMPORT_BYTES } = await import('@/lib/import/constants')
     const oversized = new Uint8Array(MAX_IMPORT_BYTES + 1)
     const form = new FormData()
     form.set('format', 'STEAM_EXPORT')

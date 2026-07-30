@@ -13,11 +13,6 @@ import { MAX_IMPORT_BYTES } from '@/lib/import/constants'
 
 export const dynamic = 'force-dynamic'
 
-// 10 MB cap on the uploaded export, shared with the wizard's client-side guard
-// (lib/import/constants.ts). The cap stops an oversized body from being buffered
-// into memory and persisted to Redis.
-export { MAX_IMPORT_BYTES }
-
 // The raw file lives in Redis only until the job consumes it (the processor
 // deletes the key). The TTL is a backstop so an enqueue that never runs does
 // not leak the bytes forever.
