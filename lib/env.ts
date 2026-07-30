@@ -53,7 +53,11 @@ const EnvSchema = z.object({
 
 const parsed = EnvSchema.safeParse(process.env)
 
-if (!parsed.success) {
+// ! SKIP_ENV_VALIDATION is set ONLY in the Docker builder stage so `next build`
+// ! does not need real secrets present. Runtime never sets it, so the server
+// ! still validates on first import (a wrong/missing NEXTAUTH_SECRET must fail
+// ! loudly, not silently). See docker/Dockerfile and docs/operations.md.
+if (!parsed.success && !process.env.SKIP_ENV_VALIDATION) {
   const summary = parsed.error.issues
     .map((i) => `  - ${i.path.join('.') || '(root)'}: ${i.message}`)
     .join('\n')
@@ -62,5 +66,7 @@ if (!parsed.success) {
   throw parsed.error
 }
 
-export const env = parsed.data
+export const env: Env = parsed.success
+  ? parsed.data
+  : (process.env as unknown as Env)
 export type Env = z.infer<typeof EnvSchema>

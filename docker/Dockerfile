@@ -14,6 +14,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# Build without real secrets: env validation (lib/env.ts) is skipped at build
+# time and runs at runtime instead, where compose injects the real values.
+ENV SKIP_ENV_VALIDATION=1
 RUN pnpm prisma generate && pnpm build
 
 # ---- runner ----

@@ -1,0 +1,26 @@
+# Build artifacts and dependencies (reinstalled/rebuilt inside the image).
+node_modules
+.next
+.turbo
+
+# Secrets: never copy .env into the image layer. Real values are injected at
+# runtime by compose; the build runs with SKIP_ENV_VALIDATION=1 (ops-1).
+.env
+.env.*
+!.env.example
+
+# Version control and CI.
+.git
+.gitignore
+.github
+
+# Compose/deploy files are host-side, not needed inside the image.
+docker-compose*.yml
+
+# Local tooling noise and test output.
+.pnpm-store
+coverage
+playwright-report
+test-results
+*.log
+.DS_Store
