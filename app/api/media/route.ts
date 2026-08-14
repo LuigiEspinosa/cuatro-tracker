@@ -12,6 +12,10 @@ import {
   type NormalisedShowWithEpisodes,
 } from '@/lib/search/media-dispatcher'
 import { normaliseTitle } from '@/lib/search/federation'
+import {
+  isReleaseDateUnknown,
+  RELEASE_DATE_SENTINEL,
+} from '@/lib/normalise/release-date'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,7 +65,18 @@ function findCrossSourceCandidates(
   const include = { user_entry: true } as const
   const yearStart = new Date(Date.UTC(releaseYear, 0, 1))
   const yearEnd = new Date(Date.UTC(releaseYear + 1, 0, 1))
-  const release_date = { gte: yearStart, lt: yearEnd }
+  // * Failure mode: Date.UTC(1970, 0, 1) IS the sentinel instant, and `gte` is
+  // * inclusive, so the year-1970 window would otherwise return every undated
+  // * row in the library. A genuine 1970 release would then merge onto an
+  // * unrelated dateless item, and the take cap below would be spent on
+  // * sentinel rows. Excluding the sentinel is what makes the caller's
+  // * isReleaseDateUnknown guard safe for the one year the two overlap. Same
+  // * clause as lib/db/library.ts:70.
+  const release_date = {
+    gte: yearStart,
+    lt: yearEnd,
+    not: RELEASE_DATE_SENTINEL,
+  }
   // ECH-8-3-6: filter by type in the WHERE clause so the 50-row take cap
   // is spent only on rows that are eligible candidates. Without this filter,
   // saturated years (e.g. 1989 with hundreds of TV_EPISODE rows) can starve
@@ -281,16 +296,19 @@ async function persistSingleMediaItem(
   type: MediaType,
 ): Promise<NextResponse> {
   try {
-    const releaseYear = normalised.release_date instanceof Date
-      ? normalised.release_date.getUTCFullYear()
-      : new Date(normalised.release_date as string).getUTCFullYear()
+    const releaseDate = new Date(normalised.release_date)
     const normalisedKey = normaliseTitle(normalised.title)
-    // Skip cross-merge when the normaliser fell back to the 1970 sentinel.
-    // Every undated item shares that year bucket and would falsely collide.
-    const candidates =
-      releaseYear === 1970
-        ? []
-        : await findCrossSourceCandidates(source, releaseYear, type)
+    // Skip cross-merge when the normaliser fell back to the exact sentinel
+    // instant. Every undated item shares it and would falsely collide. The
+    // helper also catches an Invalid Date, which would otherwise query the
+    // Date.UTC(NaN, 0, 1) window.
+    const candidates = isReleaseDateUnknown(releaseDate)
+      ? []
+      : await findCrossSourceCandidates(
+          source,
+          releaseDate.getUTCFullYear(),
+          type,
+        )
     // Filter to the same MediaType. Without this, a 2007 TMDB movie titled
     // "Sword of the Stranger" would collapse with a 2007 AniList anime of the
     // same name, patching anilist_id onto the movie row and silently changing
@@ -342,16 +360,19 @@ async function persistShowWithEpisodes(
   type: MediaType,
 ): Promise<NextResponse> {
   try {
-    const releaseYear = normalised.show.release_date instanceof Date
-      ? normalised.show.release_date.getUTCFullYear()
-      : new Date(normalised.show.release_date as string).getUTCFullYear()
+    const releaseDate = new Date(normalised.show.release_date)
     const normalisedKey = normaliseTitle(normalised.show.title)
-    // Skip cross-merge when the normaliser fell back to the 1970 sentinel.
-    // Every undated item shares that year bucket and would falsely collide.
-    const candidates =
-      releaseYear === 1970
-        ? []
-        : await findCrossSourceCandidates(source, releaseYear, type)
+    // Skip cross-merge when the normaliser fell back to the exact sentinel
+    // instant. Every undated item shares it and would falsely collide. The
+    // helper also catches an Invalid Date, which would otherwise query the
+    // Date.UTC(NaN, 0, 1) window.
+    const candidates = isReleaseDateUnknown(releaseDate)
+      ? []
+      : await findCrossSourceCandidates(
+          source,
+          releaseDate.getUTCFullYear(),
+          type,
+        )
     // Filter to TV_SHOW only: a 1984 movie and a 1984 TV show with the same
     // normalised title (e.g. "Dune") must not collapse.
     const crossMatch = candidates.find(

@@ -233,6 +233,50 @@ describe('lib/normalise/game', () => {
       expect(date.toISOString()).toBe('1970-01-01T00:00:00.000Z')
     })
 
+    it('collapses a year-only y: 1970 onto the sentinel (the two are one instant)', async () => {
+      // The counterpart of the federation assertion: search reports no year
+      // for this input precisely because the persisted date is the sentinel.
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(
+        makeIgdbGame({
+          first_release_date: null,
+          release_dates: [{ id: 1, y: 1970 }],
+        }),
+      )
+      const date = result.release_date as Date
+      expect(date.toISOString()).toBe('1970-01-01T00:00:00.000Z')
+    })
+
+    it('keeps a genuine 1970 first_release_date that is not the sentinel instant', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(
+        makeIgdbGame({ first_release_date: 14256000 }),
+      )
+      const date = result.release_date as Date
+      expect(date.toISOString()).toBe('1970-06-15T00:00:00.000Z')
+    })
+
+    it('keeps a negative first_release_date (genuine pre-1970 catalogue entry)', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(
+        makeIgdbGame({ first_release_date: -31536000 }),
+      )
+      const date = result.release_date as Date
+      expect(date.toISOString()).toBe('1969-01-01T00:00:00.000Z')
+    })
+
+    it('falls through to the sentinel when every release_dates[].y exceeds the Date.UTC ceiling', async () => {
+      const { normaliseIgdbGame } = await import('@/lib/normalise/game')
+      const result = normaliseIgdbGame(
+        makeIgdbGame({
+          first_release_date: null,
+          release_dates: [{ id: 1, y: 1_000_000_000 }],
+        }),
+      )
+      const date = result.release_date as Date
+      expect(date.toISOString()).toBe('1970-01-01T00:00:00.000Z')
+    })
+
     it('falls through to 1970 sentinel when every release_dates[].y is 0 or null', async () => {
       const { normaliseIgdbGame } = await import('@/lib/normalise/game')
       const result = normaliseIgdbGame(

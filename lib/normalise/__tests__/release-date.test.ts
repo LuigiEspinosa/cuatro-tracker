@@ -3,6 +3,7 @@ import {
   RELEASE_DATE_SENTINEL,
   isReleaseDateUnknown,
   deriveDisplayYear,
+  deriveDisplayYearFromSource,
   deriveDisplayDate,
   parseReleaseDate,
 } from '@/lib/normalise/release-date'
@@ -47,6 +48,50 @@ describe('deriveDisplayYear', () => {
 
   it('returns the UTC year for an ordinary date', () => {
     expect(deriveDisplayYear(new Date('2020-09-17T00:00:00Z'))).toBe(2020)
+  })
+})
+
+describe('deriveDisplayYearFromSource', () => {
+  it('keeps the year of a genuine 1970 source date (regression: the year === 1970 heuristic)', () => {
+    expect(deriveDisplayYearFromSource('1970-06-15')).toBe(1970)
+  })
+
+  it('returns null for an empty string and nullish input', () => {
+    expect(deriveDisplayYearFromSource('')).toBeNull()
+    expect(deriveDisplayYearFromSource(null)).toBeNull()
+    expect(deriveDisplayYearFromSource(undefined)).toBeNull()
+  })
+
+  it('returns null for the exact sentinel instant', () => {
+    expect(deriveDisplayYearFromSource('1970-01-01')).toBeNull()
+  })
+
+  it('returns the year for a full date and a year-only string', () => {
+    expect(deriveDisplayYearFromSource('2020-09-17')).toBe(2020)
+    expect(deriveDisplayYearFromSource('2020')).toBe(2020)
+  })
+
+  it('returns null for a malformed date instead of the 0 parseInt produced', () => {
+    // The retired heuristic read parseInt('0000') as a finite year !== 1970 and
+    // rendered `MOVIE 0`; routing through parseReleaseDate yields the sentinel.
+    // Only for shapes Date() rejects, though: see the next case.
+    expect(deriveDisplayYearFromSource('0000-00-00')).toBeNull()
+  })
+
+  it('still returns 0 for a calendar-valid year-zero date (documented residue)', () => {
+    // '0000-01-01' parses to a valid Date, so the sentinel rule never fires and
+    // the year 0 survives to the call sites, whose guard is `year !== null`.
+    // Unreachable from TMDB, which emits a real date or an empty string.
+    // Closing it means a `year > 0` clamp, a behaviour change beyond the story
+    // that introduced this helper. Pinned so the residue stays visible.
+    expect(deriveDisplayYearFromSource('0000-01-01')).toBe(0)
+  })
+
+  it('returns null for shapes the retired heuristic still read a year out of', () => {
+    // Undeclared delta: parseInt('2020-13-45'.slice(0, 4)) was 2020. Both of
+    // these now fall through to the sentinel and drop the year.
+    expect(deriveDisplayYearFromSource('2020-13-45')).toBeNull()
+    expect(deriveDisplayYearFromSource('2020-09')).toBeNull()
   })
 })
 

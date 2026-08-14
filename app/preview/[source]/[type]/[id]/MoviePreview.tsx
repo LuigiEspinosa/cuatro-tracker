@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { MediaType } from '@prisma/client'
 import { getMovie, getWatchProviders, getImageUrl } from '@/lib/api/tmdb'
 import { env } from '@/lib/env'
+import { deriveDisplayYearFromSource } from '@/lib/normalise/release-date'
 import { DetailHero } from '@/components/organisms/DetailHero'
 import { CastList } from '@/components/organisms/CastList'
 import { StreamingBadges } from '@/components/organisms/StreamingBadges'
@@ -16,12 +17,6 @@ const CREW_JOBS_KEEP = new Set([
   'Producer',
   'Novel',
 ])
-
-function deriveYear(releaseDate: string): number | null {
-  const year = Number.parseInt(releaseDate.slice(0, 4), 10)
-  if (!Number.isFinite(year) || year === 1970) return null
-  return year
-}
 
 export async function MoviePreview({ id }: { id: number }) {
   const [movieDetail, providers] = await Promise.all([
@@ -43,7 +38,7 @@ export async function MoviePreview({ id }: { id: number }) {
     }))
   const director =
     movieDetail.credits.crew.find((c) => c.job === 'Director')?.name ?? null
-  const year = deriveYear(movieDetail.release_date)
+  const year = deriveDisplayYearFromSource(movieDetail.release_date)
 
   const metadata: MetadataItem[] = []
   if (movieDetail.runtime != null && movieDetail.runtime > 0) {

@@ -8,13 +8,8 @@ import { SectionBand } from '@/components/organisms/SectionBand/SectionBand'
 import type { MetadataItem } from '@/components/molecules/MetadataRow'
 import type { TmdbCountryProviders } from '@/lib/api/tmdb'
 import { env } from '@/lib/env'
+import { deriveDisplayYearFromSource } from '@/lib/normalise/release-date'
 import { AddToLibraryButton } from './AddToLibraryButton'
-
-function deriveYear(firstAirDate: string): number | null {
-  const year = Number.parseInt(firstAirDate.slice(0, 4), 10)
-  if (!Number.isFinite(year) || year === 1970) return null
-  return year
-}
 
 const EMPTY_PROVIDERS: TmdbCountryProviders = {
   link: '',
@@ -32,7 +27,7 @@ export async function TvPreview({ id }: { id: number }) {
     profilePath: c.profile_path,
   }))
 
-  const year = deriveYear(tv.first_air_date)
+  const year = deriveDisplayYearFromSource(tv.first_air_date)
   const totalSeasons = tv.number_of_seasons ?? null
   const totalEpisodes = tv.number_of_episodes ?? null
 

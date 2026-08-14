@@ -3,6 +3,7 @@ import { findUserEntryByMediaItemId } from '@/lib/db/library'
 import { getMovie, getWatchProviders, getImageUrl } from '@/lib/api/tmdb'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
+import { deriveDisplayYearFromSource } from '@/lib/normalise/release-date'
 import { BackToLibraryLink } from '@/components/molecules/BackToLibraryLink'
 import { DetailHero } from '@/components/organisms/DetailHero'
 import { CastList } from '@/components/organisms/CastList'
@@ -21,12 +22,6 @@ const CREW_JOBS_KEEP = new Set([
 ])
 
 type PageParams = Promise<{ id: string }>
-
-function deriveYear(releaseDate: string): number | null {
-  const year = Number.parseInt(releaseDate.slice(0, 4), 10)
-  if (!Number.isFinite(year) || year === 1970) return null
-  return year
-}
 
 export async function generateMetadata({
   params,
@@ -84,7 +79,7 @@ export default async function MovieDetailPage({
 
   const director =
     movieDetail.credits.crew.find((c) => c.job === 'Director')?.name ?? null
-  const year = deriveYear(movieDetail.release_date)
+  const year = deriveDisplayYearFromSource(movieDetail.release_date)
 
   const metadata: MetadataItem[] = []
   if (movieDetail.runtime != null && movieDetail.runtime > 0) {

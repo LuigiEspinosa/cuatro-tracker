@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { MediaType, Prisma, WatchStatus } from '@prisma/client'
+import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
 
 const loggerMock = vi.hoisted(() => ({
   fatal: vi.fn(),
@@ -769,6 +770,93 @@ describe('POST /api/media', () => {
 
       expect(res.status).toBe(201)
       expect(dbMock.mediaItem.findMany).not.toHaveBeenCalled()
+    })
+
+    it('still looks for cross-source candidates for a genuine 1970 release date', async () => {
+      // The retired `releaseYear === 1970` guard swallowed the whole year
+      // bucket; only the exact sentinel instant means "unknown". The `not`
+      // clause is load-bearing and asserted here: the gte bound of this window
+      // IS the sentinel instant, so without it the lookup would return every
+      // undated row in the library.
+      tmdbMock.getMovie.mockResolvedValue({
+        ...validTmdbMovie,
+        release_date: '1970-06-15',
+      })
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      dbMock.mediaItem.findMany.mockResolvedValue([])
+      dbMock.mediaItem.create.mockResolvedValue(
+        newMediaItem({
+          release_date: new Date('1970-06-15T00:00:00Z'),
+          user_entry: newUserEntry(),
+        }),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({ source: 'tmdb', sourceId: 550, type: MediaType.MOVIE }),
+      )
+
+      expect(res.status).toBe(201)
+      expect(dbMock.mediaItem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            release_date: {
+              gte: new Date('1970-01-01T00:00:00Z'),
+              lt: new Date('1971-01-01T00:00:00Z'),
+              not: RELEASE_DATE_SENTINEL,
+            },
+          }),
+        }),
+      )
+    })
+
+    it('skips cross-merge when the normalised release_date is an Invalid Date', async () => {
+      // partialDateToDate does not range-guard the year, so an out-of-range
+      // AniList startDate yields NaN. The old year check let NaN through and
+      // queried Date.UTC(NaN, 0, 1) as the candidate window.
+      // ! Premise: this fixture only produces NaN while partialDateToDate stays
+      // ! unguarded (tracked in deferred-work.md). Guard it and this fixture
+      // ! yields the sentinel instead, the assertion below still passes, and
+      // ! the NaN branch silently stops being covered. The release_date
+      // ! assertion after the call is what makes that regression visible.
+      // ! Note the 201 here is an artefact of the mocked create: a real Prisma
+      // ! write rejects an Invalid Date with a non-Known validation error.
+      anilistMock.getMedia.mockResolvedValue({
+        id: 170942,
+        type: 'ANIME',
+        title: {
+          romaji: 'Sousou no Frieren',
+          english: 'Frieren',
+          native: '葬送のフリーレン',
+          userPreferred: 'Sousou no Frieren',
+        },
+        startDate: { year: 999999, month: null, day: null },
+        coverImage: { large: 'https://s4.anilist.co/x.jpg' },
+        genres: ['Adventure'],
+        episodes: 28,
+        format: 'TV',
+      })
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      dbMock.mediaItem.create.mockResolvedValue(
+        newMediaItem({
+          type: MediaType.ANIME,
+          user_entry: newUserEntry(),
+        }),
+      )
+      const { POST } = await import('@/app/api/media/route')
+
+      const res = await POST(
+        postRequest({
+          source: 'anilist',
+          sourceId: 170942,
+          type: MediaType.ANIME,
+        }),
+      )
+
+      expect(res.status).toBe(201)
+      expect(dbMock.mediaItem.findMany).not.toHaveBeenCalled()
+      const created = dbMock.mediaItem.create.mock.calls[0]?.[0]
+      expect(Number.isNaN(created.data.release_date.getTime())).toBe(true)
     })
 
     it('returns 422 when the normaliser throws ZodError (upstream payload shape drift)', async () => {

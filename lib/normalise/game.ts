@@ -42,7 +42,12 @@ function pickPublisherName(
 // (two-digit-year rule) and IGDB uses y: 0 as an "unknown year" sentinel.
 // y <= 275760 because JS Date.UTC overflows beyond that range; a far-future
 // IGDB placeholder would otherwise yield an Invalid Date and violate NFR13.
-function computeReleaseDate(source: IgdbGame): Date {
+// * Long-term cost: lib/search/federation.ts derives the search result's
+// * release_year from this same function, so an IGDB date-shape change is one
+// * edit but also one blast radius: a regression hits search and library
+// * together rather than one at a time. That is the trade accepted when the
+// * second copy in federation.ts drifted on the y <= 275760 clause alone.
+export function computeIgdbReleaseDate(source: IgdbGame): Date {
   if (
     typeof source.first_release_date === 'number' &&
     Number.isFinite(source.first_release_date) &&
@@ -71,7 +76,7 @@ function computeReleaseDate(source: IgdbGame): Date {
 // possible on the wire; both collapse to null so downstream sorting / display
 // can rely on the simple null check. The post-construction NaN check guards
 // against pathologically large rtime values that would overflow JS Date range
-// (mirrors the same guard in computeReleaseDate).
+// (mirrors the same guard in computeIgdbReleaseDate).
 function computeLastPlayed(rtime: number | null | undefined): Date | null {
   if (rtime === null || rtime === undefined) return null
   if (!Number.isFinite(rtime) || rtime <= 0) return null
@@ -97,7 +102,7 @@ export function normaliseIgdbGame(
   const base: Prisma.MediaItemCreateInput = {
     type: MediaType.GAME,
     title: source.name,
-    release_date: computeReleaseDate(source),
+    release_date: computeIgdbReleaseDate(source),
     overview: source.summary ?? null,
     poster_path: source.cover?.image_id?.trim() || null,
     screenshots:

@@ -26,6 +26,25 @@ export function deriveDisplayDate(date: Date | null | undefined): string | null 
   return date.toISOString()
 }
 
+// Display year for a raw source date string (a live TMDB `release_date` /
+// `first_air_date`, which may be empty); null when the date is unknown.
+// * Failure mode: the retired heuristic (parseInt over the leading four
+// * characters, compared against the year 1970) dropped the year of every
+// * genuine 1970 release and read a malformed '0000-00-00' as the finite year
+// * 0. Routing the string through parseReleaseDate first puts source strings
+// * under the same exact epoch-ms rule the module header states.
+// * Long-term cost: the sentinel rule only fires on strings Date() rejects, so
+// * a calendar-valid '0000-01-01' still yields the year 0, and conversely
+// * '2020-13-45' or a partial '2020-09' now yield null where the old heuristic
+// * read 2020. Both are unreachable from TMDB detail endpoints, which emit a
+// * real date or an empty string; both are pinned in the test suite.
+export function deriveDisplayYearFromSource(
+  raw: string | null | undefined,
+): number | null {
+  if (!raw) return null
+  return deriveDisplayYear(parseReleaseDate(raw))
+}
+
 export function parseReleaseDate(raw: string): Date {
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     const parsed = new Date(raw)

@@ -7,6 +7,8 @@ import {
 import { searchGames, type IgdbGame } from '@/lib/api/igdb'
 import { logger } from '@/lib/logger'
 import { preferredAnilistTitle } from '@/lib/normalise/anilist-title'
+import { computeIgdbReleaseDate } from '@/lib/normalise/game'
+import { deriveDisplayYear } from '@/lib/normalise/release-date'
 
 export type SearchType = 'movie' | 'tv' | 'anime' | 'manga' | 'game'
 
@@ -184,29 +186,20 @@ const anilistAdapter: AdapterCapability = {
 // the unified result shape mirrors that. UI consumers resolve full CDN URLs
 // at render time via lib/api/igdb-images.ts. The `|| null` coerces empty
 // image_id strings (the same pattern as lib/normalise/game.ts:95).
-function computeIgdbYear(raw: IgdbGame): number | undefined {
-  if (
-    typeof raw.first_release_date === 'number' &&
-    Number.isFinite(raw.first_release_date) &&
-    raw.first_release_date !== 0
-  ) {
-    const candidate = new Date(raw.first_release_date * 1000)
-    if (!Number.isNaN(candidate.getTime())) return candidate.getUTCFullYear()
-  }
-  const validYears = raw.release_dates
-    ?.map((r) => r.y)
-    .filter(
-      (y): y is number => typeof y === 'number' && Number.isFinite(y) && y > 0,
-    )
-  if (validYears && validYears.length > 0) return Math.min(...validYears)
-  return undefined
-}
-
+// The year comes from the normaliser's own extractor, so the year shown in
+// search is the year of the release_date the row would be persisted with. A
+// game with no usable date yields release_year: undefined precisely because
+// its release_date would be the sentinel: one contract, two representations.
+// * Roads not taken: a second local extractor kept in sync by hand. The pair
+// * had already drifted on the Date.UTC range guard, which is what a copy
+// * always eventually does.
 function adaptIgdbResult(raw: IgdbGame): UnifiedSearchResult {
   return {
     type: 'game',
     title: raw.name,
-    release_year: computeIgdbYear(raw),
+    // ?? undefined: deriveDisplayYear returns number | null, and release_year
+    // is number | undefined and participates in the federation dedup key.
+    release_year: deriveDisplayYear(computeIgdbReleaseDate(raw)) ?? undefined,
     poster_path: raw.cover?.image_id || null,
     overview: raw.summary ?? null,
     primary_source: 'igdb',

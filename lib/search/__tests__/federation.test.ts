@@ -542,6 +542,68 @@ describe('lib/search/federation: igdbAdapter (Story 9.4)', () => {
     expect(results[0]?.release_year).toBeUndefined()
   })
 
+  it('release_year is undefined when every release_dates[].y exceeds the Date.UTC ceiling', async () => {
+    // The search path and the persist path now share one extractor, so a
+    // far-future IGDB placeholder can no longer render as a raw number here
+    // while the same game shows no year in the library.
+    igdbMock.searchGames.mockResolvedValue([
+      igdbGame(75, {
+        first_release_date: null,
+        release_dates: [{ id: 1, y: 1_000_000_000 }],
+      }),
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    const results = await igdb.search('q', 'game')
+
+    expect(results[0]?.release_year).toBeUndefined()
+  })
+
+  it('release_year is undefined for a year-only y: 1970, matching what the library shows', async () => {
+    // Date.UTC(1970, 0, 1) IS the sentinel instant, so a year-only 1970 is
+    // indistinguishable from "no date" under the project-wide contract. The
+    // retired computeIgdbYear returned the raw 1970 here while the persist
+    // path already fell back to the sentinel; unifying the extractor trades
+    // that drift for consistency, and this pins the direction of the trade.
+    igdbMock.searchGames.mockResolvedValue([
+      igdbGame(77, {
+        first_release_date: null,
+        release_dates: [{ id: 1, y: 1970 }],
+      }),
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    const results = await igdb.search('q', 'game')
+
+    expect(results[0]?.release_year).toBeUndefined()
+  })
+
+  it('keeps the year of a genuine 1970 first_release_date that is not the sentinel instant', async () => {
+    igdbMock.searchGames.mockResolvedValue([
+      igdbGame(78, { first_release_date: 14256000 }), // 1970-06-15
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    const results = await igdb.search('q', 'game')
+
+    expect(results[0]?.release_year).toBe(1970)
+  })
+
+  it('keeps the year of a negative first_release_date (genuine pre-1970 catalogue entry)', async () => {
+    igdbMock.searchGames.mockResolvedValue([
+      igdbGame(76, { first_release_date: -31536000 }), // 1969-01-01
+    ])
+    const { ADAPTERS } = await import('@/lib/search/federation')
+    const igdb = ADAPTERS.find((a) => a.source === 'igdb')!
+
+    const results = await igdb.search('q', 'game')
+
+    expect(results[0]?.release_year).toBe(1969)
+  })
+
   it('poster_path is null when cover is missing or image_id is empty', async () => {
     igdbMock.searchGames.mockResolvedValue([
       igdbGame(80, { cover: null }),
