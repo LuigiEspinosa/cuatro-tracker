@@ -82,8 +82,18 @@ test.describe('/admin/merge seeded flow (Story 11.4 AC-10)', () => {
     await expect(page.getByRole('button', { name: '> MERGE' })).toBeVisible({
       timeout: 10_000,
     })
-    await expect(page.getByText('E2E MERGE DUP 0001')).toBeVisible()
-    await expect(page.getByText('E2E MERGE CANON 0001')).toBeVisible()
+    // ! Scoped to the pane headings, not bare text. Each title renders TWICE on
+    // ! this page: once as the pane's h2, and again inside the Title diff row,
+    // ! which splits into SOURCE and TARGET spans precisely because the two
+    // ! titles differ. A bare getByText matches both and trips Playwright's
+    // ! strict mode, which reads as a failed assertion rather than an ambiguous
+    // ! one.
+    await expect(
+      page.getByRole('heading', { name: 'E2E MERGE DUP 0001' }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'E2E MERGE CANON 0001' }),
+    ).toBeVisible()
     await page.getByRole('button', { name: '> MERGE' }).click()
 
     // The source MediaItem is deleted and the target's UserEntry survives.
