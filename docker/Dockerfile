@@ -55,6 +55,10 @@ COPY package.json pnpm-lock.yaml tsconfig.json ./
 COPY worker.ts ./
 COPY lib ./lib
 COPY prisma ./prisma
+# Operational entrypoints run with `docker compose exec worker`. They import from
+# lib/ and resolve the @/* alias through tsconfig.json, both already present, so
+# this stage is where they belong rather than the runner.
+COPY scripts ./scripts
 ENV NODE_ENV=production
 USER node
 CMD ["node_modules/.bin/tsx", "worker.ts"]
