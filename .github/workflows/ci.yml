@@ -168,11 +168,48 @@ jobs:
       - name: Seed admin user
         run: pnpm prisma db seed
 
+      # The seeded /admin/import e2e drives an SSE progress page that only
+      # advances when a worker consumes the bulkImport job. The worker also
+      # registers the two cron schedulers on this ephemeral Redis, but
+      # upsertJobScheduler only books the NEXT occurrence, so neither fires
+      # inside a job unless the run straddles one of their boundaries:
+      # 03:00 UTC for igdbTokenRefresh, and 00:00 / 06:00 / 12:00 / 18:00 UTC
+      # for steamAchievementSync. Either way the result is a logged job error,
+      # not a test failure.
+      - name: Start BullMQ worker
+        run: nohup pnpm exec tsx worker.ts > worker.log 2>&1 & echo $! > worker.pid
+
+      # Without this the previous step exits 0 no matter what: `&` backgrounds
+      # the process, so a worker that dies at boot (a missing env var reaching
+      # lib/env.ts, an unreachable Redis) is indistinguishable from a slow
+      # import, and surfaces 90s later as an opaque e2e timeout.
+      - name: Wait for worker ready
+        run: |
+          for _ in $(seq 1 60); do
+            if grep -q 'worker.ready' worker.log; then
+              echo "worker ready"
+              exit 0
+            fi
+            if ! kill -0 "$(cat worker.pid)" 2>/dev/null; then
+              echo "worker exited during boot"
+              cat worker.log
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "worker did not report ready within 60s"
+          cat worker.log
+          exit 1
+
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run e2e tests
         run: pnpm test:e2e
+
+      - name: Print worker log
+        if: always()
+        run: cat worker.log || true
 
       - name: Upload Playwright report on failure
         if: failure()

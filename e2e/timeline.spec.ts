@@ -1,13 +1,18 @@
 import { expect, test, type Page } from '@playwright/test'
+import {
+  cleanupSeeded,
+  disconnectSeed,
+  seedTimelineLibrary,
+  type TimelineSeedResult,
+} from './fixtures/library-seed'
 
-// Story 10.4 AC-8.
-//   - Empty-state scenario: runnable in CI. A freshly migrated + seeded test DB
-//     has the admin user but no UserEntry rows, so /timeline shows LIBRARY EMPTY.
-//     Needs only ADMIN_PASS (no external API).
-//   - Seeded scenario: authored but GATED. The populated-library seed helper
-//     does not exist yet (the same unlanded blocker as the dashboard + grid e2e,
-//     see deferred-work.md). Mirrors how anime-grid / games-grid skip without
-//     their prerequisites.
+// Story 10.4 AC-5 / AC-8, Story 10.5 AC-2, Story 10.6 AC-6, Story 10.7 AC-5.
+// The empty-state scenario runs first against an unseeded baseline; every other
+// describe seeds the shared populated library in beforeAll and drops it again in
+// afterAll. Declaration order is the run order because playwright.config pins
+// workers to 1, which is also what keeps this file's cleanup ahead of nothing
+// (timeline runs last alphabetically) and every earlier spec's cleanup ahead of
+// the LIBRARY EMPTY assertion below.
 
 const ADMIN_PASS = process.env.ADMIN_PASS
 
@@ -19,6 +24,15 @@ test.beforeAll(async () => {
   }
 })
 
+// The only in-worker disconnect, and it lives here because timeline sorts last
+// among the spec files. The other specs used to disconnect too, which closed a
+// module singleton the rest of the run then reused and silently reconnected.
+// If a spec file is ever added after this one alphabetically, it reconnects
+// lazily rather than failing, so this stays a best-effort close.
+test.afterAll(async () => {
+  await disconnectSeed()
+})
+
 async function login(page: Page): Promise<void> {
   await page.goto('/login')
   await page.getByLabel('PASSWORD').fill(ADMIN_PASS!)
@@ -26,7 +40,7 @@ async function login(page: Page): Promise<void> {
   await page.waitForURL('/', { timeout: 10_000 })
 }
 
-test.describe('/timeline (Story 10.4)', () => {
+test.describe('/timeline empty library (Story 10.4)', () => {
   test('AC-5: empty library shows LIBRARY EMPTY with an ADD AN ITEM CTA linking to search', async ({
     page,
   }) => {
@@ -41,15 +55,20 @@ test.describe('/timeline (Story 10.4)', () => {
     await cta.click()
     await page.waitForURL('/search', { timeout: 10_000 })
   })
+})
 
-  test('AC-8 (gated): a 1985-2025 library renders grouped by year and the band updates on scroll', async ({
+test.describe('/timeline seeded library (Story 10.4, 10.5)', () => {
+  test.beforeAll(async () => {
+    await seedTimelineLibrary()
+  })
+
+  test.afterAll(async () => {
+    await cleanupSeeded()
+  })
+
+  test('AC-8: a 1985-2025 library renders grouped by year and the band updates on scroll', async ({
     page,
   }) => {
-    test.skip(
-      !process.env.TIMELINE_E2E_SEEDED,
-      'Requires the populated-library seed helper (unlanded, see deferred-work.md).',
-    )
-
     await login(page)
     await page.goto('/timeline')
 
@@ -61,23 +80,21 @@ test.describe('/timeline (Story 10.4)', () => {
     // Year sentinels span multiple decades.
     expect(await page.locator('[data-tl-year]').count()).toBeGreaterThan(1)
 
-    // Scrolling to the bottom changes the active year the band displays.
+    // Scrolling to the bottom changes the active year the band displays. The
+    // wheel is inside the poll, not before it: a single event fired while the
+    // smooth-scroll layer is still coming up scrolls nothing, and no amount of
+    // waiting afterwards recovers it.
     const firstYear = await band.textContent()
-    await page.mouse.wheel(0, 20_000)
     await expect(async () => {
+      await page.mouse.wheel(0, 20_000)
       const laterYear = await band.textContent()
       expect(laterYear).not.toBe(firstYear)
-    }).toPass({ timeout: 3_000 })
+    }).toPass({ timeout: 10_000 })
   })
 
-  test('AC-2 (gated): scrolling across a decade boundary ramps the era ground tint', async ({
+  test('AC-2: scrolling across a decade boundary ramps the era ground tint', async ({
     page,
   }) => {
-    test.skip(
-      !process.env.TIMELINE_E2E_SEEDED,
-      'Requires the populated-library seed helper (unlanded, see deferred-work.md).',
-    )
-
     await login(page)
     await page.goto('/timeline')
 
@@ -89,24 +106,28 @@ test.describe('/timeline (Story 10.4)', () => {
     const groundColor = () =>
       page.evaluate(() => getComputedStyle(document.body).backgroundColor.trim())
 
+    await expect(page.locator('a.tl-row').first()).toBeVisible()
     const before = await groundColor()
-    await page.mouse.wheel(0, 20_000)
     await expect(async () => {
+      await page.mouse.wheel(0, 20_000)
       const after = await groundColor()
       expect(after).not.toBe(before)
-    }).toPass({ timeout: 3_000 })
+    }).toPass({ timeout: 10_000 })
   })
 })
 
 test.describe('/timeline filter strip (Story 10.6)', () => {
-  test('AC-6 (gated): filter to MOVIES + TV, sort consumed asc, then RESET restores the full library', async ({
+  test.beforeAll(async () => {
+    await seedTimelineLibrary()
+  })
+
+  test.afterAll(async () => {
+    await cleanupSeeded()
+  })
+
+  test('AC-6: filter to MOVIES + TV, sort consumed asc, then RESET restores the full library', async ({
     page,
   }) => {
-    test.skip(
-      !process.env.TIMELINE_E2E_SEEDED,
-      'Requires the populated-library seed helper (unlanded, see deferred-work.md).',
-    )
-
     await login(page)
     await page.goto('/timeline')
 
@@ -142,36 +163,45 @@ test.describe('/timeline filter strip (Story 10.6)', () => {
 })
 
 test.describe('/timeline franchise mode (Story 10.7)', () => {
-  test('AC-5 (gated): toggle franchise mode collapses a 30-entry Marvel franchise to one expandable row', async ({
+  let seed: TimelineSeedResult
+
+  test.beforeAll(async () => {
+    seed = await seedTimelineLibrary()
+  })
+
+  test.afterAll(async () => {
+    await cleanupSeeded()
+  })
+
+  test('AC-5: toggle franchise mode collapses the seeded franchise to one expandable row', async ({
     page,
   }) => {
-    test.skip(
-      !process.env.TIMELINE_E2E_SEEDED,
-      'Requires the populated-library seed helper with a 30-entry franchise (unlanded, see deferred-work.md).',
-    )
-
     await login(page)
     await page.goto('/timeline')
 
     // Toggle franchise mode on. The strip toggle's accessible name is FRANCHISE.
     await page.getByRole('button', { name: /FRANCHISE/ }).click()
 
-    // The 30 same-franchise_id Marvel entries collapse to a single summary row.
-    const summaries = page.locator('[data-franchise-summary]')
-    await expect(summaries).toHaveCount(1)
+    // Scope to the seeded group by its label: the summary row renders
+    // franchise_id verbatim, so a developer's real library having franchises of
+    // its own cannot break this assertion.
+    const summary = page
+      .locator('[data-franchise-summary]')
+      .filter({ hasText: seed.franchiseId })
+    await expect(summary).toHaveCount(1)
     expect(await page.locator('[data-franchise-child]').count()).toBe(0)
 
-    // Expand: 30 child rows render below, in release order.
-    await summaries.first().click()
+    // Expand: the seeded members render below, in release order.
+    await summary.click()
     const children = page.locator('[data-franchise-child]')
-    await expect(children).toHaveCount(30)
+    await expect(children).toHaveCount(seed.franchiseSize)
     const dates = (await children.locator('.tl-date').allTextContents())
       .map((text) => text.trim())
       .filter((text) => text !== '-')
     expect(dates).toEqual([...dates].sort())
 
     // Collapse: children are removed from the DOM (AC-4), not merely hidden.
-    await summaries.first().click()
+    await summary.click()
     await expect(children).toHaveCount(0)
   })
 })

@@ -1,18 +1,19 @@
 import { expect, test, type Page } from '@playwright/test'
-import { PrismaClient } from '@prisma/client'
+import {
+  cleanupSeeded,
+  seedDb,
+  seedMergePairs,
+  type MergePairSeed,
+} from './fixtures/library-seed'
 
-// Story 11.4 AC-10.
-//   - Empty-state scenario: runnable in CI. A freshly migrated + seeded test DB
-//     has the admin user but zero MergeSuggestion rows, so /admin/merge shows
-//     NO CANDIDATES. Needs only ADMIN_PASS.
-//   - Seeded accept -> dismiss -> empty flow: GATED behind TIMELINE_E2E_SEEDED
-//     (the same gate the timeline/grid specs use). It seeds its own rows via a
-//     direct Prisma client (DATABASE_URL is loaded by playwright.config), so it
-//     is self-contained when a developer opts in, and skipped in CI where the
-//     populated-library seed helper does not run.
+// Story 11.4 AC-7 / AC-10. The empty-queue and unauth scenarios run against the
+// unseeded baseline; the accept -> dismiss -> empty flow seeds three pairs
+// through the shared helper and drops them again in afterAll. That cleanup is
+// load-bearing: the fixture rows are dated 2001, so a survivor would show up on
+// the timeline and break its LIBRARY EMPTY assertion later in the run.
 
 const ADMIN_PASS = process.env.ADMIN_PASS
-const SEEDED = !!process.env.TIMELINE_E2E_SEEDED
+const MERGE_PAIR_COUNT = 3
 
 test.beforeAll(async () => {
   if (!ADMIN_PASS) {
@@ -55,82 +56,45 @@ test.describe('/admin/merge (Story 11.4)', () => {
   })
 })
 
-test.describe('/admin/merge seeded flow (Story 11.4 AC-10, gated)', () => {
-  const TAG = `e2e-merge-${Date.now()}`
-  const prisma = new PrismaClient()
-  const created: { sourceId: string; targetId: string; suggestionId: string }[] = []
+test.describe('/admin/merge seeded flow (Story 11.4 AC-10)', () => {
+  let pairs: MergePairSeed[]
 
   test.beforeAll(async () => {
-    if (!SEEDED) return
-
-    // Three source/target pairs, all with UserEntries so the accept path
-    // exercises the conflict merge and we can assert the target entry survives.
-    for (let i = 0; i < 3; i++) {
-      const source = await prisma.mediaItem.create({
-        data: {
-          type: 'MOVIE',
-          title: `${TAG} DUP ${i}`,
-          release_date: new Date('2001-01-01T00:00:00Z'),
-          user_entry: { create: { status: 'WATCHING', progress: 3 } },
-        },
-      })
-      const target = await prisma.mediaItem.create({
-        data: {
-          type: 'MOVIE',
-          title: `${TAG} CANON ${i}`,
-          release_date: new Date('2001-01-01T00:00:00Z'),
-          user_entry: { create: { status: 'COMPLETED', progress: 9 } },
-        },
-      })
-      const suggestion = await prisma.mergeSuggestion.create({
-        data: {
-          source_id: source.id,
-          target_id: target.id,
-          // Descending confidence so the seeded rows sort ahead deterministically.
-          confidence: 0.99 - i * 0.01,
-        },
-      })
-      created.push({
-        sourceId: source.id,
-        targetId: target.id,
-        suggestionId: suggestion.id,
-      })
-    }
+    pairs = await seedMergePairs(MERGE_PAIR_COUNT)
   })
 
   test.afterAll(async () => {
-    if (SEEDED) {
-      // Deleting the MediaItems cascades their UserEntries and any surviving
-      // MergeSuggestion rows. Sources may already be gone (accepted).
-      const ids = created.flatMap((c) => [c.sourceId, c.targetId])
-      await prisma.mediaItem.deleteMany({ where: { id: { in: ids } } })
-    }
-    await prisma.$disconnect()
+    await cleanupSeeded()
   })
 
   test('AC-10: accept re-points and deletes, dismiss flags, queue reaches empty', async ({
     page,
   }) => {
-    test.skip(!SEEDED, 'Requires TIMELINE_E2E_SEEDED to seed merge suggestions.')
-
     await login(page)
     await page.goto('/admin/merge')
 
-    // Suggestion 1 (highest confidence) is shown first. Accept it.
+    // ! Confirm the queue head IS the fixture before clicking MERGE. The page
+    // ! orders every unresolved suggestion by confidence descending across the
+    // ! whole table, so on a developer's populated database a real pair scoring
+    // ! above the fixture's 0.99 would sit first, and MERGE permanently deletes
+    // ! the source MediaItem. This assertion is the only thing standing between
+    // ! the accept path and a real library.
     await expect(page.getByRole('button', { name: '> MERGE' })).toBeVisible({
       timeout: 10_000,
     })
+    await expect(page.getByText('E2E MERGE DUP 0001')).toBeVisible()
+    await expect(page.getByText('E2E MERGE CANON 0001')).toBeVisible()
     await page.getByRole('button', { name: '> MERGE' }).click()
 
     // The source MediaItem is deleted and the target's UserEntry survives.
     await expect(async () => {
-      const source = await prisma.mediaItem.findUnique({
-        where: { id: created[0].sourceId },
+      const source = await seedDb.mediaItem.findUnique({
+        where: { id: pairs[0].sourceId },
       })
       expect(source).toBeNull()
     }).toPass({ timeout: 5_000 })
-    const targetEntry = await prisma.userEntry.findUnique({
-      where: { media_item_id: created[0].targetId },
+    const targetEntry = await seedDb.userEntry.findUnique({
+      where: { media_item_id: pairs[0].targetId },
     })
     expect(targetEntry).not.toBeNull()
 
@@ -139,8 +103,8 @@ test.describe('/admin/merge seeded flow (Story 11.4 AC-10, gated)', () => {
     await page.getByRole('button', { name: /CANCEL/ }).click()
 
     await expect(async () => {
-      const dismissed = await prisma.mergeSuggestion.findUnique({
-        where: { id: created[1].suggestionId },
+      const dismissed = await seedDb.mergeSuggestion.findUnique({
+        where: { id: pairs[1].suggestionId },
       })
       expect(dismissed?.dismissed).toBe(true)
       expect(dismissed?.resolved).toBe(true)

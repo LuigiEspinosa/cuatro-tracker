@@ -1,15 +1,28 @@
 import { expect, test, type Page } from '@playwright/test'
+import { cleanupSeeded, steamExportFixture } from './fixtures/library-seed'
 
-// Story 11.5 AC-10.
-//   - Wizard render + unauth slices: runnable in CI. They need only ADMIN_PASS
-//     (no worker, no seed helper), exactly as admin-dashboard / admin-merge do.
-//   - Seeded import flow: GATED behind TIMELINE_E2E_SEEDED. It uploads a 100-row
-//     Trakt fixture (generated in-spec and set via a buffer) and needs the
-//     BullMQ worker running to drive the SSE progress to completion. The merge
-//     CTA lands on /admin/merge; the actual merge candidates are Story 11.6.
+// Story 11.5 AC-1 / AC-7 / AC-10. The wizard-render and unauth slices need only
+// ADMIN_PASS; the end-to-end import needs the BullMQ worker running (CI starts
+// one, locally run `pnpm exec tsx --env-file=.env worker.ts` alongside
+// `pnpm infra`; without the env file the worker dies on Zod validation before
+// its first log line).
+//
+// * Roads not taken: the original 100-row TRAKT_JSON fixture. That path calls
+// * live TMDB once per row, and CI sets TMDB_API_KEY to a placeholder, so it
+// * could never run there. STEAM_EXPORT makes zero external calls and is written
+// * straight from the parsed row. The Trakt parse path stays covered by the
+// * lib/import Vitest suites.
+// * Failure mode worth NOT chasing: a 30-row import can finish before the
+// * browser subscribes to the SSE stream. The events route already recovers the
+// * missed terminal frame from the stored BullMQ job state, so the summary still
+// * renders. Do not "fix" that race here.
 
 const ADMIN_PASS = process.env.ADMIN_PASS
-const SEEDED = !!process.env.TIMELINE_E2E_SEEDED
+const IMPORT_ROW_COUNT = 30
+
+// Generous for a network-free import of 30 rows, and short enough that a
+// regression fails fast instead of hanging the job.
+const IMPORT_COMPLETION_TIMEOUT_MS = 15_000
 
 test.beforeAll(async () => {
   if (!ADMIN_PASS) {
@@ -61,53 +74,73 @@ test.describe('/admin/import wizard (Story 11.5)', () => {
   })
 })
 
-test.describe('/admin/import seeded flow (Story 11.5 AC-10, gated)', () => {
-  test('AC-10: upload advances the progress bar to the completion summary and links to /admin/merge', async ({
+test.describe('/admin/import seeded flow (Story 11.5 AC-10)', () => {
+  // Both hooks, not just afterAll: a retry that follows a run which already
+  // landed its rows would otherwise import 30 duplicates, and the summary would
+  // read `0 ITEMS IMPORTED` while the test went green.
+  test.beforeAll(async () => {
+    await cleanupSeeded()
+  })
+
+  test.afterAll(async () => {
+    // Drops the imported GAME rows by their reserved appid block, so a re-run
+    // imports 30 fresh rows instead of reporting 30 duplicates.
+    await cleanupSeeded()
+  })
+
+  test('AC-10: upload runs the import to its completion summary and links to /admin/merge', async ({
     page,
   }) => {
-    test.skip(!SEEDED, 'Requires TIMELINE_E2E_SEEDED and a running worker.')
+    // The default 30s cap cannot hold a login, three wizard steps and a worker
+    // round trip against a dev server compiling each route on first visit. The
+    // individual assertion timeouts below are what should fail, not the cap.
+    test.setTimeout(90_000)
 
-    // 100 Trakt movie rows. The ids need not all resolve on TMDB: unresolved
-    // rows count as failed, but progress still advances and the summary still
-    // renders, which is what this flow asserts.
-    const entries = Array.from({ length: 100 }, (_, i) => ({
-      type: 'movie',
-      watched_at: '2020-01-01T00:00:00.000Z',
-      movie: { title: `Fixture ${i}`, ids: { tmdb: i + 1 } },
-    }))
-    const buffer = Buffer.from(JSON.stringify(entries), 'utf-8')
+    const { buffer } = steamExportFixture(IMPORT_ROW_COUNT)
 
     await login(page)
     await page.goto('/admin/import')
 
-    // Step 1: pick Trakt.
-    await page.locator('input[value="TRAKT_JSON"]').check()
-    await page.getByRole('button', { name: 'NEXT' }).click()
+    // Step 1: pick the Steam library export.
+    await page.locator('input[value="STEAM_EXPORT"]').check()
+    // exact: true, or the substring match also picks up the dev overlay's
+    // "Open Next.js Dev Tools" button and trips strict mode.
+    await page.getByRole('button', { name: 'NEXT', exact: true }).click()
 
     // Step 2: upload the fixture and wait for the client preview.
     await page.locator('input[type="file"]').setInputFiles({
-      name: 'trakt-100.json',
+      name: 'steam-owned-games.json',
       mimeType: 'application/json',
       buffer,
     })
-    await expect(page.getByText(/100 ROWS DETECTED/)).toBeVisible({
-      timeout: 10_000,
-    })
-    await page.getByRole('button', { name: 'NEXT' }).click()
+    await expect(
+      page.getByText(new RegExp(`${IMPORT_ROW_COUNT} ROWS DETECTED`)),
+    ).toBeVisible({ timeout: 10_000 })
+    // exact: true, or the substring match also picks up the dev overlay's
+    // "Open Next.js Dev Tools" button and trips strict mode.
+    await page.getByRole('button', { name: 'NEXT', exact: true }).click()
 
     // Step 3: confirm.
     await page.getByRole('button', { name: 'START IMPORT' }).click()
 
-    // Lands on the SSE status page with a live progress bar.
+    // Lands on the SSE status page. It mounts in its running phase, so the bar
+    // is there, but a network-free 30-row import can finish before the browser
+    // subscribes and the recovered terminal frame swaps in the summary within a
+    // frame or two. Accept either: pinning the bar alone would be a coin flip.
     await expect(page).toHaveURL(/\/admin\/import\/[^/]+\/status/, {
       timeout: 15_000,
     })
-    await expect(page.getByRole('progressbar')).toBeVisible({ timeout: 15_000 })
+    await expect(
+      page.getByRole('progressbar').or(page.locator('.imp-summary')),
+    ).toBeVisible({ timeout: 15_000 })
 
-    // The worker drives the run to completion; the summary + CTA render.
-    await expect(page.getByText(/ITEMS IMPORTED/)).toBeVisible({
-      timeout: 120_000,
-    })
+    // The worker drives the run to completion; the summary + CTA render. Pin
+    // the count: a bare /ITEMS IMPORTED/ also matches `0 ITEMS IMPORTED`, which
+    // is exactly what a duplicate-only run renders, so the loose form would go
+    // green on a run that imported nothing.
+    await expect(
+      page.getByText(new RegExp(`${IMPORT_ROW_COUNT} ITEMS IMPORTED`)),
+    ).toBeVisible({ timeout: IMPORT_COMPLETION_TIMEOUT_MS })
     await page.getByRole('link', { name: 'REVIEW MERGES' }).click()
     await expect(page).toHaveURL(/\/admin\/merge/, { timeout: 10_000 })
   })

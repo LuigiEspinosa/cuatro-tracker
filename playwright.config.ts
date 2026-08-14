@@ -11,12 +11,21 @@ const baseURL = `http://127.0.0.1:${PORT}`
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1,
-  workers: process.env.CI ? 1 : undefined,
+  // One worker everywhere, not just in CI. fullyParallel:false only serialises
+  // tests WITHIN a file, so more than one worker runs spec FILES in parallel
+  // against the one shared database: admin-merge's dated fixture rows would be
+  // alive while timeline asserts LIBRARY EMPTY. One shared database, one worker.
+  // * Long-term cost: the local run is strictly serial. Per-worker database
+  // * isolation is the alternative, and is the right answer only once the suite
+  // * grows past a few minutes.
+  workers: 1,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL,

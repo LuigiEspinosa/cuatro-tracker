@@ -12,10 +12,15 @@ pnpm build            # Production build
 pnpm lint             # ESLint (zero warnings allowed)
 pnpm typecheck        # tsc --noEmit
 pnpm test             # Vitest unit/integration (single run)
+pnpm exec tsx --env-file=.env worker.ts   # BullMQ worker (separate process; REQUIRED for pnpm test:e2e)
 pnpm test:e2e         # Playwright end-to-end
 pnpm prisma migrate dev   # Run pending migrations
 pnpm prisma db seed       # Seed admin user
 ```
+
+Full local e2e prerequisites, in order: `pnpm infra`, `pnpm prisma migrate deploy`, `pnpm prisma db seed`, a worker in its own terminal, then `pnpm test:e2e` (Playwright starts `pnpm dev` itself via `webServer`). Without the worker the seeded `/admin/import` spec hangs on its SSE progress page: nothing consumes the `bulkImport` job. CI starts one in the `e2e` job, where the job-level `env` block supplies the variables.
+
+The worker entrypoint reads `lib/env.ts` at module load and nothing loads `.env` for it, so locally it needs `--env-file=.env` or it dies on Zod validation before the first log line. `next dev` and the Playwright runner do not: both call Next's own env loader.
 
 ## Directory Structure
 
@@ -80,6 +85,15 @@ e2e/                   # Playwright tests
 - **Path alias:** `@/` is wired in `vitest.config.ts` and resolves from repo root.
 - **Integration tests with real services:** Redis-dependent tests (BullMQ) use real Redis. DB tests use a real Postgres instance.
 - **Mocking:** Mock external API calls (TMDB, AniList, IGDB, Steam). Never mock the database or Redis in integration tests.
+
+### E2E seed helper contract (`e2e/fixtures/library-seed.ts`)
+
+- **One Prisma client for the whole suite.** No spec file may call `new PrismaClient()`; import `seedDb` from the helper instead. `playwright.config.ts` calls `loadEnvConfig(process.cwd())`, so `DATABASE_URL` is already in the runner's env.
+- **The helper owns two reserved namespaces.** Everything it writes carries a `MediaItem.id` starting `e2e-seed-` or a Steam appid inside the closed block `[E2E_STEAM_APPID_BASE, E2E_STEAM_APPID_BASE + E2E_STEAM_APPID_BLOCK)` (9000001 to 9001000). Cleanup deletes by that prefix and that block only, and the block is bounded on both ends because Steam's appid space is still growing upward. The one case where the helper removes rows it did not itself insert is that block: the import job writes them on the fixture's behalf, which is why the range is reserved. No function truncates a table or issues a bare `deleteMany({})`, so a full e2e run against a populated local library leaves it byte-identical. Do not widen a `where` clause in this module.
+- **Every mutating function refuses a non-loopback database.** `assertLocalDatabase()` parses `DATABASE_URL` and throws unless the host is `localhost`, `127.0.0.1` or `::1`. This replaces the safety the removed `TIMELINE_E2E_SEEDED` gate used to provide: `pnpm test:e2e` now sweeps rows before the first test, so a `.env` aimed at the production box would otherwise be destructive. The guard is on the host, not the database name, because local and production are both named `tracker`. Override with `E2E_ALLOW_REMOTE_DB=1` only if you are certain.
+- **Seed per describe, never globally.** `globalSetup` / `globalTeardown` only sweep leftovers. Specs seed in `beforeAll` and call `cleanupSeeded()` in `afterAll`. A global seed would break `admin-dashboard`'s `0 PENDING SUGGESTIONS` assertion (it runs first) and `timeline`'s LIBRARY EMPTY assertion (it runs last).
+- **`workers: 1` is load-bearing, not a CI-only optimisation.** `fullyParallel: false` serialises only within a file; every spec shares one database, so spec files must run one at a time for describe-scoped cleanup to land before the next file's assertions.
+- **Functions:** `seedTimelineLibrary()` (112 rows spanning 1985 to 2025, all five media types, one franchise group of 30; returns `{ totalRows, franchiseId, franchiseSize }` so specs assert against the helper's numbers, not literals), `seedMergePairs(count)`, `steamExportFixture(count)` (pure, no DB), `cleanupSeeded()`, `disconnectSeed()`. Each seeder clears its own subset first, so it is idempotent under a Playwright retry.
 
 ## Code Style (enforced)
 
