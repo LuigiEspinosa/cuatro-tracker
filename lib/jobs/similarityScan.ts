@@ -8,8 +8,20 @@ import { isReleaseDateUnknown } from '@/lib/normalise/release-date'
 
 export const SIMILARITY_SCAN_QUEUE = 'similarityScan'
 
-// Enqueued on demand by the bulk import job (after a successful run) and by the
-// accept-merge route (against the surviving canonical item), never scheduled.
+// * Circuit breaker, not a UX budget. At this many pending suggestions the
+// * merge tool is already unreviewable by hand, so the number exists to bound
+// * the per-pair read-then-write loop and the in-memory array rather than to
+// * shape a queue. A scan that reaches it is a scoring-quality signal, which is
+// * what the accompanying warn reports.
+// * Long-term cost: the dropped pairs are not recorded anywhere, so a capped
+// * run is not reproducible from the job result alone. The warn is the only
+// * evidence it happened.
+export const MAX_SCAN_PAIRS = 500
+
+// Enqueued on demand by three callers, never scheduled: the bulk import job
+// (after a successful run), the accept-merge route (against the surviving
+// canonical item), and the Steam date enrichment job (against the rows it just
+// gave a real release date, which is what makes them scannable at all).
 //
 // * Failure mode: namedRole is what stops the two callers meaning opposite
 // * things by the same payload. The import caller's ids are freshly imported
@@ -115,6 +127,7 @@ export function findScanPairs(
   const emitted = new Set<string>()
 
   for (const item of newItems) {
+    if (pairs.length >= MAX_SCAN_PAIRS) break
     if (!isScannable(item)) continue
     for (const candidate of candidates) {
       if (candidate.id === item.id) continue
@@ -129,6 +142,7 @@ export function findScanPairs(
           ? { sourceId: item.id, targetId: candidate.id, confidence }
           : { sourceId: candidate.id, targetId: item.id, confidence },
       )
+      if (pairs.length >= MAX_SCAN_PAIRS) break
     }
   }
 
@@ -169,6 +183,18 @@ export async function similarityScanProcessor(
 
   const pairs = findScanPairs(newItems, candidates, namedRole)
   result.pairs = pairs.length
+
+  if (pairs.length >= MAX_SCAN_PAIRS) {
+    logger.warn(
+      {
+        event: 'job.scan.capped',
+        queue: SIMILARITY_SCAN_QUEUE,
+        jobId,
+        cap: MAX_SCAN_PAIRS,
+      },
+      'similarity scan hit the pair cap, scoring quality needs attention',
+    )
+  }
 
   // * Failure mode: the writes run one pair at a time rather than through a
   // *  Promise.all. Each pair needs its own read-then-write, and a whole

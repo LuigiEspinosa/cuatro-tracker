@@ -16,6 +16,7 @@ import { computeSimilarity, MERGE_SIMILARITY_THRESHOLD } from '@/lib/merge'
 import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
 import {
   findScanPairs,
+  MAX_SCAN_PAIRS,
   SIMILARITY_SCAN_QUEUE,
   type ScanCandidate,
 } from '@/lib/jobs/similarityScan'
@@ -158,7 +159,10 @@ describe('findScanPairs (pure)', () => {
       type: MediaType.GAME,
     })
     const steamA = sentinel('n1', 'Portal')
-    const steamB = sentinel('e1', 'Portal 2')
+    // Two unrelated works sharing a prefix, deliberately NOT a numbered sequel:
+    // the ordinal gate would zero "Portal" against "Portal 2" for a different
+    // reason and this fixture has to isolate the sentinel exclusion.
+    const steamB = sentinel('e1', 'Portal Stories')
     const datedIgdb = candidate('e2', 'Portal', 2007)
 
     // Both sides undated: yearProximity(sentinel, sentinel) is 1.0, so this
@@ -192,6 +196,34 @@ describe('findScanPairs (pure)', () => {
 
     expect(pairs[0]!.confidence).toBe(computeSimilarity(item, existing))
     expect(pairs[0]!.confidence).toBe(0.91)
+  })
+
+  it('stops at MAX_SCAN_PAIRS and returns exactly that many', () => {
+    // 30 by 30 disjoint identical rows is 900 unique above-threshold pairs, so
+    // the cap is the only thing that can bound the result.
+    const size = 30
+    const newItems = Array.from({ length: size }, (_, i) =>
+      candidate(`n${i}`, 'Chrono Trigger', 1995),
+    )
+    const candidates = Array.from({ length: size }, (_, i) =>
+      candidate(`e${i}`, 'Chrono Trigger', 1995),
+    )
+
+    expect(size * size).toBeGreaterThan(MAX_SCAN_PAIRS)
+    expect(findScanPairs(newItems, candidates, 'source')).toHaveLength(
+      MAX_SCAN_PAIRS,
+    )
+  })
+
+  it('does not truncate a pair set below the cap', () => {
+    const newItems = Array.from({ length: 3 }, (_, i) =>
+      candidate(`n${i}`, 'Chrono Trigger', 1995),
+    )
+    const candidates = Array.from({ length: 3 }, (_, i) =>
+      candidate(`e${i}`, 'Chrono Trigger', 1995),
+    )
+
+    expect(findScanPairs(newItems, candidates, 'source')).toHaveLength(9)
   })
 
   it('puts the named items on the side namedRole selects', () => {
@@ -388,6 +420,59 @@ describe('similarityScanProcessor (BullMQ integration, real Redis, mocked db)', 
           { jobId: `${SIMILARITY_SCAN_QUEUE}:merge:sug_1` },
         ),
       ).resolves.toBeDefined()
+    },
+    25_000,
+  )
+
+  it(
+    'warns when the pair list reaches the cap',
+    async () => {
+      const size = 30
+      const fresh = Array.from({ length: size }, (_, i) =>
+        candidate(`n${i}`, 'Chrono Trigger', 1995),
+      )
+      const others = Array.from({ length: size }, (_, i) =>
+        candidate(`e${i}`, 'Chrono Trigger', 1995),
+      )
+      dbMock.mediaItem.findMany.mockReset()
+      dbMock.mediaItem.findMany
+        .mockResolvedValueOnce(fresh)
+        .mockResolvedValueOnce([...fresh, ...others])
+      dbMock.mergeSuggestion.findFirst.mockResolvedValue(null)
+      dbMock.mergeSuggestion.create.mockResolvedValue({ id: 'sug_1' })
+
+      const result = await runJob(
+        'test-scan-cap',
+        fresh.map((item) => item.id),
+      )
+
+      expect(result).toMatchObject({ pairs: MAX_SCAN_PAIRS })
+      expect(loggerMock.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'job.scan.capped',
+          queue: SIMILARITY_SCAN_QUEUE,
+          jobId: 'test-scan-cap',
+          cap: MAX_SCAN_PAIRS,
+        }),
+        expect.any(String),
+      )
+    },
+    25_000,
+  )
+
+  it(
+    'does not warn when the pair list is below the cap',
+    async () => {
+      dbMock.mergeSuggestion.findFirst.mockResolvedValue(null)
+      dbMock.mergeSuggestion.create.mockResolvedValue({ id: 'sug_1' })
+
+      const result = await runJob('test-scan-under-cap', ['n1'])
+
+      expect(result).toMatchObject({ pairs: 1 })
+      const capWarns = loggerMock.warn.mock.calls.filter(
+        (call) => (call[0] as { event?: string }).event === 'job.scan.capped',
+      )
+      expect(capWarns).toHaveLength(0)
     },
     25_000,
   )

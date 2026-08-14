@@ -41,6 +41,40 @@ const STATUS_RANK: Record<WatchStatus, number> = {
   [WatchStatus.COMPLETED]: 4,
 }
 
+// Source-only columns that would otherwise die with the source row. The four
+// source ids are each Int? @unique, and the Steam pair lives only on the row
+// being deleted. achievement_sync_status rides along because it gates whether
+// the game page renders an achievement list at all.
+const CARRIED_SELECT = {
+  steam_app_id: true,
+  igdb_id: true,
+  tmdb_id: true,
+  anilist_id: true,
+  playtime_minutes: true,
+  last_played: true,
+  achievement_sync_status: true,
+} as const
+
+// undefined means "leave the target alone", which is exactly how Prisma reads an
+// omitted update field, so the target's own value always wins.
+function carryIfNull<T>(targetValue: T | null, sourceValue: T | null) {
+  return targetValue === null && sourceValue !== null ? sourceValue : undefined
+}
+
+// * Failure mode: playtime is a measurement, not an identity, and its "unset"
+// * value is 0 rather than null. The bulk import writes playtime_forever
+// * straight through, so a never-played Steam row lands at 0, and a null-only
+// * fill would read that 0 as "already set" and silently discard the survivor's
+// * real hours. Both rows describe the same game, so the larger number is the
+// * true one. The five columns above stay null-only: they are identities, where
+// * "the target already has one" is a real answer.
+function carryHigher(targetValue: number | null, sourceValue: number | null) {
+  if (sourceValue === null) return undefined
+  return targetValue === null || sourceValue > targetValue
+    ? sourceValue
+    : undefined
+}
+
 function jsonResponse(body: unknown, status: number): NextResponse {
   return NextResponse.json(body, {
     status,
@@ -180,6 +214,90 @@ async function handler(req: NextRequest): Promise<NextResponse> {
           data: { parent_id: targetId },
         })
 
+        /* Step 2.5: carry the source's source-only data onto the survivor.
+         *
+         * * Failure mode: the ordering here is the whole correctness argument
+         *   and cannot be reordered. Achievement.game is onDelete: Cascade, so
+         *   the re-point has to happen BEFORE the delete or the cascade eats
+         *   the rows; and steam_app_id / igdb_id / tmdb_id / anilist_id are
+         *   each @unique, so the target fill has to happen AFTER it or the
+         *   write collides with the source row that still holds those values.
+         *   Without this step, accepting a Steam-vs-IGDB pair silently destroys
+         *   the appid, the playtime, the last-played stamp and every synced
+         *   achievement, with no warning and no undo.
+         * * Failure mode: "the target has no achievements" is not on its own a
+         *   licence to move them. The survivor keeps its OWN steam_app_id when
+         *   it has one, so re-pointing into a row already linked to a different
+         *   appid leaves it owning another game's achievements and colliding
+         *   with its own next sync. Both conditions have to hold.
+         * * Roads not taken: re-pointing achievements when the target already
+         *   has some. Achievement carries @@unique([game_id, steam_api_name]),
+         *   so a blind re-point would collide, and merging two real achievement
+         *   sets is a data question this route cannot answer. In that case the
+         *   source's achievements go down with the source row, which is the
+         *   pre-existing behaviour, and the warn below is the only record of it.
+         */
+        const source = await tx.mediaItem.findUnique({
+          where: { id: sourceId },
+          select: CARRIED_SELECT,
+        })
+        const target = await tx.mediaItem.findUnique({
+          where: { id: targetId },
+          select: CARRIED_SELECT,
+        })
+
+        let movedAchievements = false
+        if (source && target) {
+          const keepsSourceAppId =
+            target.steam_app_id === null ||
+            target.steam_app_id === source.steam_app_id
+          const targetAchievements = await tx.achievement.count({
+            where: { game_id: targetId },
+          })
+          if (targetAchievements === 0 && keepsSourceAppId) {
+            const moved = await tx.achievement.updateMany({
+              where: { game_id: sourceId },
+              data: { game_id: targetId },
+            })
+            movedAchievements = moved.count > 0
+            if (moved.count > 0) {
+              logger.info(
+                {
+                  event: 'admin.merge.achievements.repointed',
+                  suggestionId,
+                  sourceId,
+                  targetId,
+                  count: moved.count,
+                },
+                'source achievements re-pointed onto the target',
+              )
+            }
+          } else {
+            // The one branch that destroys data, so it is the one branch that
+            // must leave a record. The cascade on the delete below is what
+            // removes them.
+            const dropped = await tx.achievement.count({
+              where: { game_id: sourceId },
+            })
+            if (dropped > 0) {
+              logger.warn(
+                {
+                  event: 'admin.merge.achievements.dropped',
+                  suggestionId,
+                  sourceId,
+                  targetId,
+                  count: dropped,
+                  reason:
+                    targetAchievements > 0
+                      ? 'target_has_own'
+                      : 'target_keeps_another_appid',
+                },
+                'source achievements dropped with the source row',
+              )
+            }
+          }
+        }
+
         // Step 3 (AC-5.3 + AC-5.4): delete the source MediaItem.
         // MergeSuggestion.source is onDelete: Cascade, so this removes the
         // accepted suggestion row (and any sibling suggestion referencing the
@@ -187,6 +305,48 @@ async function handler(req: NextRequest): Promise<NextResponse> {
         // stamp: the row is cascade-removed a step later, so stamping it would
         // be dead work (there is no merge-history table for it to persist into).
         await tx.mediaItem.delete({ where: { id: sourceId } })
+
+        // Step 4: fill the survivor's empty source-only columns, now that the
+        // row holding those unique values is gone.
+        if (source && target) {
+          const carried = {
+            steam_app_id: carryIfNull(target.steam_app_id, source.steam_app_id),
+            igdb_id: carryIfNull(target.igdb_id, source.igdb_id),
+            tmdb_id: carryIfNull(target.tmdb_id, source.tmdb_id),
+            anilist_id: carryIfNull(target.anilist_id, source.anilist_id),
+            playtime_minutes: carryHigher(
+              target.playtime_minutes,
+              source.playtime_minutes,
+            ),
+            last_played: carryIfNull(target.last_played, source.last_played),
+            // Achievements that moved arrive with the source's sync state.
+            // Without it the survivor keeps its own "never_synced" and the game
+            // page renders the NOT YET SYNCED banner INSTEAD of the list, so the
+            // rows are preserved in the database and invisible on screen until
+            // the next six-hourly sync happens to flip the status.
+            achievement_sync_status: movedAchievements
+              ? source.achievement_sync_status
+              : undefined,
+          }
+          if (Object.values(carried).some((value) => value !== undefined)) {
+            await tx.mediaItem.update({
+              where: { id: targetId },
+              data: carried,
+            })
+            logger.info(
+              {
+                event: 'admin.merge.fields.carried',
+                suggestionId,
+                sourceId,
+                targetId,
+                fields: Object.entries(carried)
+                  .filter(([, value]) => value !== undefined)
+                  .map(([field]) => field),
+              },
+              'source-only fields carried onto the target',
+            )
+          }
+        }
       },
       { timeout: 30_000 },
     )

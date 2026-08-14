@@ -41,10 +41,21 @@ vi.mock('@/lib/db', () => ({ db: dbMock }))
 // the suite off the real queue: the unmocked module would build BullMQ Queue
 // singletons and leave jobs behind on the dev Redis.
 const queueAddMock = vi.hoisted(() => vi.fn())
+const enrichAddMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/jobs/queues', () => ({
-  queues: [{ name: 'similarityScan', queue: { add: queueAddMock } }],
+  queues: [
+    { name: 'similarityScan', queue: { add: queueAddMock } },
+    { name: 'steamDateEnrich', queue: { add: enrichAddMock } },
+  ],
 }))
+
+// A TRAKT_JSON row would otherwise resolve through live TMDB. Stubbing the
+// dispatcher keeps this suite's no-network property while still exercising the
+// non-Steam import branch, which is what the enrichment partition needs.
+const dispatcherMock = vi.hoisted(() => ({ getDispatcher: vi.fn() }))
+
+vi.mock('@/lib/search/media-dispatcher', () => dispatcherMock)
 
 const loggerMock = vi.hoisted(() => ({
   fatal: vi.fn(),
@@ -266,6 +277,78 @@ describe('bulkImportProcessor (BullMQ integration, real Redis, mocked db)', () =
       expect(dbMock.userEntry.create).not.toHaveBeenCalled()
       // A run that created nothing has nothing to scan.
       expect(queueAddMock).not.toHaveBeenCalled()
+      expect(enrichAddMock).not.toHaveBeenCalled()
+    },
+    25_000,
+  )
+
+  it(
+    'enqueues date enrichment for the Steam ids it created, alongside the scan',
+    async () => {
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      dbMock.mediaItem.create
+        .mockResolvedValueOnce({ id: 'mi_alpha' })
+        .mockResolvedValueOnce({ id: 'mi_beta' })
+
+      const file = steamExport([
+        { appid: 900000001, name: 'Alpha', playtime_forever: 1200 },
+        { appid: 900000002, name: 'Beta', playtime_forever: 0 },
+      ])
+
+      await runJob('test-import-enrich', 'STEAM_EXPORT', file)
+
+      // Both enqueues fire; enrichment is additive, not a replacement.
+      expect(queueAddMock).toHaveBeenCalledTimes(1)
+      // attempts is pinned, not incidental: the processor's two IGDB calls sit
+      // outside its per-row try/catch, so at the BullMQ default of one attempt a
+      // single transient 5xx strands every Steam row this import created at the
+      // 1970 sentinel with nothing scheduled to try again.
+      expect(enrichAddMock).toHaveBeenCalledWith(
+        'enrich',
+        { mediaItemIds: ['mi_alpha', 'mi_beta'] },
+        {
+          jobId: 'steamDateEnrich:import:test-import-enrich',
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 30_000 },
+        },
+      )
+    },
+    25_000,
+  )
+
+  it(
+    'does not enqueue date enrichment for a non-Steam import',
+    async () => {
+      dbMock.mediaItem.findUnique.mockResolvedValue(null)
+      dbMock.mediaItem.create.mockResolvedValue({ id: 'mi_movie' })
+      dispatcherMock.getDispatcher.mockReturnValue({
+        fetch: async () => ({ id: 550 }),
+        normalise: () => ({
+          type: 'MOVIE',
+          title: 'Fight Club',
+          release_date: new Date('1999-10-15T00:00:00Z'),
+          tmdb_id: 550,
+        }),
+      })
+
+      const file = JSON.stringify([
+        {
+          watched_at: '2020-01-01T00:00:00.000Z',
+          movie: { title: 'Fight Club', year: 1999, ids: { tmdb: 550 } },
+        },
+      ])
+
+      const { result } = await runJob('test-import-trakt', 'TRAKT_JSON', file)
+
+      expect(result).toEqual({ imported: 1, duplicates: 0, failed: 0, total: 1 })
+      // The row was imported and scanned, but it is not a Steam row, so it
+      // carries a real date already and must not reach the enrichment queue.
+      expect(queueAddMock).toHaveBeenCalledWith(
+        'scan',
+        { mediaItemIds: ['mi_movie'], namedRole: 'source' },
+        { jobId: 'similarityScan:import:test-import-trakt' },
+      )
+      expect(enrichAddMock).not.toHaveBeenCalled()
     },
     25_000,
   )

@@ -23,8 +23,14 @@ const txMock = vi.hoisted(() => ({
     delete: vi.fn(),
   },
   mediaItem: {
+    findUnique: vi.fn(),
     updateMany: vi.fn(),
+    update: vi.fn(),
     delete: vi.fn(),
+  },
+  achievement: {
+    count: vi.fn(),
+    updateMany: vi.fn(),
   },
   mergeSuggestion: {
     update: vi.fn(),
@@ -348,6 +354,206 @@ describe('POST /api/admin/merge', () => {
         expect.objectContaining({ event: 'admin.merge.scan_enqueue_failed' }),
         expect.any(String),
       )
+    })
+  })
+})
+
+describe('POST /api/admin/merge source-only data preservation', () => {
+  function carriedRow(overrides: Record<string, unknown> = {}) {
+    return {
+      steam_app_id: null,
+      igdb_id: null,
+      tmdb_id: null,
+      anilist_id: null,
+      playtime_minutes: null,
+      last_played: null,
+      achievement_sync_status: 'never_synced',
+      ...overrides,
+    }
+  }
+
+  const lastPlayed = new Date('2026-05-01T00:00:00Z')
+
+  it('carries the Steam source fields and achievements onto a metadata-rich IGDB target', async () => {
+    dbMock.mergeSuggestion.findUnique.mockResolvedValue(newSuggestion())
+    dbMock.mergeSuggestion.findFirst.mockResolvedValue(null)
+    txMock.userEntry.findUnique.mockResolvedValue(null)
+    txMock.mediaItem.findUnique
+      // Source: the enriched Steam row.
+      .mockResolvedValueOnce(
+        carriedRow({
+          steam_app_id: 1245620,
+          playtime_minutes: 4200,
+          last_played: lastPlayed,
+          achievement_sync_status: 'synced',
+        }),
+      )
+      // Target: the canonical IGDB row, which carries no Steam data.
+      .mockResolvedValueOnce(carriedRow({ igdb_id: 119133 }))
+    txMock.achievement.count.mockResolvedValue(0)
+    txMock.achievement.updateMany.mockResolvedValue({ count: 42 })
+
+    const { POST } = await import('@/app/api/admin/merge/route')
+    const res = await POST(postRequest(validBody))
+
+    expect(res.status).toBe(200)
+
+    // Achievements move BEFORE the delete, or the cascade eats them.
+    expect(txMock.achievement.updateMany).toHaveBeenCalledWith({
+      where: { game_id: 'src_1' },
+      data: { game_id: 'tgt_1' },
+    })
+    const repointOrder =
+      txMock.achievement.updateMany.mock.invocationCallOrder[0]!
+    const deleteOrder = txMock.mediaItem.delete.mock.invocationCallOrder[0]!
+    const fillOrder = txMock.mediaItem.update.mock.invocationCallOrder[0]!
+    expect(repointOrder).toBeLessThan(deleteOrder)
+    // The target fill runs AFTER the delete, or the unique source-id columns
+    // collide with the row that still holds them.
+    expect(fillOrder).toBeGreaterThan(deleteOrder)
+
+    expect(txMock.mediaItem.update).toHaveBeenCalledWith({
+      where: { id: 'tgt_1' },
+      data: {
+        steam_app_id: 1245620,
+        igdb_id: undefined,
+        tmdb_id: undefined,
+        anilist_id: undefined,
+        playtime_minutes: 4200,
+        last_played: lastPlayed,
+        // Rides along with the achievements: without it the survivor keeps its
+        // own never_synced and the game page renders the NOT YET SYNCED banner
+        // instead of the 42 rows that were just preserved.
+        achievement_sync_status: 'synced',
+      },
+    })
+  })
+
+  it('does not re-point achievements onto a target that keeps a different Steam appid', async () => {
+    dbMock.mergeSuggestion.findUnique.mockResolvedValue(newSuggestion())
+    dbMock.mergeSuggestion.findFirst.mockResolvedValue(null)
+    txMock.userEntry.findUnique.mockResolvedValue(null)
+    txMock.mediaItem.findUnique
+      .mockResolvedValueOnce(carriedRow({ steam_app_id: 620 }))
+      // Steam-linked to a different game and never synced, so it has no
+      // achievements of its own. An empty target is not on its own a licence.
+      .mockResolvedValueOnce(carriedRow({ steam_app_id: 440 }))
+    txMock.achievement.count.mockResolvedValueOnce(0).mockResolvedValueOnce(42)
+
+    const { POST } = await import('@/app/api/admin/merge/route')
+    const res = await POST(postRequest(validBody))
+
+    expect(res.status).toBe(200)
+    // The survivor keeps appid 440, so taking 620's achievements would leave it
+    // owning another game's rows and colliding on its own next sync.
+    expect(txMock.achievement.updateMany).not.toHaveBeenCalled()
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'admin.merge.achievements.dropped',
+        count: 42,
+        reason: 'target_keeps_another_appid',
+      }),
+      expect.any(String),
+    )
+  })
+
+  it('carries the higher playtime when the target already holds a real zero', async () => {
+    dbMock.mergeSuggestion.findUnique.mockResolvedValue(newSuggestion())
+    dbMock.mergeSuggestion.findFirst.mockResolvedValue(null)
+    txMock.userEntry.findUnique.mockResolvedValue(null)
+    txMock.mediaItem.findUnique
+      .mockResolvedValueOnce(carriedRow({ steam_app_id: 620, playtime_minutes: 4200 }))
+      // The bulk import writes playtime_forever straight through, so a
+      // never-played Steam row lands at 0 rather than null. A null-only fill
+      // reads that as "already set" and throws the 4200 away.
+      .mockResolvedValueOnce(carriedRow({ playtime_minutes: 0 }))
+    txMock.achievement.count.mockResolvedValue(0)
+    txMock.achievement.updateMany.mockResolvedValue({ count: 0 })
+
+    const { POST } = await import('@/app/api/admin/merge/route')
+    const res = await POST(postRequest(validBody))
+
+    expect(res.status).toBe(200)
+    expect(txMock.mediaItem.update).toHaveBeenCalledWith({
+      where: { id: 'tgt_1' },
+      data: expect.objectContaining({ playtime_minutes: 4200 }),
+    })
+  })
+
+  it('does not lower a target playtime that is already the larger number', async () => {
+    dbMock.mergeSuggestion.findUnique.mockResolvedValue(newSuggestion())
+    dbMock.mergeSuggestion.findFirst.mockResolvedValue(null)
+    txMock.userEntry.findUnique.mockResolvedValue(null)
+    txMock.mediaItem.findUnique
+      .mockResolvedValueOnce(carriedRow({ playtime_minutes: 10 }))
+      .mockResolvedValueOnce(carriedRow({ playtime_minutes: 999 }))
+    txMock.achievement.count.mockResolvedValue(0)
+    txMock.achievement.updateMany.mockResolvedValue({ count: 0 })
+
+    const { POST } = await import('@/app/api/admin/merge/route')
+    const res = await POST(postRequest(validBody))
+
+    expect(res.status).toBe(200)
+    expect(txMock.mediaItem.update).not.toHaveBeenCalled()
+  })
+
+  it('does not re-point achievements onto a target that already has some', async () => {
+    dbMock.mergeSuggestion.findUnique.mockResolvedValue(newSuggestion())
+    dbMock.mergeSuggestion.findFirst.mockResolvedValue(null)
+    txMock.userEntry.findUnique.mockResolvedValue(null)
+    txMock.mediaItem.findUnique
+      .mockResolvedValueOnce(carriedRow({ steam_app_id: 620 }))
+      .mockResolvedValueOnce(carriedRow({ steam_app_id: 440 }))
+    txMock.achievement.count.mockResolvedValue(17)
+
+    const { POST } = await import('@/app/api/admin/merge/route')
+    const res = await POST(postRequest(validBody))
+
+    expect(res.status).toBe(200)
+    // The source achievements go down with the source row: Achievement carries
+    // @@unique([game_id, steam_api_name]), so a blind re-point would collide,
+    // and reconciling two real sets is not a decision this route can make.
+    expect(txMock.achievement.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('never overwrites a target field that is already set', async () => {
+    dbMock.mergeSuggestion.findUnique.mockResolvedValue(newSuggestion())
+    dbMock.mergeSuggestion.findFirst.mockResolvedValue(null)
+    txMock.userEntry.findUnique.mockResolvedValue(null)
+    txMock.mediaItem.findUnique
+      .mockResolvedValueOnce(
+        carriedRow({ steam_app_id: 620, playtime_minutes: 10 }),
+      )
+      .mockResolvedValueOnce(
+        carriedRow({ steam_app_id: 440, playtime_minutes: 999 }),
+      )
+    txMock.achievement.count.mockResolvedValue(0)
+    txMock.achievement.updateMany.mockResolvedValue({ count: 0 })
+
+    const { POST } = await import('@/app/api/admin/merge/route')
+    const res = await POST(postRequest(validBody))
+
+    expect(res.status).toBe(200)
+    // Every carried field is already populated on the target, so there is
+    // nothing to write and the update is skipped entirely.
+    expect(txMock.mediaItem.update).not.toHaveBeenCalled()
+  })
+
+  it('skips the carry entirely when the source row cannot be read', async () => {
+    dbMock.mergeSuggestion.findUnique.mockResolvedValue(newSuggestion())
+    dbMock.mergeSuggestion.findFirst.mockResolvedValue(null)
+    txMock.userEntry.findUnique.mockResolvedValue(null)
+    txMock.mediaItem.findUnique.mockResolvedValue(null)
+
+    const { POST } = await import('@/app/api/admin/merge/route')
+    const res = await POST(postRequest(validBody))
+
+    expect(res.status).toBe(200)
+    expect(txMock.achievement.count).not.toHaveBeenCalled()
+    expect(txMock.mediaItem.update).not.toHaveBeenCalled()
+    // The delete still runs: the merge itself is unchanged.
+    expect(txMock.mediaItem.delete).toHaveBeenCalledWith({
+      where: { id: 'src_1' },
     })
   })
 })

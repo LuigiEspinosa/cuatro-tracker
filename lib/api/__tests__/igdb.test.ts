@@ -559,3 +559,118 @@ describe('slot-limited concurrency', () => {
     await settled
   })
 })
+
+describe('mapSteamAppIdsToIgdbGameIds + getGames (batched)', () => {
+  it('maps appids to IGDB game ids from one batched external_games request', async () => {
+    seedFreshToken()
+    const fetchSpy = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        jsonResponse([
+          { id: 15150, game: 72, uid: '620' },
+          { id: 15154, game: 891, uid: '440' },
+        ]),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { mapSteamAppIdsToIgdbGameIds } = await import('@/lib/api/igdb')
+    const mapping = await mapSteamAppIdsToIgdbGameIds([620, 440])
+
+    expect(mapping.get(620)).toBe(72)
+    expect(mapping.get(440)).toBe(891)
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+
+    const [url, init] = fetchSpy.mock.calls[0]!
+    expect(String(url)).toBe('https://api.igdb.com/v4/external_games')
+    const body = String(init?.body)
+    // ! The source filter is load-bearing: uid alone matches rows from other
+    // ! storefronts, so without it an appid maps onto an unrelated game.
+    expect(body).toContain('external_game_source = 1')
+    expect(body).toContain('uid = ("620","440")')
+    // ! One appid can carry several Steam-source rows (a game plus a bundle or
+    // ! edition record) and the mapping loop is first-wins, so without a sort
+    // ! two runs of the same backfill can write two different release dates
+    // ! onto one row. release_date is the timeline sort field.
+    expect(body).toContain('sort game asc')
+    // The request asks for game and uid only, so the schema must not require an
+    // id it never requested.
+    expect(body).toContain('fields game,uid;')
+  })
+
+  it('parses an external_games row that carries only the requested fields', async () => {
+    seedFreshToken()
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse([{ game: 72, uid: '620' }]),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { mapSteamAppIdsToIgdbGameIds } = await import('@/lib/api/igdb')
+    const mapping = await mapSteamAppIdsToIgdbGameIds([620])
+
+    expect(mapping.get(620)).toBe(72)
+  })
+
+  it('omits an appid that has no Steam mapping instead of guessing one', async () => {
+    seedFreshToken()
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse([{ id: 15150, game: 72, uid: '620' }]),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { mapSteamAppIdsToIgdbGameIds } = await import('@/lib/api/igdb')
+    const mapping = await mapSteamAppIdsToIgdbGameIds([620, 9000001])
+
+    expect(mapping.get(620)).toBe(72)
+    expect(mapping.has(9000001)).toBe(false)
+    expect(mapping.size).toBe(1)
+  })
+
+  it('short-circuits an empty appid list with zero HTTP calls', async () => {
+    seedFreshToken()
+    const fetchSpy = vi.fn(async () => jsonResponse([]))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { mapSteamAppIdsToIgdbGameIds } = await import('@/lib/api/igdb')
+    const mapping = await mapSteamAppIdsToIgdbGameIds([])
+
+    expect(mapping.size).toBe(0)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('chunks an input larger than IGDB_BATCH_SIZE into one request per batch', async () => {
+    seedFreshToken()
+    const fetchSpy = vi.fn(async () => jsonResponse([]))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { mapSteamAppIdsToIgdbGameIds, IGDB_BATCH_SIZE } = await import(
+      '@/lib/api/igdb'
+    )
+    const appIds = Array.from(
+      { length: IGDB_BATCH_SIZE * 2 + 1 },
+      (_, i) => 1000 + i,
+    )
+    await mapSteamAppIdsToIgdbGameIds(appIds)
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3)
+  })
+
+  it('getGames fetches a batch by id and short-circuits an empty list', async () => {
+    seedFreshToken()
+    const fetchSpy = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        jsonResponse([makeGame({ id: 72 }), makeGame({ id: 891 })]),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const { getGames } = await import('@/lib/api/igdb')
+
+    expect(await getGames([])).toEqual([])
+    expect(fetchSpy).not.toHaveBeenCalled()
+
+    const games = await getGames([72, 891])
+    expect(games.map((g) => g.id)).toEqual([72, 891])
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(String(fetchSpy.mock.calls[0]![1]?.body)).toContain(
+      'where id = (72,891)',
+    )
+  })
+})

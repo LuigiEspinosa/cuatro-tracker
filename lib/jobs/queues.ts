@@ -14,6 +14,10 @@ import {
   SIMILARITY_SCAN_QUEUE,
   similarityScanProcessor,
 } from '@/lib/jobs/similarityScan'
+import {
+  STEAM_DATE_ENRICH_QUEUE,
+  steamDateEnrichProcessor,
+} from '@/lib/jobs/steamDateEnrich'
 
 // Module-level Queue singletons via the globalThis pattern (mirrors
 // lib/redis.ts and lib/db.ts). Survives dev hot-reload without leaking
@@ -51,6 +55,12 @@ function makeRegistry(): {
   const similarityScan = new Queue(SIMILARITY_SCAN_QUEUE, {
     connection: redis,
   })
+  // Enqueued on demand at the tail of a successful bulk import that created
+  // Steam rows, not scheduled, so it registers here (worker.ts binds every
+  // registry queue) but is absent from CRONS below.
+  const steamDateEnrich = new Queue(STEAM_DATE_ENRICH_QUEUE, {
+    connection: redis,
+  })
 
   return {
     queues: [
@@ -58,12 +68,14 @@ function makeRegistry(): {
       { name: STEAM_ACHIEVEMENT_SYNC_QUEUE, queue: steamAchievementSync },
       { name: BULK_IMPORT_QUEUE, queue: bulkImport },
       { name: SIMILARITY_SCAN_QUEUE, queue: similarityScan },
+      { name: STEAM_DATE_ENRICH_QUEUE, queue: steamDateEnrich },
     ],
     processors: {
       [IGDB_TOKEN_REFRESH_QUEUE]: igdbTokenRefreshProcessor,
       [STEAM_ACHIEVEMENT_SYNC_QUEUE]: steamAchievementSyncProcessor,
       [BULK_IMPORT_QUEUE]: bulkImportProcessor,
       [SIMILARITY_SCAN_QUEUE]: similarityScanProcessor,
+      [STEAM_DATE_ENRICH_QUEUE]: steamDateEnrichProcessor,
     },
   }
 }

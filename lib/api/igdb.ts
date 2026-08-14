@@ -119,6 +119,36 @@ export type IgdbGame = z.infer<typeof IgdbGameSchema>
 
 const IgdbGamesArraySchema = z.array(IgdbGameSchema)
 
+// ! The v4 docs describe external_games rows as carrying `category`, with
+// ! category 1 meaning Steam. The live API no longer serves that field: a probe
+// ! of `where category = 1 & uid = "620"` returned an empty array, not an error,
+// ! while the same row carries `external_game_source: 1`. A category filter
+// ! would therefore make every lookup a permanent silent no-op.
+// Only the two fields the request asks for. Requiring `id` as well would rest
+// the whole batch on IGDB continuing to return an unrequested field, and one row
+// without it fails the array parse and the entire enrichment run.
+export const IgdbExternalGameSchema = z.object({
+  game: z.number(),
+  uid: z.string(),
+})
+export type IgdbExternalGame = z.infer<typeof IgdbExternalGameSchema>
+
+const IgdbExternalGamesArraySchema = z.array(IgdbExternalGameSchema)
+
+// * Failure mode: uid is NOT unique on its own. The live API returns three rows
+// * for uid "620": a GiantBomb row for Star Ocean, a Twitch row for Portal
+// * Runner, and the Steam row for Portal 2. Dropping this filter would map a
+// * Steam appid onto an unrelated game and write its release date, which is
+// * strictly worse than leaving the sentinel in place because a wrong date
+// * poisons both the chronological timeline and the merge scorer's year axis.
+const IGDB_STEAM_SOURCE = 1
+
+// Uids per external_games request, so a 300-game import costs 3 requests rather
+// than 300. The response limit is IGDB's documented maximum and sits well above
+// the worst case of one row per requested uid.
+export const IGDB_BATCH_SIZE = 100
+const IGDB_MAX_LIMIT = 500
+
 // Slot limiter mirrors lib/api/anilist.ts withLimit. Each in-flight call is
 // wrapped with a settled-token whose .catch swallows rejections so
 // cross-caller Promise.race waiters do not inherit unrelated errors.
@@ -510,6 +540,72 @@ export function searchGames(
       `search/games`,
     )
   })
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const batches: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    batches.push(items.slice(i, i + size))
+  }
+  return batches
+}
+
+// Exact Steam appid to IGDB game id mapping. Never a title search: an appid
+// either has a mapping or it does not, and "no mapping" is a correct outcome.
+export async function mapSteamAppIdsToIgdbGameIds(
+  appIds: number[],
+): Promise<Map<number, number>> {
+  const mapping = new Map<number, number>()
+  // Mirrors the searchGames empty-query guard: no input means no request.
+  if (appIds.length === 0) return mapping
+
+  const unique = [...new Set(appIds)].filter((id) => Number.isInteger(id))
+  for (const batch of chunk(unique, IGDB_BATCH_SIZE)) {
+    const uids = batch
+      .map((id) => `"${escapeApicalypseString(String(id))}"`)
+      .join(',')
+    // ! sort is not cosmetic. The source filter fixes the cross-storefront
+    // ! collision, but one appid can still carry several Steam-source rows (a
+    // ! game plus a bundle or edition record), and the first-wins loop below
+    // ! would otherwise take whichever row IGDB happened to return. Two runs of
+    // ! the same backfill could then write two different release_date values
+    // ! onto one row, and release_date is the timeline sort field.
+    const body = `fields game,uid; where external_game_source = ${IGDB_STEAM_SOURCE} & uid = (${uids}); sort game asc; limit ${IGDB_MAX_LIMIT};`
+    const rows = await withIgdbLimit(() =>
+      igdbFetchWithAuthRetry(
+        'external_games',
+        body,
+        IgdbExternalGamesArraySchema,
+        'external_games/steam',
+      ),
+    )
+    for (const row of rows) {
+      const appId = Number(row.uid)
+      if (!Number.isInteger(appId)) continue
+      if (!mapping.has(appId)) mapping.set(appId, row.game)
+    }
+  }
+  return mapping
+}
+
+export async function getGames(ids: number[]): Promise<IgdbGame[]> {
+  if (ids.length === 0) return []
+
+  const unique = [...new Set(ids)].filter((id) => Number.isInteger(id))
+  const games: IgdbGame[] = []
+  for (const batch of chunk(unique, IGDB_BATCH_SIZE)) {
+    const body = `${GAME_FIELDS} where id = (${batch.join(',')}); limit ${IGDB_MAX_LIMIT};`
+    const rows = await withIgdbLimit(() =>
+      igdbFetchWithAuthRetry(
+        'games',
+        body,
+        IgdbGamesArraySchema,
+        'games/batch',
+      ),
+    )
+    games.push(...rows)
+  }
+  return games
 }
 
 export function getGame(id: number): Promise<IgdbGame> {

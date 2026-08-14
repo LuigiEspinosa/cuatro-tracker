@@ -13,6 +13,7 @@ import { normaliseAnilistAnime } from '@/lib/normalise/anime'
 import { normaliseAnilistManga } from '@/lib/normalise/manga'
 import { RELEASE_DATE_SENTINEL } from '@/lib/normalise/release-date'
 import { SIMILARITY_SCAN_QUEUE } from '@/lib/jobs/similarityScan'
+import { STEAM_DATE_ENRICH_QUEUE } from '@/lib/jobs/steamDateEnrich'
 import { ImportFormatSchema, parseImport, type ImportRow } from '@/lib/import/formats'
 import {
   toDispatch,
@@ -272,6 +273,59 @@ async function enqueueSimilarityScan(
   }
 }
 
+// Steam rows land at the release-date sentinel, so they are invisible to the
+// timeline and excluded from the scan above until IGDB dates them. Same
+// swallow-and-warn contract as enqueueSimilarityScan: the import is already
+// committed and must not fail over a queue that is briefly unreachable.
+async function enqueueSteamDateEnrich(
+  mediaItemIds: string[],
+  importJobId: string,
+): Promise<void> {
+  if (mediaItemIds.length === 0) return
+  try {
+    // ! Lazy import and three-part job id, for the same two reasons documented
+    // ! on enqueueSimilarityScan above.
+    const { queues } = await import('@/lib/jobs/queues')
+    const entry = queues.find((q) => q.name === STEAM_DATE_ENRICH_QUEUE)
+    if (!entry) throw new Error('steamDateEnrich queue is not registered')
+    // * Failure mode: the two IGDB calls inside the processor sit outside its
+    // * per-row try/catch, so a 5xx that outlives the adapter's own retry ladder
+    // * throws out of the job. At the BullMQ default of one attempt that strands
+    // * every Steam row this import created at the 1970 sentinel: invisible on
+    // * the timeline, excluded from the scan, and with nothing scheduled to try
+    // * again. The failure is transient by nature, so it is worth retrying.
+    await entry.queue.add(
+      'enrich',
+      { mediaItemIds },
+      {
+        jobId: `${STEAM_DATE_ENRICH_QUEUE}:import:${importJobId}`,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 30_000 },
+      },
+    )
+    logger.info(
+      {
+        event: 'job.enrich.enqueued',
+        queue: BULK_IMPORT_QUEUE,
+        jobId: importJobId,
+        mediaItems: mediaItemIds.length,
+      },
+      'steam date enrichment enqueued',
+    )
+  } catch (err) {
+    logger.warn(
+      {
+        event: 'job.enrich.enqueue_failed',
+        queue: BULK_IMPORT_QUEUE,
+        jobId: importJobId,
+        mediaItems: mediaItemIds.length,
+        err,
+      },
+      'bulk import committed but steam date enrichment enqueue failed',
+    )
+  }
+}
+
 export async function bulkImportProcessor(job: Job): Promise<BulkImportResult> {
   const { format, redisKey } = BulkImportDataSchema.parse(job.data)
   const jobId = job.id ?? 'unknown'
@@ -292,6 +346,9 @@ export async function bulkImportProcessor(job: Job): Promise<BulkImportResult> {
     }
 
     const newMediaItemIds: string[] = []
+    // STEAM_EXPORT maps one-to-one onto the steam dispatch source
+    // (lib/import/map-row.ts:30), so the format is a sound partition here.
+    const steamMediaItemIds: string[] = []
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!
@@ -302,6 +359,7 @@ export async function bulkImportProcessor(job: Job): Promise<BulkImportResult> {
         else {
           result.imported += 1
           newMediaItemIds.push(created.id)
+          if (row.format === 'STEAM_EXPORT') steamMediaItemIds.push(created.id)
         }
       } catch (err) {
         result.failed += 1
@@ -343,6 +401,10 @@ export async function bulkImportProcessor(job: Job): Promise<BulkImportResult> {
     )
 
     await enqueueSimilarityScan(newMediaItemIds, jobId)
+    // Both enqueues, not one instead of the other: the scan above covers the
+    // dated rows this import created, and enrichment re-enqueues its own scan
+    // for the Steam rows once they carry a real date.
+    await enqueueSteamDateEnrich(steamMediaItemIds, jobId)
 
     return result
   } catch (err) {
